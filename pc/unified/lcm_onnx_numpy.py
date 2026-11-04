@@ -125,6 +125,11 @@ class LcmOnnxNumpy:
         vae_enc = self.dir / "vae_encoder" / "model.onnx"
         self.vae_enc = ort.InferenceSession(str(vae_enc), sess_options=so, providers=provs) if vae_enc.is_file() else None
         self.unet_inputs = [i.name for i in self.unet.get_inputs()]
+        # LRU cache for text embeddings (prompt -> ndarray); repeated prompts
+        # (batch runs, chat) skip the text encoder entirely.
+        self._emb_cache: dict[str, np.ndarray] = {}
+        self._emb_cache_order: list[str] = []
+        self._EMB_CACHE_MAX = 64
 
     # ---------- tokenizer ----------
 
@@ -198,8 +203,17 @@ class LcmOnnxNumpy:
     # ---------- inference ----------
 
     def _encode_text(self, text: str) -> np.ndarray:
+        cached = self._emb_cache.get(text)
+        if cached is not None:
+            return cached.copy()
         ids = np.array([self._tokenize(text)], dtype=np.int32)
-        return self.te.run(None, {"input_ids": ids})[0].astype(np.float32)
+        out = self.te.run(None, {"input_ids": ids})[0].astype(np.float32)
+        if len(self._emb_cache) >= self._EMB_CACHE_MAX:
+            oldest = self._emb_cache_order.pop(0)
+            self._emb_cache.pop(oldest, None)
+        self._emb_cache[text] = out
+        self._emb_cache_order.append(text)
+        return out.copy()
 
     def _run_unet(self, latents, t, emb, guidance):
         feed = {

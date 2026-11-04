@@ -105,12 +105,17 @@ def main():
         im.save(OUT / "gen.png")
         return f"{im.size} std={a.std():.1f} engine={j.get('engine')}"
 
-    def generate_warm():
-        t0 = time.time()
-        r = c.post("/v1/images/generations", json={"prompt": "a blue circle", "size": "256x256",
-                                                   "quality": "low"})
-        assert r.status_code == 200, r.text[:120]
-        return f"{time.time() - t0:.1f}s warm"
+    def generate_deterministic():
+        body = {"prompt": "a red apple on a wooden table, photo",
+                "negative_prompt": "blurry", "size": "256x256", "quality": "low",
+                "seed": 42, "n": 1}
+        r1 = c.post("/v1/images/generations", json=body)
+        r2 = c.post("/v1/images/generations", json=body)
+        assert r1.status_code == 200 and r2.status_code == 200, (r1.status_code, r2.status_code)
+        b1 = r1.json()["data"][0]["b64_json"]
+        b2 = r2.json()["data"][0]["b64_json"]
+        assert b1 == b2, "non-deterministic output with fixed seed"
+        return "seed=42 byte-identical"
 
     def edit():
         src = Image.new("RGB", (256, 256), (60, 120, 200))
@@ -374,6 +379,7 @@ def main():
     check("settings", settings)
     check("generate 256x256", generate)
     check("generate warm", generate_warm)
+    check("generate deterministic (seed)", generate_deterministic)
     check("edit (img2img)", edit)
     check("inpaint add", inpaint)
     check("outpaint 192->288", outpaint)

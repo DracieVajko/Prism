@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.media.MediaCodec
 import android.media.MediaCodecInfo
+import android.media.MediaCodecList
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.media.MediaMetadataRetriever
@@ -31,6 +32,18 @@ object MediaTools {
     data class Output(val bytes: ByteArray, val name: String, val mime: String)
 
     class Unsupported(message: String) : Exception(message)
+
+    /** True when the device has a hardware H.264 encoder (needed for re-encode). */
+    fun hasH264Encoder(): Boolean {
+        return try {
+            val list = MediaCodecList(MediaCodecList.REGULAR_CODECS)
+            list.codecInfos.any { info ->
+                info.isEncoder && info.supportedTypes.any { it.equals("video/avc", ignoreCase = true) }
+            }
+        } catch (_: Exception) {
+            false
+        }
+    }
 
     // ---------------------------------------------------------------- presets
     val videoPresets = linkedMapOf(
@@ -66,6 +79,12 @@ object MediaTools {
     )
 
     fun presetsJson(): Map<String, Any> {
+        // Video re-encode (mp4-small) needs a hardware H.264 encoder.
+        val video = if (hasH264Encoder()) videoPresets else videoPresets.mapValues { (key, value) ->
+            if (key == "mp4-small") value + mapOf("supported" to false,
+                "reason" to "no H.264 hardware encoder on this device")
+            else value
+        }
         // MP3 depends on the bundled LAME library; report it honestly if it is
         // missing from this build.
         val audio = audioPresets.mapValues { (key, value) ->
@@ -75,7 +94,7 @@ object MediaTools {
             } else value
         }
         return mapOf(
-            "video" to videoPresets,
+            "video" to video,
             "audio" to audio,
             "image" to imagePresets,
             "resize" to mapOf(

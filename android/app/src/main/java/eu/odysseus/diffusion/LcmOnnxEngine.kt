@@ -672,5 +672,25 @@ object HardwareProfile {
         }
     }
 
+    /** Coarse device tier from the JVM heap cap (a proxy for RAM). */
+    fun deviceTier(ctx: Context): String {
+        val ramMb = (Runtime.getRuntime().maxMemory() / 1024 / 1024).toInt()
+        return when {
+            ramMb >= 4096 -> "high"
+            ramMb >= 2048 -> "mid"
+            else -> "low"
+        }
+    }
+
+    /** Android thermal status (0 = none … 4 = critical). Returns 0 on API < 29. */
+    fun thermalStatus(ctx: Context): Int {
+        return try {
+            val pm = ctx.getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager
+            pm?.currentThermalStatus ?: 0
+        } catch (_: Exception) {
+            0
+        }
+    }
+
     fun canRunModel(modelId: String): Boolean = true
 }

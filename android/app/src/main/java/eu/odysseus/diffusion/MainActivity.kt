@@ -993,7 +993,7 @@ class MainActivity : AppCompatActivity() {
 
         val themeModes = listOf("system" to "System", "light" to "Light", "dark" to "Dark")
         val langs = listOf("en" to "English", "sk" to "Slovak", "cs" to "Czech", "de" to "German")
-        val accels = listOf("auto" to "Auto", "cpu" to "CPU", "gpu" to "GPU (NNAPI)")
+        val accels = listOf("auto" to "Auto", "cpu" to "CPU", "gpu" to "GPU (NNAPI, deprecated)")
 
         spinnerTheme.adapter = android.widget.ArrayAdapter(this,
             android.R.layout.simple_spinner_dropdown_item, themeModes.map { it.second })

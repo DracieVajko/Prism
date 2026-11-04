@@ -96,6 +96,7 @@ data class GenerationReq(
     val quality: String = "medium",
     val steps: Int? = null,
     val request_id: String = "",
+    val seed: Long? = null,
 )
 
 @Serializable
@@ -437,6 +438,24 @@ private val batchState = ConcurrentHashMap<String, BatchState>()
             }
         }
 
+
+        // Optional LAN auth: when AppConfig.authToken is set, every request except
+        // /health must carry "Authorization: Bearer <token>". Disabled by default.
+        intercept(io.ktor.server.application.ApplicationCallPipeline.Monitoring) {
+            val token = AppConfig.authToken
+            if (token.isNotEmpty()) {
+                val path = call.request.path()
+                if (path != "/health") {
+                    val auth = call.request.headers["Authorization"] ?: ""
+                    val ok = auth == "Bearer $token"
+                    if (!ok) {
+                        call.respond(HttpStatusCode.Unauthorized, jsonOf("error" to "unauthorized"))
+                        return@intercept
+                    }
+                }
+            }
+            proceed()
+        }
 
         // Track in-flight image/audio requests for /health busy/queue.
         intercept(io.ktor.server.application.ApplicationCallPipeline.Monitoring) {
@@ -799,6 +818,9 @@ private val batchState = ConcurrentHashMap<String, BatchState>()
                         "models_dir" to downloader.modelsDir().absolutePath,
                         "default_image_model" to "lcm-dreamshaper-int8-onnx",
                         "audio_models" to downloader.allAssets().filter { it.kind == "audio" }.map { it.id },
+                        "device_tier" to (appContext?.let { HardwareProfile.deviceTier(it) } ?: "unknown"),
+                        "thermal_status" to (appContext?.let { HardwareProfile.thermalStatus(it) } ?: 0),
+                        "auth_enabled" to AppConfig.authToken.isNotEmpty(),
                         "engines" to jsonOf(
                             "torch" to false,
                             "cuda" to false,
@@ -998,6 +1020,7 @@ private val batchState = ConcurrentHashMap<String, BatchState>()
                     WhisperLib.release()
                     if (!LcmOnnxEngine.isReady()) {
                         requireMemory(1400, "the LCM image engine")
+                        requireThermal(ctx)
                         manager.setLoading(modelId, true)
                         try {
                             if (!LcmOnnxEngine.init(ctx, modelDir)) {
@@ -1014,7 +1037,7 @@ private val batchState = ConcurrentHashMap<String, BatchState>()
                     for (i in 0 until req.n) {
                         val bmp = LcmOnnxEngine.generate(
                             req.prompt, req.negative_prompt, req.guidance, steps, side,
-                            seed = System.nanoTime() + i,
+                            seed = req.seed ?: (System.nanoTime() + i),
                         )
                         if (bmp == null) {
                             LcmOnnxEngine.release()
@@ -1490,6 +1513,7 @@ private val batchState = ConcurrentHashMap<String, BatchState>()
                 val t0 = System.currentTimeMillis()
                 val text: String? = try {
                     withContext(heavyDispatcher) {
+                        requireThermal(ctx)
                         requireMemory(XiaomiOcrEngine.NEEDED_MB, "the Xiaomi-OCR-0 engine")
                         val png = XiaomiOcrEngine.prep(bytes)
                         if (png == null) null
@@ -1849,6 +1873,15 @@ switchTo("audio", effectiveModel) // 503 loading while switching image→audio
             throw ModelWillNotLoadError(
                 "low memory: ${avail} MB available, $what needs ~${neededMb} MB. " +
                     "Close other apps or use a smaller model.", -1, -1)
+        }
+    }
+
+    /** Refuse heavy work when the device is thermally throttled. */
+    private fun requireThermal(ctx: android.content.Context) {
+        val status = HardwareProfile.thermalStatus(ctx)
+        if (status >= 3) { // SEVERE or higher
+            throw ModelWillNotLoadError(
+                "thermal: device status $status (>=3). Let it cool or reduce load.", -1, -1)
         }
     }
 
