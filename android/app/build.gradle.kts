@@ -83,6 +83,11 @@ android {
     }
     kotlinOptions {
         jvmTarget = "17"
+        // litertlm-android 0.19.0 ships kotlin-stdlib/kotlin-reflect 2.4.0 whose
+        // metadata is newer than this 1.9.24 compiler accepts by default; the
+        // same flag is required by Google's own sample (litert-samples
+        // receipt_to_json, which uses it with a 2.3.0 compiler).
+        freeCompilerArgs = freeCompilerArgs + listOf("-Xskip-metadata-version-check")
     }
     packaging {
         resources {
@@ -146,4 +151,9 @@ dependencies {
     implementation("com.microsoft.onnxruntime:onnxruntime-android:1.20.0")
     // SmolVLM native runtime (llama.cpp + libmtmd) in its own CMake project
     implementation(project(":smolvlm"))
+    // OCR: Xiaomi-OCR-0 through LiteRT-LM (Kotlin API + liblitertlm_jni.so,
+    // arm64-v8a, minSdk 24). Brings kotlin-stdlib/reflect 2.4.0 via its POM.
+    implementation("com.google.ai.edge.litertlm:litertlm-android:0.19.0")
+    // EXIF orientation for OCR input photos (litertlm applies none itself).
+    implementation("androidx.exifinterface:exifinterface:1.4.1")
 }

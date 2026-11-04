@@ -19,7 +19,7 @@ from pathlib import Path
 
 import httpx
 import numpy as np
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parents[2]
 TD = ROOT / "testdata"
@@ -226,6 +226,45 @@ def main():
         assert r.status_code == 200, r.text[:200]
         return f"{len(r.json().get('text') or '')} chars"
 
+    # --------------------------------------------------------------- OCR
+    def ocr_missing_file():
+        r = c.post("/v1/images/ocr", files={"language": (None, "auto")})
+        assert r.status_code == 400, r.status_code
+        return r.json().get("error", "")[:40]
+
+    def ocr_page():
+        # White page with big dark words, inside the model's domain. An
+        # honest 503 (model not downloaded / low RAM / will-not-load) passes
+        # with the reason shown; a 200 must return the words back.
+        img = Image.new("RGB", (768, 1344), "white")
+        d = ImageDraw.Draw(img)
+        try:
+            font = ImageFont.load_default(size=150)
+        except TypeError:
+            font = ImageFont.load_default()
+        d.text((60, 120), "PRISM", fill="black", font=font)
+        d.text((60, 480), "OCR", fill="black", font=font)
+        d.text((60, 840), "2026", fill="black", font=font)
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        r = c.post("/v1/images/ocr",
+                   files={"file": ("page.png", buf.getvalue(), "image/png")},
+                   data={"language": "auto", "model": "xiaomi-ocr-0"})
+        if r.status_code == 503:
+            j = r.json()
+            reason = j.get("reason") or j.get("detail") or ""
+            assert j.get("error") == "will not load", j
+            return f"503 honest: {reason[:70]}"
+        assert r.status_code == 200, r.text[:200]
+        text = (r.json().get("text") or "").strip()
+        assert len(text) >= 10, f"too short: {text!r}"
+        low = text.lower()
+        assert "prism" in low, f"missing PRISM: {text[:80]}"
+        assert "ocr" in low, f"missing OCR: {text[:80]}"
+        out = (r.json().get("outputs") or [{}])[0]
+        assert out.get("url", "").startswith("/v1/outputs/text/"), out
+        return f"{len(text)} chars: {text[:50]} | {out.get('name')}"
+
     # ---------------------------------------------------------- ffmpeg tools
     def ff_presets():
         j = c.get("/v1/ffmpeg/presets").json()
@@ -344,6 +383,8 @@ def main():
     check("chat (vision)", chat)
     check("transcribe wav", transcribe)
     check("translations", translations)
+    check("ocr missing file -> 400", ocr_missing_file)
+    check("ocr page", ocr_page)
     check("ffmpeg presets", ff_presets)
     check("ffmpeg info", ff_info)
     check("ffmpeg image png->jpg", ff_image)

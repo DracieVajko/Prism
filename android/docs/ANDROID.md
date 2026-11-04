@@ -14,6 +14,7 @@ Every feature runs locally; models are downloaded once and then used offline.
 | Harmonize | planned | CPU (LAB color match + feather) |
 | Upscale | planned | Real-ESRGAN ONNX or CPU fallback |
 | Caption / Chat | experimental | SmolVLM (llama.cpp runtime not bundled yet) |
+| OCR | experimental | LiteRT-LM (Xiaomi-OCR-0 int8, CPU) |
 | FFmpeg tools | planned | bundled ffmpeg binary |
 
 See `docs/ONDEVICE-PLAN.md` for the implementation plan and order of work.
@@ -26,7 +27,7 @@ Caption / Tools**. Tabs can be tapped or swiped (slide + fade animation).
 - **Server**: status, START/STOP, models manager, settings, console.
 - **Generate**: prompt, size (default 512×512), steps (default 6), preview, Save image.
 - **Transcribe**: file picker, audio-model spinner, language, transcript, Save transcript.
-- **Upscale / Caption**: image picker, action, output.
+- **Upscale / Caption**: image picker, action, output; OCR button (Xiaomi-OCR-0).
 - **Tools**: FFmpeg note (experimental).
 - Console: scrollable, selectable, copy/clear.
 - Models: collapsible sections by kind, install/uninstall, progress, **Stop N%**
@@ -44,6 +45,7 @@ repositories are downloaded file by file.
 | Image generation | LCM-Dreamshaper v7 INT8 ONNX → QDQ (1.6 GB) | onnxruntime |
 | Upscale | Real-ESRGAN x4plus NCNN (45 MB zip) | vulkan-ncnn (experimental) |
 | Vision-language | SmolVLM 500M / SmolVLM2 500M GGUF + mmproj | llama.cpp (experimental) |
+| OCR | Xiaomi-OCR-0 int8 LiteRT-LM (1.25 GB) | litertlm |
 | Custom | any direct URL (GGUF/ONNX/bin/safetensors) | depends on type |
 
 Downloads are handled by `ModelDownloader` (own engine, not DownloadManager):
@@ -72,6 +74,7 @@ Downloads are handled by `ModelDownloader` (own engine, not DownloadManager):
 | `POST /v1/audio/translations` | local whisper.cpp |
 | `POST /v1/images/generations` | local ONNX LCM |
 | `POST /v1/images/edits|inpaint|harmonize|upscale|caption` | 503 until implemented |
+| `POST /v1/images/ocr` | local LiteRT-LM OCR (multipart `file`, `language`, `model`; JSON `image` b64 accepted) |
 | `POST /v1/chat/completions` | 503 until the VLM runtime lands |
 | `GET /v1/ffmpeg/presets`, `POST /v1/ffmpeg/{op}` | 503 until ffmpeg is bundled |
 | `GET /v1/settings` | runtime info |
@@ -85,6 +88,8 @@ Only one heavy engine is loaded at a time:
 - image generation calls `WhisperLib.release()` before loading the LCM engine,
 - audio calls `LcmOnnxEngine.release()` before loading whisper,
 - `LcmOnnxEngine.release()` runs after every generation,
+- OCR releases every resident engine first (its CPU peak is 3.3-4.3 GB) and
+  builds/releases its own engine per request,
 - `ModelManager` enforces the switch (503 `loading model` during cold load).
 
 ## Hardware adaptation
@@ -100,6 +105,37 @@ Only one heavy engine is loaded at a time:
 - **Upscale**: Real-ESRGAN NCNN engine not implemented; CPU fallback planned.
 - **FFmpeg**: no ffmpeg binary on Android; bundled binary planned.
 - **Edits / Inpaint / Harmonize**: planned (see `docs/ONDEVICE-PLAN.md`).
+- **OCR**: arm64 only. Works with the Xiaomi-OCR-0 bundle, but is slow
+  (10-60 s/page) and needs ~3-4 GB free RAM; the endpoint returns an honest 503
+  when the model is missing or memory is short.
+
+## OCR (Xiaomi-OCR-0 via LiteRT-LM)
+
+`XiaomiOcrEngine.kt` runs the official Google conversion
+(`litert-community/Xiaomi-OCR-0`, `Xiaomi-OCR-0_int8.litertlm`, 1.25 GB) through
+`com.google.ai.edge.litertlm:litertlm-android:0.19.0` (arm64-v8a JNI, minSdk 24).
+
+- Input: decode with `inSampleSize`, apply EXIF orientation, center on a white
+  4:7 canvas, resize to 768x1344 and PNG-encode. This matches the model card and
+  `litert-samples` `receipt_to_json`: the runtime resizes without keeping the
+  aspect ratio and applies no EXIF rotation.
+- One `Engine` + `Conversation` per request, closed afterwards: an engine that
+  already served a conversation continues from its recurrent state
+  (LiteRT-LM issue #3165). The runtime cache directory keeps engine build at
+  ~2.5-4 s.
+- CPU only. The model card measures ~10-13 s for a paragraph/page warm on a
+  Galaxy S26 and 20-25 s on a Pixel 11 Pro, with CPU peaks of 3.3-4.3 GB RSS.
+- The endpoint mirrors the PC contract: multipart `file` (optional `language`,
+  `model`) or JSON `{"image": "<base64>"}`. It returns `{text, model, language,
+  outputs, elapsed, request_id, engine}` and stores the text in Outputs -> text
+  (`.md`).
+- Failure paths are honest: missing model -> 503 `will not load` with reason
+  `model xiaomi-ocr-0 not downloaded (see ModelDownloader)`; low RAM -> 503 with
+  required/free MB; engine failure -> 503 `will not load` with the reason.
+
+The live suite (`android/tests/test_android_live.py`) checks the 400 for a
+missing file and, when the model is installed, that a synthetic page returns
+PRISM/OCR/2026 plus an outputs entry; an honest 503 passes with its reason.
 
 ## Image generation note
 

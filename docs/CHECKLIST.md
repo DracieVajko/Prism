@@ -23,7 +23,7 @@ Status legend: [x] done, [~] in progress, [ ] todo, [!] experimental/blocked.
 - [x] Generate: prompt, size, steps, preview.
 - [x] Transcribe: file picker, audio-model spinner, language, output.
 - [x] Upscale: image picker, 2x button.
-- [x] Caption: image picker, caption button.
+- [x] Caption: image picker, caption + OCR buttons.
 - [x] Tools: ffmpeg note.
 - [x] File pickers via `ActivityResultContracts.OpenDocument` (`*/*` for audio).
 - [x] All UI text in English.
@@ -42,6 +42,7 @@ Status legend: [x] done, [~] in progress, [ ] todo, [!] experimental/blocked.
 - [x] Harmonize — CPU fallback in `ImageOps.kt`, wired in `ApiServer`.
 - [ ] Upscale — NCNN Vulkan engine skeleton (`RealEsrganNcnnEngine.kt`), JNI placeholder; 503 until `librealesrgan_jni.so` built.
 - [ ] Caption / Chat — llama.cpp (mtmd) engine skeleton (`SmolVlmEngine.kt`), JNI placeholder; 503 until `libsmolvlm_jni.so` built.
+- [x] OCR — Xiaomi-OCR-0 int8 via LiteRT-LM (`XiaomiOcrEngine.kt`), engine per request, honest 503 when the model or RAM is missing; device run pending.
 - [ ] FFmpeg — plan §6 (bundled binary).
 
 ## Android endpoints
@@ -55,6 +56,7 @@ Status legend: [x] done, [~] in progress, [ ] todo, [!] experimental/blocked.
 - [x] POST /v1/images/harmonize — CPU, **200**
 - [ ] POST /v1/images/upscale — NCNN skeleton wired, JNI placeholder, **503**
 - [ ] POST /v1/images/caption — llama.cpp skeleton wired, JNI placeholder, **503**
+- [x] POST /v1/images/ocr — LiteRT-LM (multipart or JSON image); **503** with reason when not installed or too little RAM
 - [ ] POST /v1/chat/completions — llama.cpp skeleton wired, JNI placeholder, **503**
 - [x] POST /v1/audio/transcriptions, /translations — local whisper.cpp
 - [ ] GET /v1/ffmpeg/presets / POST /v1/ffmpeg/{op} — 503 until ffmpeg lands

@@ -2,7 +2,7 @@ package eu.odysseus.diffusion
 
 import android.content.Context
 import android.graphics.BitmapFactory
-import android.net.Uri
+import android.graphics.Typeface
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -10,70 +10,72 @@ import android.widget.ArrayAdapter
 import android.widget.CheckBox
 import android.widget.ImageView
 import android.widget.TextView
-import java.io.File
 
 /**
  * Adapter for the Outputs dialog list.
- * Shows items grouped by type with section headers.
- * Each item shows: checkbox, thumbnail (for images), name, size, delete button.
+ *
+ * Items are grouped by kind with a section header in front of each group, so
+ * the adapter's [getCount] is larger than the item count. Selection is keyed
+ * by *display* position; [getItem] maps a display position back to its item.
  */
 class OutputsAdapter(
     private val context: Context,
-    private val items: MutableList<OutputStore.OutputFile>,
-    private val onItemClick: (OutputStore.OutputFile) -> Unit,
-    private val onDelete: (OutputStore.OutputFile) -> Unit,
-) : ArrayAdapter<OutputStore.OutputFile>(context, 0, items) {
+    private val items: MutableList<OutputFile>,
+    private val onItemClick: (OutputFile) -> Unit,
+    private val onDelete: (OutputFile) -> Unit,
+) : ArrayAdapter<OutputFile>(context, 0, items) {
 
     private val inflater: LayoutInflater = LayoutInflater.from(context)
 
-    // Section headers: maps position -> section header text
-    private val sectionPositions: MutableMap<Int, String> = mutableMapOf()
+    /** Section header label by display position. Rebuilt by [rebuildSections]. */
+    private val headerAt: MutableMap<Int, String> = mutableMapOf()
+
+    /** Selected display positions. */
+    val selectedIndices: MutableSet<Int> = mutableSetOf()
 
     init {
         rebuildSections()
     }
 
-    /** Rebuild section headers based on current items list. */
+    /** Recompute header positions after the item list changed. */
     fun rebuildSections() {
-        sectionHeaders.clear()
-        sectionPositions.clear()
+        headerAt.clear()
+        var displayPos = 0
         var currentSection: String? = null
-        for (i in items.indices) {
-            val kind = items[i].kind
-            if (kind != currentSection) {
-                currentSection = kind
-                sectionPositions[i] = kind.uppercase()
+        for (item in items) {
+            if (item.kind != currentSection) {
+                currentSection = item.kind
+                headerAt[displayPos] = item.kind
+                displayPos++
             }
+            displayPos++
         }
     }
 
-    private val sectionHeaders: MutableMap<Int, String> = mutableMapOf()
+    override fun getCount(): Int = items.size + headerAt.size
 
-    override fun getCount(): Int {
-        return items.size + sectionHeaders.size
-    }
+    private fun headersBefore(position: Int): Int = headerAt.keys.count { it < position }
 
-    override fun getItem(position: Int): OutputStore.OutputFile? {
-        val realIndex = position - countHeadersBefore(position)
+    override fun getItem(position: Int): OutputFile? {
+        val realIndex = position - headersBefore(position)
         return if (realIndex in items.indices) items[realIndex] else null
     }
 
     override fun getItemId(position: Int): Long = position.toLong()
 
     override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
-        // Check if this position is a section header
-        val headerText = sectionHeaders[position]
+        val headerText = headerAt[position]
         if (headerText != null) {
             val tv = TextView(context)
-            textViewSetup(textView)
             tv.text = headerText.uppercase()
+            tv.setTextColor(0xFF57606A.toInt())
+            tv.textSize = 12f
+            tv.setTypeface(null, Typeface.BOLD)
+            tv.setPadding(16, 24, 16, 8)
             return tv
         }
 
-        // It's a regular item
-        val realIndex = position - countHeadersBefore(position)
         val item = getItem(position) ?: return View(context)
-
         val view = inflater.inflate(R.layout.item_output, parent, false)
 
         val cb: CheckBox = view.findViewById(R.id.cbOutputItem)
@@ -90,74 +92,61 @@ class OutputsAdapter(
             item.size < 1024 * 1024 -> "${item.size / 1024} KB"
             else -> "${item.size / (1024 * 1024)} MB"
         }
-        tvInfo.text = "${item.kind.uppercase()} • $size"
+        tvInfo.text = "${item.kind.uppercase()} \u2022 $sizeStr"
 
-        // Set thumbnail for images
+        // Thumbnail for images. item.uri is a file:// URI built by OutputStore.list().
         when (item.kind) {
             "image" -> {
-                try {
-                    val bitmap = BitmapFactory.decodeFile(item.path)
-                    if (bitmap != null) {
-                        ivThumb.setImageBitmap(bitmap)
-                    } else {
-                        ivThumb.setImageResource(android.R.drawable.ic_menu_gallery)
-                    }
+                val bitmap = try {
+                    BitmapFactory.decodeFile(item.uri.path)
                 } catch (e: Exception) {
+                    null
+                }
+                if (bitmap != null) {
+                    ivThumb.setImageBitmap(bitmap)
+                } else {
                     ivThumb.setImageResource(android.R.drawable.ic_menu_gallery)
                 }
             }
-            "video" -> ivThumb.setImageResource(android.R.drawable.ic_media_video)
+            "video" -> ivThumb.setImageResource(android.R.drawable.ic_media_ff)
             "audio" -> ivThumb.setImageResource(android.R.drawable.ic_media_play)
             "text" -> ivThumb.setImageResource(android.R.drawable.ic_menu_edit)
             else -> ivThumb.setImageResource(android.R.drawable.ic_menu_info_details)
         }
 
-        // Checkbox click - toggle selection
         cb.setOnCheckedChangeListener { _, isChecked ->
-            if (isChecked) {
-                selectedIndices.add(position)
-            } else {
-                selectedIndices.remove(position)
-            }
+            if (isChecked) selectedIndices.add(position) else selectedIndices.remove(position)
         }
 
-        // Item click - toggle selection AND open file
+        // Item click: toggle selection and open the file.
         view.setOnClickListener {
             cb.isChecked = !cb.isChecked
-            if (cb.isChecked) {
-                selectedIndices.add(position)
-            } else {
-                selectedIndices.remove(position)
-            }
             onItemClick(item)
         }
 
-        // Delete button click
-        ivDelete.setOnClickListener {
-            onDelete(item)
-        }
+        ivDelete.setOnClickListener { onDelete(item) }
 
         return view
     }
 
-    private fun countHeadersBefore(position: Int): Int {
-        var count = 0
-        for (pos in sectionHeaders.keys) {
-            if (pos < position) count++ else break
-        }
-        return count
+    /** Replace the whole list (sort spinner, delete-all). */
+    fun setItems(newItems: List<OutputFile>) {
+        items.clear()
+        items.addAll(newItems)
+        selectedIndices.clear()
+        rebuildSections()
+        notifyDataSetChanged()
     }
 
-    /** Selected positions */
-    val selectedIndices: MutableSet<Int> = mutableSetOf()
-
-    /** Get selected items */
-    fun getSelectedItems(): List<OutputStore.OutputFile> {
-        return selectedIndices.sorted().mapNotNull { getItem(it) }
-    }
+    /** Currently selected items. */
+    fun getSelectedItems(): List<OutputFile> =
+        selectedIndices.sorted().mapNotNull { getItem(it) }
 
     fun selectAll() {
-        selectedIndices = (0 until items.size).toMutableSet()
+        selectedIndices.clear()
+        for (p in 0 until count) {
+            if (headerAt[p] == null) selectedIndices.add(p)
+        }
         notifyDataSetChanged()
     }
 
@@ -175,19 +164,11 @@ class OutputsAdapter(
         notifyDataSetChanged()
     }
 
-    fun deleteItemAt(position: Int) {
-        val realIndex = position - countHeadersBefore(position)
-        val item = getItem(position)
-        if (item != null) {
-            onDelete(item)
-        }
-    }
-
-    fun removeItem(item: OutputStore.OutputFile) {
+    fun removeItem(item: OutputFile) {
         val index = items.indexOf(item)
         if (index >= 0) {
             items.removeAt(index)
-            selectedIndices.remove(index)
+            selectedIndices.clear()
             rebuildSections()
             notifyDataSetChanged()
         }

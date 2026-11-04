@@ -832,8 +832,29 @@
                             app:backgroundTint="@color/prism_green"
                             app:cornerRadius="8dp" />
 
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnOcr"
+                            style="@style/Widget.MaterialComponents.Button"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="8dp"
+                            android:text="@string/btn_ocr"
+                            app:backgroundTint="@color/prism_accent"
+                            app:cornerRadius="8dp" />
+
                         <TextView
                             android:id="@+id/captionOut"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="8dp"
+                            android:fontFamily="monospace"
+                            android:text=""
+                            android:textColor="@color/prism_muted"
+                            android:textIsSelectable="true"
+                            android:textSize="11sp" />
+
+                        <TextView
+                            android:id="@+id/ocrOut"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="8dp"

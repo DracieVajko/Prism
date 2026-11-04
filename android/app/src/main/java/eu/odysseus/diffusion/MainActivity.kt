@@ -86,6 +86,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var imageFileLabel: TextView
     private lateinit var btnUpscale: MaterialButton
     private lateinit var btnCaption: MaterialButton
+    private lateinit var btnOcr: MaterialButton
+    private lateinit var ocrOut: TextView
     private lateinit var visionOut: TextView
     private lateinit var btnCopyLog: TextView
     private lateinit var btnSaveImage: MaterialButton
@@ -207,6 +209,7 @@ class MainActivity : AppCompatActivity() {
         imageFileLabel = findViewById(R.id.imageFileLabel)
         btnUpscale = findViewById(R.id.btnUpscale)
         btnCaption = findViewById(R.id.btnCaption)
+        btnOcr = findViewById(R.id.btnOcr)
         visionOut = findViewById(R.id.visionOut)
         btnCopyLog = findViewById(R.id.btnCopyLog)
         btnSaveImage = findViewById(R.id.btnSaveImage)
@@ -237,6 +240,7 @@ class MainActivity : AppCompatActivity() {
         btnSaveInpaint = findViewById(R.id.btnSaveInpaint)
 
         captionOut = findViewById(R.id.captionOut)
+        ocrOut = findViewById(R.id.ocrOut)
         captionImageLabel = findViewById(R.id.captionImageLabel)
         btnPickImageCaption = findViewById(R.id.btnPickImageCaption)
         toolsInfo = findViewById(R.id.toolsInfo)
@@ -337,25 +341,11 @@ class MainActivity : AppCompatActivity() {
 
     /** Default output folder browser: open, share and clear what the jobs produced. */
     private fun showOutputsDialog() {
-        val allFiles = OutputStore.list(this, 200)
+        val outputItems = OutputStore.list(this).toMutableList()
         val (count, bytes) = OutputStore.total(this)
-        if (allFiles.isEmpty()) {
+        if (outputItems.isEmpty()) {
             toast("No outputs yet")
             return
-        }
-
-        // Build OutputFile objects with URIs
-        val outputItems = allFiles.map { f ->
-            val kind = f.parentFile?.name ?: "text"
-            val uri = android.net.Uri.fromFile(f)
-            OutputStore.OutputFile(
-                name = f.name,
-                kind = kind,
-                size = f.length(),
-                path = "$kind/${f.name}",
-                uri = uri,
-                lastModified = f.lastModified(),
-            )
         }
 
         val dialog = android.app.AlertDialog.Builder(this)
@@ -366,7 +356,7 @@ class MainActivity : AppCompatActivity() {
         val spinnerSort: android.widget.Spinner = view.findViewById(R.id.spinnerSortOutputs)
         val btnSelectAll: com.google.android.material.button.MaterialButton = view.findViewById(R.id.btnSelectAllOutputs)
         val btnDeleteSelected: com.google.android.material.button.MaterialButton = view.findViewById(R.id.btnDeleteSelectedOutputs)
-        val btnDeleteAll: com.google.android.material.button.MaterialButton = view.findViewById(R.id.btnDeleteSelectedOutputs)
+        val btnDeleteAll: com.google.android.material.button.MaterialButton = view.findViewById(R.id.btnDeleteAllOutputs)
         val btnDownloadAll: com.google.android.material.button.MaterialButton = view.findViewById(R.id.btnDownloadAllOutputs)
 
         // Sort spinner
@@ -375,10 +365,11 @@ class MainActivity : AppCompatActivity() {
         spinnerSort.adapter = sortAdapter
         spinnerSort.setSelection(0) // date by default
 
-        // Adapter
-        val adapter = OutputsAdapter(this, outputItems,
+        // Adapter. The delete callback drops the row immediately.
+        lateinit var adapter: OutputsAdapter
+        adapter = OutputsAdapter(this, outputItems,
             { item -> openOutputFile(item) }, // onItemClick - open file
-            { item -> deleteOutputFile(item) } // onDelete
+            { item -> if (deleteOutputFile(item)) adapter.removeItem(item) } // onDelete
         )
         rv.adapter = adapter
 
@@ -391,23 +382,7 @@ class MainActivity : AppCompatActivity() {
                     2 -> "size"
                     else -> "date"
                 }
-                val sorted = OutputStore.list(this@MainActivity, limit = 200, sortBy = sortBy)
-                val newItems = sorted.map { f ->
-                    val kind = f.parentFile?.name ?: "text"
-                    val uri = android.net.Uri.fromFile(f)
-                    OutputStore.OutputFile(
-                        name = f.name,
-                        kind = kind,
-                        size = f.length(),
-                        path = "$kind/${f.name}",
-                        uri = uri,
-                        lastModified = f.lastModified(),
-                    )
-                }
-                adapter.items.clear()
-                adapter.items.addAll(newItems)
-                adapter.rebuildSections()
-                adapter.notifyDataSetChanged()
+                adapter.setItems(OutputStore.list(this@MainActivity, limit = 200, sortBy = sortBy))
             }
             override fun onNothingSelected(parent: android.widget.AdapterView<*>) {}
         })
@@ -427,11 +402,7 @@ class MainActivity : AppCompatActivity() {
             android.app.AlertDialog.Builder(this)
                 .setTitle("Delete ${selected.size} item(s)?")
                 .setMessage("Are you sure you want to delete the selected files?")
-                .setPositiveButton("Delete") { _, _ ->
-                    adapter.deleteSelected()
-                    // Rebuild list after deletion
-                    refreshOutputsDialog(adapter, rv)
-                }
+                .setPositiveButton("Delete") { _, _ -> adapter.deleteSelected() }
                 .setNegativeButton("Cancel", null)
                 .show()
             }
@@ -440,15 +411,11 @@ class MainActivity : AppCompatActivity() {
         btnDeleteAll.setOnClickListener {
             android.app.AlertDialog.Builder(this)
                 .setTitle("Delete all outputs?")
-                .setMessage("Are you sure you want to delete all ${adapter.count} files?")
+                .setMessage("Are you sure you want to delete all ${OutputStore.total(this).first} files?")
                 .setPositiveButton("Delete All") { _, _ ->
-                    adapter.items.clear()
-                    adapter.notifyDataSetChanged()
-                    OutputStore.list(this, 200).forEach { f -> f.delete() }
-                    rv.adapter = null
-                    btnSelectAll.isEnabled = false
-                    btnDeleteSelected.isEnabled = false
-                    btnDeleteAll.isEnabled = false
+                    val n = OutputStore.deleteAll(this)
+                    adapter.setItems(emptyList())
+                    toast("Deleted $n file(s)")
                 }
                 .setNegativeButton("Cancel", null)
                 .show()
@@ -467,38 +434,16 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun refreshOutputsDialog(adapter: OutputsAdapter, rv: android.widget.ListView) {
-        val remaining = OutputStore.list(this, 200)
-        val newItems = remaining.map { f ->
-            val kind = f.parentFile?.name ?: "text"
-            val uri = android.net.Uri.fromFile(f)
-            OutputStore.OutputFile(
-                name = f.name,
-                kind = kind,
-                size = f.length(),
-                path = "$kind/${f.name}",
-                uri = uri,
-                lastModified = f.lastModified(),
-            )
-        }
-        adapter.items.clear()
-        adapter.items.addAll(newItems)
-        adapter.rebuildSections()
-        adapter.notifyDataSetChanged()
+    private fun deleteOutputFile(file: OutputFile): Boolean {
+        val f = java.io.File(OutputStore.root(this), file.path)
+        val ok = f.delete()
+        toast(if (ok) "Deleted ${file.name}" else "Delete failed")
+        return ok
     }
 
-    private fun deleteOutputFile(file: OutputStore.OutputFile) {
-        val f = java.io.File(OutputStore.root(this), "${file.kind}/${file.name}")
-        if (f.delete()) {
-            adapter?.let { adapter.removeItem(file) }
-            toast("Deleted ${file.name}")
-        } else {
-            toast("Delete failed")
-        }
-    }
-
-    private fun openOutputFile(file: java.io.File) {
-        val mime = when (file.extension.lowercase()) {
+    private fun openOutputFile(file: OutputFile) {
+        val f = java.io.File(OutputStore.root(this), file.path)
+        val mime = when (f.extension.lowercase()) {
             "png" -> "image/png"
             "jpg", "jpeg" -> "image/jpeg"
             "webp" -> "image/webp"
@@ -510,7 +455,7 @@ class MainActivity : AppCompatActivity() {
         }
         try {
             val uri = androidx.core.content.FileProvider.getUriForFile(
-                this, "$packageName.files", file)
+                this, "$packageName.files", f)
             startActivity(Intent(Intent.ACTION_VIEW).apply {
                 setDataAndType(uri, mime)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
@@ -1127,6 +1072,7 @@ class MainActivity : AppCompatActivity() {
         }
         btnUpscale.setOnClickListener { runUpscale() }
         btnCaption.setOnClickListener { runCaption() }
+        btnOcr.setOnClickListener { runOcr() }
     }
 
     private fun runGenerate() {
@@ -1398,6 +1344,71 @@ class MainActivity : AppCompatActivity() {
                     else "error: " + j.optString("error", resp)
                 } catch (e: Exception) {
                     captionOut.text = "error: ${e.message}"
+                }
+            }
+        }.start()
+    }
+
+
+    /** OCR on the picked image through our own /v1/images/ocr endpoint.
+     * Honest errors: 503 shows the reason (model not downloaded, low RAM,
+     * will-not-load); first run pays engine build (~15-20 s, then cached). */
+    private fun runOcr() {
+        val uri = imageUri ?: run { toast("Pick an image first"); return }
+        ocrOut.text = "ocr: reading page… first run can take 15-60 s"
+        btnOcr.isEnabled = false
+        btnCaption.isEnabled = false
+        Thread {
+            var resp: String? = null
+            var readBytes: ByteArray? = null
+            try {
+                readBytes = contentResolver.openInputStream(uri)?.use { it.readBytes() }
+            } catch (e: Exception) {
+                handler.post {
+                    btnOcr.isEnabled = true; btnCaption.isEnabled = true
+                    ocrOut.text = "error: cannot read file: ${e.message}"
+                }
+                return@Thread
+            }
+            if (readBytes == null || readBytes.isEmpty()) {
+                handler.post { btnOcr.isEnabled = true; btnCaption.isEnabled = true; ocrOut.text = "error: empty file" }
+                return@Thread
+            }
+            try {
+                val b64 = android.util.Base64.encodeToString(readBytes, android.util.Base64.NO_WRAP)
+                val body = org.json.JSONObject()
+                    .put("image", b64)
+                    .put("language", "auto")
+                    .put("model", "xiaomi-ocr-0")
+                    .toString()
+                resp = httpPostJson("http://127.0.0.1:8101/v1/images/ocr", body)
+            } catch (e: Exception) {
+                resp = null
+                log("ocr request failed: ${e.message}")
+            }
+            handler.post {
+                btnOcr.isEnabled = true
+                btnCaption.isEnabled = true
+                if (resp == null) {
+                    ocrOut.text = "error: no response (is the server STARTed?)"
+                    return@post
+                }
+                try {
+                    val j = org.json.JSONObject(resp)
+                    val text = j.optString("text", "")
+                    ocrOut.text = when {
+                        text.isNotEmpty() -> {
+                            if (text.length > 4000) text.take(4000) + "\n… (full result saved to Outputs → text)"
+                            else text
+                        }
+                        else -> {
+                            val reason = j.optString("reason", "")
+                            val err = j.optString("error", j.optString("detail", resp))
+                            "error: " + (if (reason.isNotEmpty()) "$err — $reason" else err)
+                        }
+                    }
+                } catch (e: Exception) {
+                    ocrOut.text = "error: ${e.message}"
                 }
             }
         }.start()

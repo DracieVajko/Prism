@@ -17,6 +17,7 @@ import io.ktor.server.netty.NettyApplicationEngine
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.plugins.statuspages.StatusPages
 import io.ktor.server.request.receive
+import io.ktor.server.request.contentType
 import io.ktor.server.request.path
 import io.ktor.server.request.httpMethod
 import io.ktor.server.request.receiveMultipart
@@ -818,21 +819,20 @@ private val batchState = ConcurrentHashMap<String, BatchState>()
                     return@get
                 }
                 val limit = (call.request.queryParameters["limit"] ?: "200").toIntOrNull() ?: 200
-                val files = OutputStore.list(ctx, limit.coerceIn(1, 1000))
+                val files = OutputStore.list(ctx, null, limit.coerceIn(1, 1000))
                 call.respond(
                     jsonOf(
                         "dir" to OutputStore.root(ctx).absolutePath,
                         "count" to files.size,
                         "engine" to "android-outputs",
                         "files" to files.map { f ->
-                            val kind = f.parentFile?.name ?: ""
                             jsonOf(
                                 "name" to f.name,
-                                "kind" to kind,
-                                "size" to f.length(),
-                                "mtime" to f.lastModified() / 1000,
-                                "path" to "$kind/${f.name}",
-                                "url" to "/v1/outputs/$kind/${f.name}",
+                                "kind" to f.kind,
+                                "size" to f.size,
+                                "mtime" to f.lastModified / 1000,
+                                "path" to f.path,
+                                "url" to "/v1/outputs/${f.path}",
                             )
                         },
                     ),
@@ -1427,6 +1427,98 @@ private val batchState = ConcurrentHashMap<String, BatchState>()
                     "engine" to "smolvlm-llama",
                 ))
             }
+            post("/v1/images/ocr") {
+                // PC contract: multipart form-data (file, language, model).
+                // The app UI may also send application/json {"image": <b64>}
+                // for parity with /v1/images/caption.
+                var bytes = ByteArray(0)
+                var language = "auto"
+                var modelParam = "xiaomi-ocr-0"
+                val ct = call.request.contentType()
+                if (ct.match(ContentType.MultiPart.FormData)) {
+                    call.receiveMultipart().forEachPart { part ->
+                        when (part) {
+                            is PartData.FileItem -> bytes = part.provider().readBytes()
+                            is PartData.FormItem -> when (part.name) {
+                                "language" -> language = part.value.ifBlank { "auto" }
+                                "model" -> if (part.value.isNotBlank()) modelParam = part.value
+                                else -> {}
+                            }
+                            else -> {}
+                        }
+                        part.dispose()
+                    }
+                } else {
+                    val body = call.receiveText()
+                    if (body.isNotBlank()) {
+                        val root = try {
+                            Json.parseToJsonElement(body).jsonObject
+                        } catch (e: Exception) {
+                            call.respond(HttpStatusCode.BadRequest, jsonOf("error" to "body must be JSON or multipart form-data"))
+                            return@post
+                        }
+                        val imgB64 = root["image"]?.jsonPrimitive?.contentOrNull ?: ""
+                        if (imgB64.isNotEmpty()) {
+                            try {
+                                bytes = android.util.Base64.decode(imgB64, android.util.Base64.DEFAULT)
+                            } catch (e: Exception) {
+                                call.respond(HttpStatusCode.BadRequest, jsonOf("error" to "invalid image base64"))
+                                return@post
+                            }
+                        }
+                        language = root["language"]?.jsonPrimitive?.contentOrNull ?: "auto"
+                        root["model"]?.jsonPrimitive?.contentOrNull
+                            ?.takeIf { it.isNotBlank() }?.let { modelParam = it }
+                    }
+                }
+                if (bytes.isEmpty()) {
+                    call.respond(HttpStatusCode.BadRequest, jsonOf("error" to "missing file"))
+                    return@post
+                }
+                val rid = UUID.randomUUID().toString()
+                requireModelReady(XiaomiOcrEngine.MODEL_ID)
+                // OCR needs ~3-4 GB with nothing else resident (measured CPU
+                // peaks: 3.3-4.3 GB); drop the other heavy engines first. The
+                // OCR engine itself is built and released per request, and the
+                // memory check + prep + read run on the single heavy dispatcher
+                // so no other engine can load between the check and the run.
+                releaseResidentForOcr()
+                val ctx = appContext ?: run {
+                    call.respond(HttpStatusCode.InternalServerError, jsonOf("error" to "no app context"))
+                    return@post
+                }
+                val t0 = System.currentTimeMillis()
+                val text: String? = try {
+                    withContext(heavyDispatcher) {
+                        requireMemory(XiaomiOcrEngine.NEEDED_MB, "the Xiaomi-OCR-0 engine")
+                        val png = XiaomiOcrEngine.prep(bytes)
+                        if (png == null) null
+                        else XiaomiOcrEngine.run(
+                            File(downloader.modelDir(XiaomiOcrEngine.MODEL_ID), XiaomiOcrEngine.MODEL_FILE),
+                            png,
+                            XiaomiOcrEngine.prompt(language),
+                            cacheDir = File(ctx.cacheDir, "litertlm-ocr"),
+                        )
+                    }
+                } catch (t: Throwable) {
+                    if (t is ModelWillNotLoadError) throw t
+                    throw ModelWillNotLoadError("OCR engine failed: ${t.javaClass.simpleName}: ${t.message}", -1, -1)
+                }
+                if (text == null) {
+                    call.respond(HttpStatusCode.BadRequest, jsonOf("error" to "invalid image (not decodable)"))
+                    return@post
+                }
+                val elapsed = (System.currentTimeMillis() - t0) / 1000.0
+                call.respond(jsonOf(
+                    "text" to text,
+                    "model" to modelParam,
+                    "language" to language,
+                    "outputs" to outputList(storeText(text, rid, ".md")),
+                    "elapsed" to elapsed,
+                    "request_id" to rid,
+                    "engine" to "litertlm-xiaomi-ocr-0",
+                ))
+            }
             post("/v1/chat/completions") {
                 // Vision chat on device: the same SmolVLM engine that captions,
                 // fed with the conversation text + the first image in the thread.
@@ -1703,6 +1795,21 @@ switchTo("audio", effectiveModel) // 503 loading while switching image→audio
             RealEsrganNcnnEngine.release()
         }
         return manager.ensure(kind, id)
+    }
+
+    /**
+     * OCR needs ~3-4 GB of free RAM (measured CPU peaks: 3.3-4.3 GB on Pixel
+     * 11 Pro / Galaxy S26), so nothing else may stay resident during a read.
+     * Every heavy engine is released and the residency slot cleared; the OCR
+     * engine itself is per-request and never stays in the slot.
+     */
+    private fun releaseResidentForOcr() {
+        val prev = manager.status().loadedKind
+        if (prev == "audio") WhisperLib.release()
+        if (prev == "upscale" && RealEsrganNcnnEngine.isReady()) RealEsrganNcnnEngine.release()
+        if (prev == "vlm" && SmolVlmEngine.isReady()) SmolVlmEngine.release()
+        if (prev == "image") LcmOnnxEngine.release()
+        manager.unload("ocr")
     }
 
 

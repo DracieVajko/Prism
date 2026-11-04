@@ -23,7 +23,7 @@ data class ModelFile(
 
 data class ModelAsset(
     val id: String,
-    val kind: String, // audio | image | upscale | vlm | custom
+    val kind: String, // audio | image | upscale | vlm | ocr | custom
     val label: String,
     val files: List<ModelFile>,
     val engine: String = "",
@@ -136,15 +136,32 @@ object ModelCatalog {
         ),
     )
 
-    val assets: List<ModelAsset> = audio + image + upscale + vlm
+/** OCR: Xiaomi-OCR-0 as the official LiteRT-LM conversion (com.google.ai.edge.litertlm). */
+private val ocr: List<ModelAsset> = listOf(
+    ModelAsset(
+        id = "xiaomi-ocr-0", kind = "ocr", engine = "litertlm",
+        label = "Xiaomi-OCR-0 int8 LiteRT-LM — 1.25 GB, OCR / tables / key info",
+        files = listOf(
+            ModelFile("Xiaomi-OCR-0_int8.litertlm",
+                "https://huggingface.co/litert-community/Xiaomi-OCR-0/resolve/main/Xiaomi-OCR-0_int8.litertlm",
+                1254, "82880f7361b90f51a3fda9609878e24b4a00e95a058f8ff47391b90e5e95d9be"),
+        ),
+        note = "Official Google conversion (litert-community, min runtime 0.19.0). " +
+               "Runs on CPU: ~10-60 s per page, peak RAM ~3-4 GB — the server " +
+               "refuses OCR with an honest 503 when memory is short.",
+    ),
+)
 
-    val kinds: List<String> = listOf("audio", "image", "upscale", "vlm", "custom")
+    val assets: List<ModelAsset> = audio + image + upscale + vlm + ocr
+
+    val kinds: List<String> = listOf("audio", "image", "upscale", "vlm", "ocr", "custom")
 
     fun kindLabel(kind: String): String = when (kind) {
         "audio" -> "Transcription (Whisper)"
         "image" -> "Image generation"
         "upscale" -> "Upscale"
         "vlm" -> "Vision-language (VLM)"
+        "ocr" -> "OCR (Xiaomi-OCR-0)"
         "custom" -> "Custom (own URL)"
         else -> kind
     }

@@ -14,6 +14,7 @@ host, no network after the models are downloaded.
 | Harmonize | TODO | CPU (Kotlin) | color match + seam feather |
 | Upscale | TODO | ONNX Runtime or NCNN | Real-ESRGAN |
 | Caption | TODO | ONNX Runtime (SmolVLM) | VLM |
+| OCR | **DONE (device run pending)** | LiteRT-LM (Xiaomi-OCR-0) | 1.25 GB, CPU 10-60 s/page, 3-4 GB RAM |
 | Chat (vision) | TODO | ONNX Runtime (SmolVLM) | same engine as Caption |
 | FFmpeg tools | TODO | bundled ffmpeg / ffmpeg-kit | no binary today |
 
@@ -259,3 +260,37 @@ The two 30B-A4B variants (NVFP4 21.6 GB, FP8 34.7 GB) are PC-only by design.
 Nemotron was about 5x faster and produced correct capitalisation plus correct
 diacritics on "ukaz" (whisper dropped it). Both transcribed the trailing unclear
 word as "zana".
+
+## OCR - Xiaomi-OCR-0 via LiteRT-LM (2026-11-04)
+
+Implemented in `android/app/src/main/java/eu/odysseus/diffusion/XiaomiOcrEngine.kt`
+and exposed as `POST /v1/images/ocr` with the PC multipart contract (`file`,
+`language`, `model`), plus a JSON `{"image": "<base64>"}` form for the app UI.
+
+- Runtime: `com.google.ai.edge.litertlm:litertlm-android:0.19.0` from Google
+  Maven (not published on Maven Central). AAR is 20.2 MB with
+  `jni/arm64-v8a/liblitertlm_jni.so`, minSdk 24. Its POM pulls Kotlin
+  stdlib/reflect 2.4.0, so the app keeps Kotlin 1.9.24 and adds
+  `-Xskip-metadata-version-check` - the same flag Google's own litert-samples
+  uses with a 2.3.0 compiler.
+- Weights: official Google conversion `litert-community/Xiaomi-OCR-0`,
+  `Xiaomi-OCR-0_int8.litertlm`, 1254 MB, sha256
+  `82880f7361b90f51a3fda9609878e24b4a00e95a058f8ff47391b90e5e95d9be`,
+  minimum runtime 0.19.0.
+- Input prep: downsample decode, EXIF orientation, center on a white 4:7 canvas,
+  768x1344 PNG. The runtime resizes without keeping the aspect ratio and ignores
+  EXIF; the sample (`litert-samples/.../receipt_to_json`) pads the same way.
+- Engine lifetime: one Engine + Conversation per request, both closed
+  afterwards. Reusing an engine leaks recurrent state between conversations
+  (LiteRT-LM issue #3165). The runtime cache directory keeps the build at
+  ~2.5-4 s.
+- Memory: `requireMemory(2800 MB, ...)` and every resident heavy engine is
+  released before the read. Model-card CPU peaks: 3.3-4.3 GB RSS.
+- Timings from the model card (not re-measured here): Galaxy S26 9.7-13 s per
+  page warm, Pixel 11 Pro 20.6-24.8 s; a page outputs ~211 tokens, context 4096.
+- Honest failures: missing bundle -> 503 `will not load` with reason `model
+  xiaomi-ocr-0 not downloaded (see ModelDownloader)`; low RAM -> 503 with
+  required/free MB; engine failure -> 503 `will not load` with reason.
+- Not yet verified on this phone: `adb devices` was empty on 2026-11-04, so the
+  live-suite entry currently exercises the 503 path until the 1.25 GB bundle is
+  installed. The APK itself builds (93 MB, `liblitertlm_jni.so` present).

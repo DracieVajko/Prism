@@ -29,7 +29,7 @@ data class OutputFile(
  */
 object OutputStore {
     private const val TAG = "OutputStore"
-    private const val KINDS = listOf("image", "video", "audio", "text")
+    private val KINDS = listOf("image", "video", "audio", "text")
 
     fun root(ctx: Context): File =
         File(ctx.getExternalFilesDir(null) ?: ctx.filesDir, "output").apply { mkdirs() }
@@ -112,7 +112,7 @@ object OutputStore {
             try {
                 val values = ContentValues().apply {
                     put(MediaStore.MediaColumns.DISPLAY_NAME, f.name)
-                    put(MediaStore.MediaColumns.MIME_TYPE, mimeOf(f))
+                    put(MediaStore.MediaColumns.MIME_TYPE, mimeOf(outFile))
                     put(MediaStore.MediaColumns.RELATIVE_PATH,
                         "${android.os.Environment.DIRECTORY_DOWNLOADS}/Prism")
                 }
