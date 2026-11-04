@@ -7,7 +7,6 @@ off what is actually installed instead of assuming one environment.
 import pytest
 
 import unified.engine as engine
-import diffusion_server as ds
 
 
 def _stack_available() -> bool:
@@ -17,6 +16,11 @@ def _stack_available() -> bool:
 def test_init_matches_installed_stack():
     ok = engine.init_diffusion_engine()
     if _stack_available():
+        # Import inside the branch: diffusion_server.py assumes torch at
+        # module level (`import torch`, DTYPE_MAP), and unified.engine imports
+        # it only after _have_torch() proved the stack. Without torch (CI)
+        # this import would kill the whole suite at collection.
+        import diffusion_server as ds
         assert ok is True
         # init must have loaded models.json into the registry (no weights)
         assert ds._REGISTRY, "registry empty after init_diffusion_engine"

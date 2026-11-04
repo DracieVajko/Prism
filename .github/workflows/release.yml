@@ -38,17 +38,20 @@ jobs:
       PRISM_KEY_ALIAS: ${{ secrets.PRISM_KEY_ALIAS }}
       PRISM_KEY_PASSWORD: ${{ secrets.PRISM_KEY_PASSWORD }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"
 
-      - uses: android-actions/setup-android@v3
-
+      # The Android SDK is preinstalled on the runner (ANDROID_HOME set,
+      # sdkmanager on PATH). android-actions/setup-android@v3 is skipped: on
+      # current runners it fails installing the removed 'tools' package.
       - name: Install SDK packages
-        run: sdkmanager "platforms;android-34" "build-tools;34.0.0"
+        run: |
+          yes | sdkmanager --licenses > /dev/null
+          sdkmanager "platforms;android-34" "build-tools;34.0.0" > /dev/null
 
       - name: Restore keystore (optional)
         if: env.PRISM_KEYSTORE_BASE64 != ''
@@ -138,7 +141,7 @@ jobs:
       matrix:
         os: [ ubuntu-latest, macos-latest ]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: actions/setup-python@v5
         with:
