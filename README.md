@@ -5,18 +5,34 @@ the one you want to run.
 
 ## Start here (PC — server + WebUI)
 
-1. Double-click **`Start-Prism.bat`** in this folder.
-2. The browser opens the WebUI automatically.
-   - `http://127.0.0.1:8101/webui` normally.
-   - If port 8101 is still used by the old `OdysseusDiffusion` service, the
-     launcher starts Prism on **8102** and opens that URL instead.
-3. Stop it with **`Stop-Prism.bat`**.
+| Platform | Start | Stop | Auto-start at boot/login |
+|---|---|---|---|
+| **Windows** | `Start-Prism.bat` | `Stop-Prism.bat` | `pc\scripts\install-prism-service.ps1` (elevated) |
+| **Linux** | `./pc/scripts/start-prism.sh` | `./pc/scripts/stop-prism.sh` | `./pc/scripts/install-prism-service.sh` |
+| **macOS** | `./pc/scripts/start-prism.sh` | `./pc/scripts/stop-prism.sh` | `./pc/scripts/install-prism-service.sh` |
 
-The WebUI has Generate, Edit/Inpaint, Upscale, Transcribe, Caption/Chat and
-FFmpeg tools. If a feature is not available on this machine it says so
-(503 will-not-load) instead of faking output.
+The launcher starts the server and opens the WebUI at
+`http://127.0.0.1:8101/webui` (falling back to 8102 when 8101 is taken).
 
-Android is separate: build/install `android/` (see below).
+One server answers everything: image generation, edits, inpaint, outpaint,
+upscale, caption, chat, transcription (Whisper or Nemotron), OCR, subtitles,
+FFmpeg and the outputs/batch/jobs API. Models are loaded on the first request
+and released after the idle timeout, so an idle server holds no weights.
+
+If a feature cannot run on this machine it answers `503` with a reason instead
+of faking output.
+
+### Removing the old services
+
+`OdysseusDiffusion` and `whisper-api` are superseded. From an elevated
+PowerShell:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File pc\scripts\remove-legacy-services.ps1 -WhatIf   # preview
+powershell -ExecutionPolicy Bypass -File pc\scripts\remove-legacy-services.ps1           # delete
+```
+
+Android is separate: install the APK or build `android/` (see below).
 
 | Product | Folder | What it is |
 |---|---|---|

@@ -6,10 +6,14 @@ All paths below are relative to the repository root. The PC product lives in
 ## Start / stop (Windows, .venv)
 
 ```powershell
-.\pc\scripts\Start-Unified.ps1            # :8101 lazy, whisper fallback -> :4444
-.\pc\scripts\Start-Unified.ps1 -Remote    # + bind 0.0.0.0 (Tailscale/LAN)
-.\pc\scripts\Start-Unified.ps1 -Shim      # + legacy :4444 -> :8101 for old clients
-.\pc\scripts\Stop-Unified.ps1
+.\pc\Start-Prism.bat                    # :8101 (falls back to 8102 if busy), opens the WebUI
+powershell -File pc\scripts\Start-Prism.ps1 -Remote    # + bind 0.0.0.0 (Tailscale/LAN)
+.\pc\Stop-Prism.bat                     # stop the service, the autostart runner, or whatever holds the port
+
+# Linux / macOS
+./pc/scripts/start-prism.sh
+./pc/scripts/stop-prism.sh
+./pc/scripts/install-prism-service.sh    # systemd user unit / launchd agent, auto-start
 ```
 
 The scripts look for a venv in `pc/.venv` first, then the repo-root `.venv`.
@@ -141,11 +145,15 @@ extract-audio|trim|compress|info}` (multipart).
 The `OdysseusDiffusion` service currently runs the old `pc/diffusion_server.py`. Switching
 (changes the running service, run it deliberately):
 
-```powershell
-.\Switch-Service-ToUnified.ps1 -WhatIf   # shows what it would change
-.\Switch-Service-ToUnified.ps1           # switches to unified_server
-.\Switch-Service-ToUnified.ps1 -Revert   # reverts to the old diffusion_server
-```
+powershell -ExecutionPolicy Bypass -File pc\scripts\install-prism-service.ps1 -RemoveLegacy
+
+That creates the single `Prism` service (auto start at boot), points it at
+`unified_server:app` on port 8101, and deletes the old `OdysseusDiffusion` and
+`whisper-api` services. Without elevation it writes a Startup-folder launcher
+instead. To remove the old services without reinstalling Prism:
+
+powershell -ExecutionPolicy Bypass -File pc\scripts\remove-legacy-services.ps1 -WhatIf
+powershell -ExecutionPolicy Bypass -File pc\scripts\remove-legacy-services.ps1
 
 ## Odysseus wiring
 
@@ -156,11 +164,19 @@ The `OdysseusDiffusion` service currently runs the old `pc/diffusion_server.py`.
 
 ## Portable package (Win/Mac/Linux)
 
-V1 = repo + `.venv` + `models/` + `Start-Unified.ps1` (Win) /
-`uvicorn unified_server:app` (.venv python) everywhere. Mac: `--cpu` path
-automatically (torch MPS/CPU, SD slow but functional); Linux: same venv
-procedure as Win. A full installer (PyInstaller/Briefcase) only after V1
-stabilizes — the venv is ~8 GB, models ~19 GB, none of it should be committed.
+V1 = repo + `.venv` + `models/` + a launcher per platform:
+
+| Platform | Start | Stop | Auto-start |
+|---|---|---|---|
+| Windows | `Start-Prism.bat` | `Stop-Prism.bat` | `pc\scripts\install-prism-service.ps1` |
+| Linux | `./pc/scripts/start-prism.sh` | `./pc/scripts/stop-prism.sh` | `./pc/scripts/install-prism-service.sh` (systemd user unit + lingering) |
+| macOS | `./pc/scripts/start-prism.sh` | `./pc/scripts/stop-prism.sh` | `./pc/scripts/install-prism-service.sh` (launchd agent) |
+
+Under the hood every launcher runs `python -m uvicorn unified_server:app` from
+the venv. Mac uses the CPU path automatically (torch MPS/CPU; SD is slow but
+functional); Linux follows the same venv procedure as Windows. A packaged
+installer (PyInstaller/Briefcase) only after V1 stabilises: the venv is ~8 GB
+and models ~19 GB, none of which belongs in git.
 
 ## Android
 

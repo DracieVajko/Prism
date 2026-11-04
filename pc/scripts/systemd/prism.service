@@ -1,0 +1,22 @@
+[Unit]
+Description=Prism unified server (images, audio, OCR, VLM, ffmpeg)
+Documentation=https://github.com/DracieVajko/Prism
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Copy prism.env.example to /etc/prism.env and adjust WORKDIR, USER, port.
+# Or install the per-user unit instead (no root needed):
+#   pc/scripts/install-prism-service.sh
+EnvironmentFile=-/etc/prism.env
+WorkingDirectory=/opt/prism/pc
+ExecStart=/opt/prism/.venv/bin/python -m uvicorn unified_server:app --host 0.0.0.0 --port 8101
+Restart=on-failure
+RestartSec=10
+# Models load on first request and unload on idle; no tuning needed at boot.
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

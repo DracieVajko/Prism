@@ -21,7 +21,28 @@ this `pc/` folder if you downloaded only PC). It finds a Python with the
 dependencies, starts the server and opens the WebUI; if port 8101 is occupied
 by the old service it uses 8102. Stop with `Stop-Prism.bat`.
 
-Linux/macOS: `./scripts/Start-Unified.sh` (venv at `pc/.venv` or repo root `.venv`).
+Linux/macOS: `./scripts/start-prism.sh` (venv at `pc/.venv` or repo root `.venv`),
+stop with `./scripts/stop-prism.sh`.
+
+To run Prism automatically at boot/login on either platform:
+
+```bash
+# Linux (systemd user unit, enables lingering so it starts before login)
+# macOS (launchd agent)
+./pc/scripts/install-prism-service.sh
+
+# Windows, elevated PowerShell
+powershell -ExecutionPolicy Bypass -File pc\scripts\install-prism-service.ps1 -RemoveLegacy
+```
+
+`-RemoveLegacy` deletes the old `OdysseusDiffusion` and `whisper-api` services.
+To remove them later, or on a machine where Prism is already installed:
+
+```powershell
+# preview first, then run for real
+powershell -ExecutionPolicy Bypass -File pc\scripts\remove-legacy-services.ps1 -WhatIf
+powershell -ExecutionPolicy Bypass -File pc\scripts\remove-legacy-services.ps1
+```
 
 ## GPU (optional)
 
@@ -69,7 +90,7 @@ with `--port 8200`).
 | `unified/` | LCM ONNX pipeline, upscale, VLM, FFmpeg, model manager, registry |
 | `diffusion_server.py` | legacy Diffusers engine (CUDA) used when torch is installed |
 | `webui_unified.html` | WebUI |
-| `scripts/` | Start/Stop, service switch, install, firewall, systemd |
+| `scripts/` | Start/Stop (`.ps1` + `.sh`), service install, legacy cleanup, firewall, systemd |
 | `tools/` | e2e tests, model conversion, reference scripts |
 | `tests/` | pytest unit tests |
 | `legacy/` | old image-only launcher and scripts (kept for reference) |
@@ -77,13 +98,26 @@ with `--port 8200`).
 
 ## Service (Windows)
 
-The `OdysseusDiffusion` service currently points at the old root layout. Run
-`scripts/migrate-service-paths.ps1` **as Administrator** once to repoint it at
-`pc/`, then use `scripts/Start-Unified.ps1` / `Stop-Unified.ps1` or
-`scripts/Switch-Service-ToUnified.ps1`.
+The legacy services (`OdysseusDiffusion`, `whisper-api`) are replaced by the
+single `Prism` service. Install it from an elevated PowerShell:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File pc\scripts\install-prism-service.ps1 -RemoveLegacy
+```
+
+Without elevation the same command writes a hidden launcher into the user's
+Startup folder instead, which also works but only starts at login.
+
+To delete the old services and their files later:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File pc\scripts\remove-legacy-services.ps1 -WhatIf   # preview
+powershell -ExecutionPolicy Bypass -File pc\scripts\remove-legacy-services.ps1           # delete
+```
 
 ## Docs
 
+- `docs/ADMIN-SETUP.md` — service install, legacy removal, verification.
 - `docs/UNIFIED-OPS.md` — operations, CLI, models, GPU, FFmpeg.
 - `docs/UNIFIED-CONTRACT.md` — API contract.
 - `../docs/ODYSSEUS-CONTRACT.md` — shared integration contract.

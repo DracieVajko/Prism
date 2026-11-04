@@ -1,5 +1,5 @@
 @echo off
 setlocal
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\Stop-Unified.ps1"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\Stop-Prism.ps1" %*
 pause
 endlocal
