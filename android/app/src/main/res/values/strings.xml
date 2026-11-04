@@ -30,4 +30,10 @@
     <string name="server_stopped">Server stopped</string>
     <string name="server_running">Server running</string>
     <string name="server_starting">Server starting…</string>
+
+<string-array name="sort_options">
+    <item>Date (newest first)</item>
+    <item>Name (A-Z)</item>
+    <item>Size (smallest first)</item>
+</string-array>
 </resources>

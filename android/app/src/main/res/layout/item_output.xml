@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:padding="8dp"
+    android:background="@android:color/white">
+
+    <CheckBox
+        android:id="@+id/cbOutputItem"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_vertical"
+        android:layout_marginEnd="8dp" />
+
+    <ImageView
+        android:id="@+id/ivOutputThumbnail"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_gravity="center_vertical"
+        android:layout_marginEnd="8dp"
+        android:scaleType="centerCrop"
+        android:background="@android:color/darker_gray" />
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:layout_gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/tvOutputName"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="filename.png"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            android:textColor="#000000"
+            android:ellipsize="end"
+            android:maxLines="1" />
+
+        <TextView
+            android:id="@+id/tvOutputInfo"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="image • 24.5 KB"
+            android:textSize="11sp"
+            android:textColor="#666666"
+            android:maxLines="1" />
+
+    </LinearLayout>
+
+    <ImageView
+        android:id="@+id/ivOutputDelete"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_vertical"
+        android:layout_marginStart="8dp"
+        android:src="@android:drawable/ic_delete"
+        android:contentDescription="Delete" />
+
+</LinearLayout>

@@ -337,31 +337,164 @@ class MainActivity : AppCompatActivity() {
 
     /** Default output folder browser: open, share and clear what the jobs produced. */
     private fun showOutputsDialog() {
-        val files = OutputStore.list(this, 200)
+        val allFiles = OutputStore.list(this, 200)
         val (count, bytes) = OutputStore.total(this)
-        if (files.isEmpty()) {
+        if (allFiles.isEmpty()) {
             toast("No outputs yet")
             return
         }
-        val labels = files.map {
-            val kind = it.parentFile?.name ?: ""
-            "$kind/${it.name}  (${Math.max(1, it.length() / 1024)} KB)"
-        }.toTypedArray()
-        android.app.AlertDialog.Builder(this)
-            .setTitle("Outputs · $count files, ${bytes / 1048576} MB")
-            .setItems(labels) { _, which -> openOutputFile(files[which]) }
-            .setPositiveButton("Save all to Downloads") { _, _ ->
-                Thread {
-                    val n = OutputStore.saveAllToDownloads(this)
-                    handler.post { toast("Saved $n file(s) to Download/Prism") }
-                }.start()
+
+        // Build OutputFile objects with URIs
+        val outputItems = allFiles.map { f ->
+            val kind = f.parentFile?.name ?: "text"
+            val uri = android.net.Uri.fromFile(f)
+            OutputStore.OutputFile(
+                name = f.name,
+                kind = kind,
+                size = f.length(),
+                path = "$kind/${f.name}",
+                uri = uri,
+                lastModified = f.lastModified(),
+            )
+        }
+
+        val dialog = android.app.AlertDialog.Builder(this)
+        val view = layoutInflater.inflate(R.layout.dialog_outputs, null)
+        dialog.setView(view)
+
+        val rv: android.widget.ListView = view.findViewById(R.id.listOutputs)
+        val spinnerSort: android.widget.Spinner = view.findViewById(R.id.spinnerSortOutputs)
+        val btnSelectAll: com.google.android.material.button.MaterialButton = view.findViewById(R.id.btnSelectAllOutputs)
+        val btnDeleteSelected: com.google.android.material.button.MaterialButton = view.findViewById(R.id.btnDeleteSelectedOutputs)
+        val btnDeleteAll: com.google.android.material.button.MaterialButton = view.findViewById(R.id.btnDeleteSelectedOutputs)
+        val btnDownloadAll: com.google.android.material.button.MaterialButton = view.findViewById(R.id.btnDownloadAllOutputs)
+
+        // Sort spinner
+        val sortAdapter = android.widget.ArrayAdapter.createFromResource(
+            this, R.array.sort_options, android.R.layout.simple_spinner_dropdown_item)
+        spinnerSort.adapter = sortAdapter
+        spinnerSort.setSelection(0) // date by default
+
+        // Adapter
+        val adapter = OutputsAdapter(this, outputItems,
+            { item -> openOutputFile(item) }, // onItemClick - open file
+            { item -> deleteOutputFile(item) } // onDelete
+        )
+        rv.adapter = adapter
+
+        // Sort spinner change
+        spinnerSort.setOnItemSelectedListener(object : android.widget.AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: android.widget.AdapterView<*>, view: android.view.View?, position: Int, id: Long) {
+                val sortBy = when (position) {
+                    0 -> "date"
+                    1 -> "name"
+                    2 -> "size"
+                    else -> "date"
+                }
+                val sorted = OutputStore.list(this@MainActivity, limit = 200, sortBy = sortBy)
+                val newItems = sorted.map { f ->
+                    val kind = f.parentFile?.name ?: "text"
+                    val uri = android.net.Uri.fromFile(f)
+                    OutputStore.OutputFile(
+                        name = f.name,
+                        kind = kind,
+                        size = f.length(),
+                        path = "$kind/${f.name}",
+                        uri = uri,
+                        lastModified = f.lastModified(),
+                    )
+                }
+                adapter.items.clear()
+                adapter.items.addAll(newItems)
+                adapter.rebuildSections()
+                adapter.notifyDataSetChanged()
             }
-            .setNeutralButton("Open folder path") { _, _ ->
-                toast(OutputStore.root(this).absolutePath)
-                log("outputs: " + OutputStore.root(this).absolutePath)
+            override fun onNothingSelected(parent: android.widget.AdapterView<*>) {}
+        })
+
+        // Select all
+        btnSelectAll.setOnClickListener {
+            adapter.selectAll()
+        }
+
+        // Delete selected
+        btnDeleteSelected.setOnClickListener {
+            val selected = adapter.getSelectedItems()
+            if (selected.isEmpty()) {
+                toast("No items selected")
+                return@setOnClickListener
             }
+            android.app.AlertDialog.Builder(this)
+                .setTitle("Delete ${selected.size} item(s)?")
+                .setMessage("Are you sure you want to delete the selected files?")
+                .setPositiveButton("Delete") { _, _ ->
+                    adapter.deleteSelected()
+                    // Rebuild list after deletion
+                    refreshOutputsDialog(adapter, rv)
+                }
+                .setNegativeButton("Cancel", null)
+                .show()
+            }
+
+        // Delete all
+        btnDeleteAll.setOnClickListener {
+            android.app.AlertDialog.Builder(this)
+                .setTitle("Delete all outputs?")
+                .setMessage("Are you sure you want to delete all ${adapter.count} files?")
+                .setPositiveButton("Delete All") { _, _ ->
+                    adapter.items.clear()
+                    adapter.notifyDataSetChanged()
+                    OutputStore.list(this, 200).forEach { f -> f.delete() }
+                    rv.adapter = null
+                    btnSelectAll.isEnabled = false
+                    btnDeleteSelected.isEnabled = false
+                    btnDeleteAll.isEnabled = false
+                }
+                .setNegativeButton("Cancel", null)
+                .show()
+            }
+
+        // Download all to Downloads
+        btnDownloadAll.setOnClickListener {
+            Thread {
+                val n = OutputStore.saveAllToDownloads(this)
+                handler.post { toast("Saved $n file(s) to Download/Prism") }
+            }.start()
+        }
+
+        dialog.setTitle("Outputs ($count files, ${bytes / 1048576} MB)")
             .setNegativeButton("Close", null)
             .show()
+    }
+
+    private fun refreshOutputsDialog(adapter: OutputsAdapter, rv: android.widget.ListView) {
+        val remaining = OutputStore.list(this, 200)
+        val newItems = remaining.map { f ->
+            val kind = f.parentFile?.name ?: "text"
+            val uri = android.net.Uri.fromFile(f)
+            OutputStore.OutputFile(
+                name = f.name,
+                kind = kind,
+                size = f.length(),
+                path = "$kind/${f.name}",
+                uri = uri,
+                lastModified = f.lastModified(),
+            )
+        }
+        adapter.items.clear()
+        adapter.items.addAll(newItems)
+        adapter.rebuildSections()
+        adapter.notifyDataSetChanged()
+    }
+
+    private fun deleteOutputFile(file: OutputStore.OutputFile) {
+        val f = java.io.File(OutputStore.root(this), "${file.kind}/${file.name}")
+        if (f.delete()) {
+            adapter?.let { adapter.removeItem(file) }
+            toast("Deleted ${file.name}")
+        } else {
+            toast("Delete failed")
+        }
     }
 
     private fun openOutputFile(file: java.io.File) {
