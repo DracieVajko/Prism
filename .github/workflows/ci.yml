@@ -48,6 +48,35 @@ jobs:
           fi
           yes | "$SDKMANAGER" --licenses > /dev/null || true
           "$SDKMANAGER" "platforms;android-34" "build-tools;34.0.0" > /dev/null
+
+      # whisper.cpp, llama.cpp, LAME and ncnn are not committed (.gitignore):
+      # locally they are staged by android/tools/fetch_third_party.ps1 and
+      # fetch_ncnn.ps1. CI fetches the same sources; whisper.cpp is pinned to
+      # v1.9.5 and llama.cpp to the commit used locally, so the build matches.
+      - name: Fetch native sources
+        run: |
+          set -euo pipefail
+          WHISPER=android/app/src/main/cpp/third_party/whisper.cpp
+          git clone --depth 1 --branch v1.9.5 https://github.com/ggerganov/whisper.cpp "$WHISPER"
+
+          mkdir -p android/third_party
+          git init -q android/third_party/llama.cpp
+          git -C android/third_party/llama.cpp remote add origin https://github.com/ggml-org/llama.cpp
+          git -C android/third_party/llama.cpp fetch -q --depth 1 origin fae9ac561f7c20b320d89103be67372381485653
+          git -C android/third_party/llama.cpp checkout -q FETCH_HEAD
+
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/lame.tar.gz" \
+            https://downloads.sourceforge.net/project/lame/lame/3.100/lame-3.100.tar.gz
+          tar -xzf "$RUNNER_TEMP/lame.tar.gz" -C android/third_party
+          mv android/third_party/lame-3.100 android/third_party/lame
+
+          NCNN_VER=20261020
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/ncnn.zip" \
+            "https://github.com/Tencent/ncnn/releases/download/$NCNN_VER/ncnn-$NCNN_VER-android-vulkan-shared.zip"
+          unzip -q "$RUNNER_TEMP/ncnn.zip" -d android/app/src/main/cpp/third_party/ncnn-shared
+          mkdir -p android/app/src/main/cpp/third_party/ncnn-jni/arm64-v8a
+          cp "android/app/src/main/cpp/third_party/ncnn-shared/ncnn-$NCNN_VER-android-vulkan-shared/arm64-v8a/lib/libncnn.so" \
+             android/app/src/main/cpp/third_party/ncnn-jni/arm64-v8a/
       - name: Assemble debug APK
         working-directory: android
         run: |
