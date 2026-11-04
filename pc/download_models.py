@@ -78,6 +78,16 @@ VLM_TASKS = [
      "license": "Apache-2.0 (see repo card)"},
 ]
 
+# OCR: Xiaomi Nemotron-3.5-OCR-0 (Qwen3.5-0.8B based, ~1.67 GB)
+OCR_TASKS = [
+    {"id": "nemotron-ocr-0", "kind": "snapshot", "repo": "xiaomi-research/Xiaomi-OCR-0",
+     "target": "nemotron-ocr-0", "min_gb": 2.0,
+     "allow": ["*.safetensors", "*.json", "tokenizer/*", "tokenizer_config.json",
+               "*.model", "*.txt", "chat_template.jinja", "generation_config.json"],
+     "license": "Apache-2.0 (see repo card)",
+     "note": "OCR model based on Qwen3.5-0.8B. Requires transformers>=4.51."},
+]
+
 # Audio: NVIDIA Nemotron 3.5 ASR. All three are optional downloads; the 0.6B
 # runs comfortably on CPU, the 30B-A4B variants need far more memory than a
 # 6-8 GB GPU (see the note on each entry) and are offered for completeness.

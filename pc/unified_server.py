@@ -1720,6 +1720,52 @@ async def translations(
     return r
 
 
+@app.post("/v1/images/ocr")
+async def ocr_endpoint(
+    file: UploadFile = File(default=None),
+    language: str = Form(default="auto"),
+    model: str = Form(default="nemotron-ocr-0"),
+):
+    """OCR endpoint using Xiaomi Nemotron-3.5-OCR-0 model.
+    
+    Accepts an image file and returns transcribed text.
+    """
+    if file is None:
+        return JSONResponse(status_code=400, content={"error": "missing file"})
+
+    from unified.ocr_engine import get_ocr_engine
+
+    engine = get_ocr_engine()
+    if not engine.is_installed():
+        return JSONResponse(status_code=503, content={
+            "error": "OCR model not installed",
+            "detail": "Download nemotron-ocr-0 model from Models tab, or run "
+                      "python pc/tools/download_ocr_model.py"})
+
+    if not engine.init():
+        return JSONResponse(status_code=503, content={
+            "error": "OCR model failed to load"})
+
+    try:
+        import tempfile
+        import os
+        # Save uploaded file to temp
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file.filename or ".jpg")[1])
+        content = await file.read()
+        tmp.write(content)
+        tmp.close()
+
+        try:
+            text = engine.transcribe(tmp.name, language=language)
+        finally:
+            Path(tmp.name).unlink(missing_ok=True)
+
+        return {"text": text, "model": model, "language": language}
+    except Exception as e:
+        logger.error(f"OCR endpoint failed: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)[:200]})
+
+
 @app.post("/transcribe")
 async def transcribe_alias(
     file: UploadFile = File(...),
