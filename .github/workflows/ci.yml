@@ -35,13 +35,19 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
-      # The Android SDK is preinstalled on the runner (ANDROID_HOME set,
-      # sdkmanager on PATH). android-actions/setup-android@v3 is skipped: on
-      # current runners it fails installing the removed 'tools' package.
+      # The Android SDK is preinstalled on the runner, but cmdline-tools is no
+      # longer on PATH (android-actions/setup-android@v3 also fails here trying
+      # to install the removed 'tools' package). Resolve sdkmanager from the
+      # SDK root and install the packages this project builds against.
       - name: Install SDK packages
         run: |
-          yes | sdkmanager --licenses > /dev/null
-          sdkmanager "platforms;android-34" "build-tools;34.0.0" > /dev/null
+          SDK_ROOT="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
+          SDKMANAGER="$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$SDKMANAGER" ]; then
+            SDKMANAGER="$(find "$SDK_ROOT" -name sdkmanager -type f | head -1)"
+          fi
+          yes | "$SDKMANAGER" --licenses > /dev/null || true
+          "$SDKMANAGER" "platforms;android-34" "build-tools;34.0.0" > /dev/null
       - name: Assemble debug APK
         working-directory: android
         run: |
