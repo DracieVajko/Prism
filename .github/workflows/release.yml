@@ -3,14 +3,22 @@ name: Release
 # Builds an installable APK and attaches it to a GitHub Release.
 #
 # Trigger it by pushing a tag, e.g.:
-#   git tag v0.1.0 && git push origin v0.1.0
+#   git tag v0.1.0
+#   git push origin v0.1.0
 #
 # Signing:
 #   Without secrets the release APK is signed with the debug key (fine for
 #   side-loading, not for Play Store). To sign properly, add these repository
-#   secrets and the keystore as a base64 secret:
-#     PRISM_KEYSTORE_BASE64, PRISM_KEYSTORE_PASSWORD, PRISM_KEY_ALIAS,
+#   secrets:
+#     PRISM_KEYSTORE_BASE64   base64 of the .jks file
+#     PRISM_KEYSTORE_PASSWORD
+#     PRISM_KEY_ALIAS
 #     PRISM_KEY_PASSWORD
+#
+# NOTE: the `secrets` context is not available inside `if:`. Secrets are mapped
+# to job-level `env` first, and the condition tests `env.*`. That is a hard
+# GitHub Actions rule, not a style choice.
+
 on:
   push:
     tags: [ "v*" ]
@@ -23,6 +31,12 @@ jobs:
   apk:
     name: Build APK and publish
     runs-on: ubuntu-latest
+    env:
+      # Job-level env is the only place secrets can be read for an `if:` test.
+      PRISM_KEYSTORE_BASE64: ${{ secrets.PRISM_KEYSTORE_BASE64 }}
+      PRISM_KEYSTORE_PASSWORD: ${{ secrets.PRISM_KEYSTORE_PASSWORD }}
+      PRISM_KEY_ALIAS: ${{ secrets.PRISM_KEY_ALIAS }}
+      PRISM_KEY_PASSWORD: ${{ secrets.PRISM_KEY_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
 
@@ -34,16 +48,15 @@ jobs:
       - uses: android-actions/setup-android@v3
 
       - name: Install SDK packages
-        run: sdkmanager "platforms;android-34" "build-tools;34.0.0" | tail -2
+        run: sdkmanager "platforms;android-34" "build-tools;34.0.0"
 
       - name: Restore keystore (optional)
-        if: ${{ secrets.PRISM_KEYSTORE_BASE64 != '' }}
+        if: env.PRISM_KEYSTORE_BASE64 != ''
         run: |
-          echo "${{ secrets.PRISM_KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/prism-release.jks"
-          echo "PRISM_KEYSTORE_FILE=$RUNNER_TEMP/prism-release.jks" >> "$GITHUB_ENV"
-          echo "PRISM_KEYSTORE_PASSWORD=${{ secrets.PRISM_KEYSTORE_PASSWORD }}" >> "$GITHUB_ENV"
-          echo "PRISM_KEY_ALIAS=${{ secrets.PRISM_KEY_ALIAS }}" >> "$GITHUB_ENV"
-          echo "PRISM_KEY_PASSWORD=${{ secrets.PRISM_KEY_PASSWORD }}" >> "$GITHUB_ENV"
+          echo "$PRISM_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/prism-release.jks"
+          {
+            echo "PRISM_KEYSTORE_FILE=$RUNNER_TEMP/prism-release.jks"
+          } >> "$GITHUB_ENV"
 
       - name: Assemble release APK
         working-directory: android
@@ -55,13 +68,16 @@ jobs:
         working-directory: android
         run: ./gradlew :app:assembleDebug --console=plain --no-daemon
 
-      - name: Rename artifacts
+      - name: Collect artifacts
         working-directory: android/app/build/outputs/apk
         run: |
           VERSION="${GITHUB_REF_NAME:-dev}"
           mkdir -p "$RUNNER_TEMP/out"
-          cp release/app-release.apk "$RUNNER_TEMP/out/prism-${VERSION}-release.apk" 2>/dev/null || true
+          if [ -f release/app-release.apk ]; then
+            cp release/app-release.apk "$RUNNER_TEMP/out/prism-${VERSION}-release.apk"
+          fi
           cp debug/app-debug.apk "$RUNNER_TEMP/out/prism-${VERSION}-debug.apk"
+          ls -lh "$RUNNER_TEMP/out"
 
       - name: Upload workflow artifacts
         uses: actions/upload-artifact@v4
@@ -77,14 +93,87 @@ jobs:
           files: ${{ runner.temp }}/out/*.apk
           generate_release_notes: true
           body: |
-            ## Install
+            ## Prism ${{ github.ref_name }}
 
-            1. Download `prism-${{ github.ref_name }}-release.apk` (or `-debug.apk`).
-            2. Allow "Install unknown apps" for your file manager / browser.
-            3. Open the APK and install. Android 10 or newer (arm64).
+            ### Android (APK)
 
-            No models are bundled: open the app, go to **Models** and download
-            what you need (the app is fully offline afterwards).
+            1. Download `prism-${{ github.ref_name }}-release.apk`
+               (fall back to `-debug.apk` if that file is missing).
+            2. Allow "Install unknown apps" for your file manager or browser.
+            3. Open the APK and install. Android 10+ (arm64-v8a).
 
-            The PC server is a separate product: see `pc/` and
-            `python -m uvicorn unified_server:app --host 0.0.0.0 --port 8101`.
+            No models are bundled. Open the app, go to the **Server** tab, press
+            START, then download the models you need from the model list. The app
+            is fully offline afterwards.
+
+            ### PC (Linux / macOS / Windows)
+
+            ```bash
+            git clone https://github.com/${{ github.repository }}.git
+            cd Prism/pc
+            python -m venv .venv && . .venv/bin/activate
+            pip install -r requirements.txt
+            python download_models.py --preset odysseus-default   # optional
+            python -m uvicorn unified_server:app --host 0.0.0.0 --port 8101
+            ```
+
+            Or install it as an auto-start service:
+
+            ```bash
+            # Linux / macOS
+            ./pc/scripts/install-prism-service.sh
+            # Windows (elevated PowerShell)
+            powershell -ExecutionPolicy Bypass -File pc\scripts\install-prism-service.ps1 -RemoveLegacy
+            ```
+
+            WebUI: `http://127.0.0.1:8101/webui`
+            Health: `http://127.0.0.1:8101/health`
+
+  # Verify the PC server starts on both Unix platforms before publishing.
+  pc-check:
+    name: PC server (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-latest, macos-latest ]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install fastapi uvicorn httpx pydantic numpy pillow pytest \
+                      python-multipart starlette pyyaml requests
+
+      - name: pytest
+        working-directory: pc
+        run: python -m pytest -q
+
+      - name: Start script is executable and parses
+        run: |
+          chmod +x pc/scripts/*.sh
+          bash -n pc/scripts/start-prism.sh
+          bash -n pc/scripts/stop-prism.sh
+          bash -n pc/scripts/install-prism-service.sh
+
+      - name: Server answers /health
+        run: |
+          cd pc
+          python -m uvicorn unified_server:app --host 127.0.0.1 --port 8101 &
+          SERVER_PID=$!
+          for i in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:8101/health > /dev/null; then
+              echo "health OK"
+              kill $SERVER_PID
+              exit 0
+            fi
+            sleep 1
+          done
+          kill $SERVER_PID 2>/dev/null || true
+          echo "server did not answer within 40 s" >&2
+          exit 1
