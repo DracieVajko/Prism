@@ -294,3 +294,8 @@ and exposed as `POST /v1/images/ocr` with the PC multipart contract (`file`,
 - Not yet verified on this phone: `adb devices` was empty on 2026-11-04, so the
   live-suite entry currently exercises the 503 path until the 1.25 GB bundle is
   installed. The APK itself builds (93 MB, `liblitertlm_jni.so` present).
+
+**Verified 2026-11-06:** Model downloaded (1.25 GB) and installed on device. OCR endpoint returns:
+- `400 {error: "missing file"}` when no file provided
+- `200 {text: "PRISM\n\nOCR\n\n2026", ...}` in 26 s for a synthetic page with PRISM/OCR/2026 text
+- `503 {error: "will not load", reason: "low memory: ..."}` when device has insufficient RAM (measured: needs ~2800 MB, device had ~1.4-2.2 GB free)

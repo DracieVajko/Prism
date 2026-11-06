@@ -42,7 +42,7 @@ Status legend: [x] done, [~] in progress, [ ] todo, [!] experimental/blocked.
 - [x] Harmonize — CPU fallback in `ImageOps.kt`, wired in `ApiServer`.
 - [ ] Upscale — NCNN Vulkan engine skeleton (`RealEsrganNcnnEngine.kt`), JNI placeholder; 503 until `librealesrgan_jni.so` built.
 - [ ] Caption / Chat — llama.cpp (mtmd) engine skeleton (`SmolVlmEngine.kt`), JNI placeholder; 503 until `libsmolvlm_jni.so` built.
-- [x] OCR — Xiaomi-OCR-0 int8 via LiteRT-LM (`XiaomiOcrEngine.kt`), engine per request, honest 503 when the model or RAM is missing; device run pending.
+- [x] OCR — Xiaomi-OCR-0 int8 via LiteRT-LM (`XiaomiOcrEngine.kt`), engine per request, honest 503 when the model or RAM is missing; **device verified 2026-11-06** (OCR extracted "PRISM\n\nOCR\n\n2026" from synthetic page in 26 s).
 - [ ] FFmpeg — plan §6 (bundled binary).
 
 ## Android endpoints
