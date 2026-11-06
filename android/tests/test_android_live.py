@@ -46,9 +46,6 @@ def check(name, fn):
     return ok
 
 
-def img_from_b64(s):
-    return Image.open(io.BytesIO(base64.b64decode(s))).convert("RGB")
-
 
 def png_b64(img):
     buf = io.BytesIO()
@@ -89,6 +86,11 @@ def main():
         print("  [server not responding, restarting…]")
         restart_server()
 
+    def health():
+        j = c.get("/health").json()
+        assert j.get("status") == "ok", j
+        return f"device={j.get('device')} models={len(j.get('available_models', []))}"
+
     def check(name, fn, retries=1):
         t0 = time.time()
         try:
@@ -114,11 +116,6 @@ def main():
         RESULTS.append((name, ok, detail, round(dt, 1)))
         print(f"[{'OK  ' if ok else 'FAIL'}] {name:<32} {dt:7.1f}s  {str(detail)[:100]}")
         return ok
-
-    def img_from_b64(s):
-        j = c.get("/health").json()
-        assert j.get("status") == "ok", j
-        return f"device={j.get('device')} models={len(j.get('available_models', []))}"
 
     def models():
         j = c.get("/v1/models").json()
@@ -153,7 +150,11 @@ def main():
             "request_id": "live-gen"})
         assert r.status_code == 200, r.text[:200]
         j = r.json()
-        im = img_from_b64(j["data"][0]["b64_json"])
+        assert j.get("data"), f"no data in response: {list(j.keys())}"
+        b64 = j["data"][0].get("b64_json")
+        assert b64, f"no b64_json in data[0]: {list(j['data'][0].keys())}"
+        im = Image.open(io.BytesIO(base64.b64decode(b64))).convert("RGB")
+        assert isinstance(im, Image.Image)
         a = np.asarray(im, dtype=np.float32)
         assert im.size == (256, 256), im.size
         assert a.std() > 5, f"flat image (std={a.std():.1f})"
@@ -189,7 +190,11 @@ def main():
                          "strength": "0.8", "quality": "low"})
         assert r.status_code == 200, r.text[:200]
         j = r.json()
-        out = img_from_b64(j["data"][0]["b64_json"])
+        assert j.get("data"), f"no data in response: {list(j.keys())}"
+        b64 = j["data"][0].get("b64_json")
+        assert b64, f"no b64_json in data[0]"
+        out = Image.open(io.BytesIO(base64.b64decode(b64))).convert("RGB")
+        assert isinstance(out, Image.Image)
         d = float(np.abs(np.asarray(src, np.float32) -
                          np.asarray(out.resize(src.size), np.float32)).mean())
         assert out.size == src.size and d > 1.0, f"{out.size} diff={d:.1f}"
@@ -203,7 +208,10 @@ def main():
             "image": png_b64(base), "mask": png_b64(mask), "prompt": "a red flower",
             "mode": "add", "strength": 0.9, "width": 256, "height": 256, "steps": 6})
         assert r.status_code == 200, r.text[:200]
-        out = img_from_b64(r.json()["image"])
+        j = r.json()
+        assert j.get("image"), f"no image in response: {list(j.keys())}"
+        out = Image.open(io.BytesIO(base64.b64decode(j["image"]))).convert("RGB")
+        assert isinstance(out, Image.Image)
         a = np.asarray(base, np.float32)
         b = np.asarray(out.resize(base.size), np.float32)
         m = np.asarray(mask) > 127
@@ -220,7 +228,9 @@ def main():
                                                 "prompt": "continue the scene"})
         assert r.status_code == 200, r.text[:200]
         j = r.json()
-        out = img_from_b64(j["image"])
+        assert j.get("image"), f"no image in response: {list(j.keys())}"
+        out = Image.open(io.BytesIO(base64.b64decode(j["image"]))).convert("RGB")
+        assert isinstance(out, Image.Image)
         assert out.size == (288, 288), out.size
         a = np.asarray(src, np.float32)
         b = np.asarray(out, np.float32)[48:240, 48:240]
@@ -234,7 +244,10 @@ def main():
         src = Image.open(TD / "images" / "test_512.png").convert("RGB").resize((256, 256))
         r = c.post("/v1/images/upscale", json={"image": png_b64(src), "scale": 4})
         assert r.status_code == 200, r.text[:200]
-        out = img_from_b64(r.json()["image"])
+        j = r.json()
+        assert j.get("image"), f"no image in response: {list(j.keys())}"
+        out = Image.open(io.BytesIO(base64.b64decode(j["image"]))).convert("RGB")
+        assert isinstance(out, Image.Image)
         a = np.asarray(out, np.float32)
         assert out.size == (1024, 1024), out.size
         assert a.std() > 5, f"flat output ({a.std():.1f})"
