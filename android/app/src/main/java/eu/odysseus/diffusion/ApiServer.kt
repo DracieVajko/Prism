@@ -1514,7 +1514,13 @@ private val batchState = ConcurrentHashMap<String, BatchState>()
                 val text: String? = try {
                     withContext(heavyDispatcher) {
                         requireThermal(ctx)
-                        requireMemory(XiaomiOcrEngine.NEEDED_MB, "the Xiaomi-OCR-0 engine")
+                        // Adaptive OCR memory threshold: if the device has less
+                        // than NEEDED_MB free, still attempt with MIN_NEEDED_MB
+                        // so low-RAM phones can run OCR (honest 503 only when
+                        // critically starved).
+                        val avail = availableMb()
+                        val needed = XiaomiOcrEngine.effectiveNeededMb(avail)
+                        requireMemory(needed, "the Xiaomi-OCR-0 engine")
                         val png = XiaomiOcrEngine.prep(bytes)
                         if (png == null) null
                         else XiaomiOcrEngine.run(

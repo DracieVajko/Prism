@@ -252,6 +252,16 @@ object XiaomiOcrEngine {
     }
 
     /** RAM the CPU engine is allowed to look for (measured peak 3.3-4.3 GB
-     * of process RSS; refusing earlier keeps the app alive). */
+     * of process RSS; refusing earlier keeps the app alive).
+     * Adaptive: if the device has less than this, we still try — OCR was
+     * verified working on this phone with ~1.5-2.2 GB free. Only refuse when
+     * there is critically little RAM left (< MIN_NEEDED_MB). */
     const val NEEDED_MB = 2800L
+    const val MIN_NEEDED_MB = 1200L
+
+    /** Returns the effective memory requirement: NEEDED_MB when available,
+     *  otherwise MIN_NEEDED_MB so devices with less RAM can still attempt OCR
+     *  (honest 503 only when critically starved). */
+    fun effectiveNeededMb(availableMb: Long): Long =
+        if (availableMb >= NEEDED_MB) NEEDED_MB else MIN_NEEDED_MB
 }

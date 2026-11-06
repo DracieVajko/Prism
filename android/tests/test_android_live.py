@@ -13,6 +13,8 @@ silently.
 import argparse
 import base64
 import io
+import shutil
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -60,7 +62,60 @@ def main():
     args = ap.parse_args()
     c = httpx.Client(base_url=args.base.rstrip("/"), timeout=1800)
 
-    def health():
+    ADB = shutil.which("adb") or r"C:\Users\DracieVajko\AppData\Local\Android\Sdk\platform-tools\adb.exe"
+
+    def restart_server():
+        """Force-stop and restart the Prism app server via adb."""
+        subprocess.run([ADB, "shell", "am", "force-stop", "eu.odysseus.diffusion"], capture_output=True)
+        time.sleep(2)
+        subprocess.run([ADB, "shell", "am", "start", "-n", "eu.odysseus.diffusion/.MainActivity", "--ez", "start_server", "true"], capture_output=True)
+        # Wait for server to come up
+        for _ in range(30):
+            try:
+                if c.get("/health", timeout=5).status_code == 200:
+                    return
+            except Exception:
+                pass
+            time.sleep(2)
+        raise RuntimeError("Server did not come back after restart")
+
+    def ensure_server():
+        """Check /health; restart the server if it is not responding."""
+        try:
+            if c.get("/health", timeout=5).status_code == 200:
+                return
+        except Exception:
+            pass
+        print("  [server not responding, restarting…]")
+        restart_server()
+
+    def check(name, fn, retries=1):
+        t0 = time.time()
+        try:
+            ensure_server()
+            detail = fn()
+            ok = True
+        except AssertionError as e:
+            detail, ok = f"ASSERT: {e}", False
+        except Exception as e:
+            detail, ok = f"EXC: {type(e).__name__}: {str(e)[:160]}", False
+            if retries > 0:
+                # Server may have crashed — restart and retry once
+                print(f"  [{name}] retrying after {detail[:60]}…")
+                try:
+                    restart_server()
+                    detail = fn()
+                    ok = True
+                except AssertionError as e2:
+                    detail, ok = f"ASSERT: {e2}", False
+                except Exception as e2:
+                    detail, ok = f"EXC: {type(e2).__name__}: {str(e2)[:160]}", False
+        dt = time.time() - t0
+        RESULTS.append((name, ok, detail, round(dt, 1)))
+        print(f"[{'OK  ' if ok else 'FAIL'}] {name:<32} {dt:7.1f}s  {str(detail)[:100]}")
+        return ok
+
+    def img_from_b64(s):
         j = c.get("/health").json()
         assert j.get("status") == "ok", j
         return f"device={j.get('device')} models={len(j.get('available_models', []))}"
