@@ -158,4 +158,7 @@ dependencies {
     implementation("com.google.ai.edge.litertlm:litertlm-android:0.19.0")
     // EXIF orientation for OCR input photos (litertlm applies none itself).
     implementation("androidx.exifinterface:exifinterface:1.4.1")
+    // Sherpa-ONNX: streaming ASR replacement for whisper.cpp JNI
+    // Provides causal streaming Zipformer/Conformer models with ~80-320ms latency
+    implementation("com.github.k2-fsa:sherpa-onnx-android:2024.12")
 }
