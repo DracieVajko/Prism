@@ -71,12 +71,33 @@ object LcmOnnxEngine {
                 var providerOk = false
                 if (accel != "cpu") {
                     if (accel == "gpu") {
+                        // Try Qualcomm QNN EP first (Snapdragon Hexagon NPU),
+                        // then NNAPI, then XNNPACK CPU fallback.
                         try {
-                            addNnapi()
+                            val qnnOpts = java.util.HashMap<String, String>()
+                            qnnOpts["qnn.htp_performance_mode"] = "high_performance"
+                            qnnOpts["qnn.htp_arch"] = "69" // Snapdragon 8 Gen 2 Hexagon
+                            // Context binary path - generated separately via
+                            // onnxruntime-qnn-tools. Falls back to CPU if missing.
+                            val ctxDir = File(dir, "qnn_contexts")
+                            val ctxFile = File(ctxDir, "unet_qnn_context.bin")
+                            if (ctxFile.isFile()) {
+                                qnnOpts["qnn.context_path"] = ctxFile.absolutePath
+                            }
+                            addQnn(qnnOpts)
                             providerOk = true
-                            Log.i(TAG, "NNAPI (GPU/NPU) provider enabled")
+                            Log.i(TAG, "QNN EP (Hexagon NPU) enabled")
                         } catch (e: Exception) {
-                            Log.w(TAG, "NNAPI unavailable: ${e.message}")
+                            Log.w(TAG, "QNN EP unavailable: ${e.message}")
+                        }
+                        if (!providerOk) {
+                            try {
+                                addNnapi()
+                                providerOk = true
+                                Log.i(TAG, "NNAPI (GPU/NPU) provider enabled")
+                            } catch (e: Exception) {
+                                Log.w(TAG, "NNAPI unavailable: ${e.message}")
+                            }
                         }
                         if (!providerOk) {
                             try {

@@ -149,6 +149,8 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.3")
 
     implementation("com.microsoft.onnxruntime:onnxruntime-android:1.20.0")
+    // QNN Execution Provider for Snapdragon Hexagon NPU acceleration
+    implementation("com.qualcomm.qti:onnxruntime-android-qnn:1.20.0")
     // SmolVLM native runtime (llama.cpp + libmtmd) in its own CMake project
     implementation(project(":smolvlm"))
     // OCR: Xiaomi-OCR-0 through LiteRT-LM (Kotlin API + liblitertlm_jni.so,
