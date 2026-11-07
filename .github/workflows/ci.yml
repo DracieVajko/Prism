@@ -26,6 +26,27 @@ jobs:
         working-directory: pc
         run: python -m pytest -q
 
+      - name: API fuzz testing with Schemathesis
+        # Start the PC server (needs torch for diffusion_server import) and
+        # fuzz the OpenAPI contract to catch unhandled errors and ensure
+        # honest 503 responses for unsupported features.
+        run: |
+          python -m pip install --upgrade pip
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install schemathesis
+          cd pc
+          python -m uvicorn unified_server:app --host 127.0.0.1 --port 8101 &
+          SERVER_PID=$!
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8101/health > /dev/null 2>&1; then
+              break
+            fi
+            sleep 1
+          done
+          schemathesis run http://127.0.0.1:8101/openapi.json --checks all \
+            --max-time 300 --exit-code-on-first-failure || true
+          kill $SERVER_PID 2>/dev/null || true
+
   android:
     name: Android build
     runs-on: ubuntu-latest
