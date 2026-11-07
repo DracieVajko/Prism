@@ -40,7 +40,7 @@ from unified.ffmpeg_tools import (
 )
 from unified.engine import init_diffusion_engine, try_real_inpaint
 from unified.model_manager import ModelManager, ModelLoadingError
-from unified.action_extractor import ActionExtractor
+from unified.action_extractor import ActionExtractor, ActionType
 from unified.action_handlers import process_action, process_actions
 from unified.ai_client import AIClient, get_ai_client
 from unified.registry import build_registry
@@ -1240,7 +1240,7 @@ def _job_snapshot(rid: str) -> dict:
     with _JOBS_LOCK:
         job = _JOBS.get(rid)
         if not job:
-            return {"id": rid, "state": "unknown", "percent": 0}
+            return {"id": rid, "state": ActionType.UNKNOWN.value, "percent": 0}
         snap = dict(job)
     if snap.get("started"):
         end = snap.get("finished") or time.time()
@@ -2245,7 +2245,7 @@ def list_jobs():
 @app.get("/v1/jobs/{rid}")
 def get_job(rid: str):
     snap = _job_snapshot(rid)
-    if snap.get("state") == "unknown":
+    if snap.get("state") == ActionType.UNKNOWN.value:
         return JSONResponse(status_code=404, content={"error": "unknown job"})
     return snap
 
