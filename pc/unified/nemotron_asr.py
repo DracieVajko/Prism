@@ -125,17 +125,22 @@ def init(model_id: str = None) -> bool:
         return False
 
 
-def release():
-    global _processor, _model, _device
-    _processor = None
-    _model = None
-    _device = None
+def _clear_cuda_cache():
+    """Clear torch CUDA cache if available (shared by model release helpers)."""
     try:
         import torch
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
     except Exception:
         pass
+
+
+def release():
+    global _processor, _model, _device
+    _processor = None
+    _model = None
+    _device = None
+    _clear_cuda_cache()
 
 
 def _normalise_language(code: Optional[str]) -> str:

@@ -135,12 +135,8 @@ def release():
     _processor = None
     _model = None
     _device = None
-    try:
-        import torch
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-    except Exception:
-        pass
+    from unified.nemotron_asr import _clear_cuda_cache
+    _clear_cuda_cache()
 
 
 def _language_name(code: str) -> str:

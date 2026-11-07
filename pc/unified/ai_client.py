@@ -155,33 +155,37 @@ class AIClient:
         if prov is None:
             raise ValueError(f"No AI provider available (tried: {provider})")
 
-        # Override settings
-        if model is not None:
-            prov.model = model
-        if temperature is not None:
-            prov.temperature = temperature
-        if max_tokens is not None:
-            prov.max_tokens = max_tokens
+        return await self._call_provider(
+            prov, prompt,
+            model=model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
 
-        return await self._call_provider(prov, prompt)
-
-    async def _call_provider(self, prov: AIProviderConfig, prompt: str) -> AIResponse:
+    async def _call_provider(
+        self,
+        prov: AIProviderConfig,
+        prompt: str,
+        model: str | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> AIResponse:
         import time
 
         start = time.time()
 
         if prov.provider == AIProvider.OPENAI:
-            return await self._call_openai(prov, prompt, start)
+            return await self._call_openai(prov, prompt, start, model=model, temperature=temperature, max_tokens=max_tokens)
         if prov.provider == AIProvider.ANTHROPIC:
-            return await self._call_anthropic(prov, prompt, start)
+            return await self._call_anthropic(prov, prompt, start, model=model, temperature=temperature, max_tokens=max_tokens)
         if prov.provider == AIProvider.GOOGLE:
-            return await self._call_google(prov, prompt, start)
+            return await self._call_google(prov, prompt, start, model=model, temperature=temperature, max_tokens=max_tokens)
         if prov.provider == AIProvider.OLLAMA:
-            return await self._call_ollama(prov, prompt, start)
+            return await self._call_ollama(prov, prompt, start, model=model, temperature=temperature, max_tokens=max_tokens)
         if prov.provider == AIProvider.LM_STUDIO:
-            return await self._call_lm_studio(prov, prompt, start)
+            return await self._call_lm_studio(prov, prompt, start, model=model, temperature=temperature, max_tokens=max_tokens)
         if prov.provider == AIProvider.CUSTOM:
-            return await self._call_custom(prov, prompt, start)
+            return await self._call_custom(prov, prompt, start, model=model, temperature=temperature, max_tokens=max_tokens)
 
         raise ValueError(f"Unknown provider: {prov.provider}")
 
@@ -189,7 +193,11 @@ class AIClient:
     # Provider-specific implementations
     # ------------------------------------------------------------------
 
-    async def _call_openai(self, prov: AIProviderConfig, prompt: str, start: float) -> AIResponse:
+    async def _call_openai(
+        self, prov: AIProviderConfig, prompt: str, start: float,
+        model: str | None = None, temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> AIResponse:
         try:
             import httpx
         except ImportError:
@@ -197,10 +205,10 @@ class AIClient:
 
         headers = {"Authorization": f"Bearer {prov.api_key}"}
         payload = {
-            "model": prov.model,
+            "model": model or prov.model,
             "messages": [{"role": "user", "content": prompt}],
-            "temperature": prov.temperature,
-            "max_tokens": prov.max_tokens,
+            "temperature": temperature if temperature is not None else prov.temperature,
+            "max_tokens": max_tokens if max_tokens is not None else prov.max_tokens,
         }
         async with httpx.AsyncClient(timeout=prov.timeout) as client:
             resp = await client.post(
@@ -215,13 +223,17 @@ class AIClient:
         return AIResponse(
             text=text,
             provider="openai",
-            model=prov.model,
+            model=model or prov.model,
             tokens_in=usage.get("prompt_tokens"),
             tokens_out=usage.get("completion_tokens"),
             latency_ms=int((time.time() - start) * 1000),
         )
 
-    async def _call_anthropic(self, prov: AIProviderConfig, prompt: str, start: float) -> AIResponse:
+    async def _call_anthropic(
+        self, prov: AIProviderConfig, prompt: str, start: float,
+        model: str | None = None, temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> AIResponse:
         try:
             import httpx
         except ImportError:
@@ -233,9 +245,9 @@ class AIClient:
             "content-type": "application/json",
         }
         payload = {
-            "model": prov.model,
-            "max_tokens": prov.max_tokens or 1024,
-            "temperature": prov.temperature,
+            "model": model or prov.model,
+            "max_tokens": max_tokens if max_tokens is not None else prov.max_tokens or 1024,
+            "temperature": temperature if temperature is not None else prov.temperature,
             "messages": [{"role": "user", "content": prompt}],
         }
         async with httpx.AsyncClient(timeout=prov.timeout) as client:
@@ -250,24 +262,29 @@ class AIClient:
         return AIResponse(
             text=text,
             provider="anthropic",
-            model=prov.model,
+            model=model or prov.model,
             tokens_in=data.get("usage", {}).get("input_tokens"),
             tokens_out=data.get("usage", {}).get("output_tokens"),
             latency_ms=int((time.time() - start) * 1000),
         )
 
-    async def _call_google(self, prov: AIProviderConfig, prompt: str, start: float) -> AIResponse:
+    async def _call_google(
+        self, prov: AIProviderConfig, prompt: str, start: float,
+        model: str | None = None, temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> AIResponse:
         try:
             import httpx
         except ImportError:
             raise RuntimeError("httpx is required for Google provider")
 
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{prov.model}:generateContent?key={prov.api_key}"
+        effective_model = model or prov.model
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{effective_model}:generateContent?key={prov.api_key}"
         payload = {
             "contents": [{"parts": [{"text": prompt}]}],
             "generationConfig": {
-                "temperature": prov.temperature,
-                "maxOutputTokens": prov.max_tokens,
+                "temperature": temperature if temperature is not None else prov.temperature,
+                "maxOutputTokens": max_tokens if max_tokens is not None else prov.max_tokens,
             },
         }
         async with httpx.AsyncClient(timeout=prov.timeout) as client:
@@ -279,21 +296,25 @@ class AIClient:
         return AIResponse(
             text=text,
             provider="google",
-            model=prov.model,
+            model=effective_model,
             latency_ms=int((time.time() - start) * 1000),
         )
 
-    async def _call_ollama(self, prov: AIProviderConfig, prompt: str, start: float) -> AIResponse:
+    async def _call_ollama(
+        self, prov: AIProviderConfig, prompt: str, start: float,
+        model: str | None = None, temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> AIResponse:
         try:
             import httpx
         except ImportError:
             raise RuntimeError("httpx is required for Ollama provider")
 
         payload = {
-            "model": prov.model,
+            "model": model or prov.model,
             "prompt": prompt,
             "stream": False,
-            "options": {"temperature": prov.temperature},
+            "options": {"temperature": temperature if temperature is not None else prov.temperature},
         }
         async with httpx.AsyncClient(timeout=prov.timeout) as client:
             resp = await client.post(
@@ -305,33 +326,41 @@ class AIClient:
         return AIResponse(
             text=data.get("response", ""),
             provider="ollama",
-            model=prov.model,
+            model=model or prov.model,
             latency_ms=int((time.time() - start) * 1000),
         )
 
-    async def _call_lm_studio(self, prov: AIProviderConfig, prompt: str, start: float) -> AIResponse:
+    async def _call_lm_studio(
+        self, prov: AIProviderConfig, prompt: str, start: float,
+        model: str | None = None, temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> AIResponse:
         # LM Studio uses OpenAI-compatible API
         prov2 = AIProviderConfig(
             provider=AIProvider.OPENAI,
             api_key="lm-studio",
             base_url=prov.base_url,
-            model=prov.model,
-            temperature=prov.temperature,
-            max_tokens=prov.max_tokens,
+            model=model or prov.model,
+            temperature=temperature if temperature is not None else prov.temperature,
+            max_tokens=max_tokens if max_tokens is not None else prov.max_tokens,
         )
         return await self._call_openai(prov2, prompt, start)
 
-    async def _call_custom(self, prov: AIProviderConfig, prompt: str, start: float) -> AIResponse:
+    async def _call_custom(
+        self, prov: AIProviderConfig, prompt: str, start: float,
+        model: str | None = None, temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> AIResponse:
         try:
             import httpx
         except ImportError:
             raise RuntimeError("httpx is required for custom provider")
 
         payload = {
-            "model": prov.model,
+            "model": model or prov.model,
             "messages": [{"role": "user", "content": prompt}],
-            "temperature": prov.temperature,
-            "max_tokens": prov.max_tokens,
+            "temperature": temperature if temperature is not None else prov.temperature,
+            "max_tokens": max_tokens if max_tokens is not None else prov.max_tokens,
         }
         headers = {}
         if prov.api_key:
@@ -348,7 +377,7 @@ class AIClient:
         return AIResponse(
             text=text,
             provider="custom",
-            model=prov.model,
+            model=model or prov.model,
             latency_ms=int((time.time() - start) * 1000),
         )
 
