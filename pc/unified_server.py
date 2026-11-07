@@ -224,6 +224,7 @@ class GenRequest(BaseModel):
     n: int = 1
     size: str = "768x768"
     quality: str = "medium"
+    response_format: str = "b64_json"
     request_id: Optional[str] = ""
 
 
