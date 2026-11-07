@@ -1500,14 +1500,12 @@ async def _transcribe_with_splitting(audio_path: Path, wanted: str, language,
 @app.post("/v1/audio/transcriptions")
 async def transcriptions(
     file: UploadFile = File(default=None),
-    audio: UploadFile = File(default=None),
     url: str = Form(default=""),
     model: str = Form(default="whisper-1"),
-    model_name: str = Form(default="whisper-1"),
     device: str = Form(default=""),
     language: str = Form(default=None),
     response_format: str = Form(default="json"),
-    auto_split: str = Form(default="true"),
+    auto_split: bool = Form(default=True),
     request_id: str = Form(default=""),
     post_process: str = Form(default=""),
     post_process_lang: str = Form(default=""),
@@ -1519,7 +1517,7 @@ async def transcriptions(
     if not isinstance(request_id, str):
         request_id = ""
     rid = request_id or f"req-{uuid.uuid4().hex[:8]}"
-    up = file or audio
+    up = file
     url = (url or "").strip()
     if url:
         if up is not None:
@@ -1539,7 +1537,7 @@ async def transcriptions(
         up = None
     if up is None and not url:
         return JSONResponse(status_code=400, content={"error": "missing file or url"})
-    raw_model = (model or "").strip() or (model_name or "").strip() or "whisper-1"
+    raw_model = (model or "").strip() or "whisper-1"
     wanted = "small" if raw_model == "whisper-1" else raw_model
     # NVIDIA Nemotron 3.5 ASR: opt in per request, or globally with
     # PRISM_ASR_ENGINE=nemotron.
@@ -1611,7 +1609,7 @@ async def transcriptions(
                     "error": "nemotron asr failed", "detail": str(e)[:300]})
         else:
             try:
-                split_enabled = auto_split.lower() in ("true", "1", "yes", "on")
+                split_enabled = auto_split
                 logger.info(f"transcribe: starting engine (split={split_enabled})")
                 if split_enabled:
                     text, lang, segments = await _transcribe_with_splitting(
@@ -1709,12 +1707,11 @@ async def transcriptions(
 @app.post("/v1/audio/translations")
 async def translations(
     file: UploadFile = File(default=None),
-    audio: UploadFile = File(default=None),
     model: str = Form(default="whisper-1"),
 ):
-    r = await transcriptions(file=file, audio=audio, url="", model=model,
-                             model_name=model, device="", language=None,
-                             response_format="json", auto_split="true",
+    r = await transcriptions(file=file, url="", model=model,
+                             device="", language=None,
+                             response_format="json", auto_split=True,
                              request_id="")
     if isinstance(r, dict) and "text" in r:
         return {"text": r["text"]}
