@@ -44,6 +44,7 @@ from unified.action_extractor import ActionExtractor, ActionType
 from unified.action_handlers import process_action, process_actions
 from unified.ai_client import AIClient, get_ai_client
 from unified.registry import build_registry
+from unified.sherpa_asr import transcribe as sherpa_transcribe, is_installed as sherpa_installed
 from unified.upscale import upscale_image_b64
 from unified.vlm import MODEL_ID as VLM_ID, caption_image_b64, EngineMissing, release_vlm
 
@@ -1542,12 +1543,18 @@ async def transcriptions(
     # NVIDIA Nemotron 3.5 ASR: opt in per request, or globally with
     # PRISM_ASR_ENGINE=nemotron.
     from unified import nemotron_asr
+    from unified import sherpa_asr
     use_nemotron = (
         wanted.startswith("nemotron")
         or (nemotron_asr.enabled() and raw_model == "whisper-1")
     )
+    use_sherpa = (
+        wanted.startswith("sherpa")
+        or (sherpa_asr.enabled() and raw_model == "whisper-1")
+    )
     nemotron_id = wanted if wanted.startswith("nemotron") else nemotron_asr.MODEL_ID
-    if not use_nemotron and wanted not in ALLOWED_WHISPER:
+    sherpa_id = wanted if wanted.startswith("sherpa") else sherpa_asr.MODEL_ID
+    if not use_nemotron and not use_sherpa and wanted not in ALLOWED_WHISPER:
         return JSONResponse(status_code=400,
                             content={"error": f"Unknown model '{raw_model}'"})
     if device and device.strip().lower() not in ("cuda", "cpu", ""):
@@ -1561,10 +1568,14 @@ async def transcriptions(
         return JSONResponse(status_code=400, content={"error": "Empty file uploaded"})
     if len(content) > MAX_FILE_SIZE:
         return JSONResponse(status_code=413, content={"error": "File too large"})
-    try:
-        _manager.ensure("audio", wanted)
-    except ModelLoadingError as e:
-        return _raise_loading(e)
+    # Determine which engine handles this request
+    if use_sherpa:
+        _manager.ensure("audio", sherpa_id)
+    else:
+        try:
+            _manager.ensure("audio", wanted)
+        except ModelLoadingError as e:
+            return _raise_loading(e)
     _job_start(rid, "transcribe", 0.0, f"model={wanted}")
     logger.info(f"transcribe: {len(content)} bytes, model={wanted}, lang={language}")
     import tempfile
@@ -1607,6 +1618,28 @@ async def transcriptions(
                 logger.error("nemotron transcribe failed: %s", str(e)[:400])
                 return JSONResponse(status_code=500, content={
                     "error": "nemotron asr failed", "detail": str(e)[:300]})
+        elif use_sherpa:
+            # Sherpa-ONNX streaming ASR: causal streaming, low latency
+            if not sherpa_asr.is_installed(sherpa_id):
+                _job_finish(rid, "error", "sherpa not installed")
+                return JSONResponse(status_code=503, content={
+                    "error": f"{sherpa_id} not installed",
+                    "detail": "install Sherpa-ONNX model files, or run "
+                              "python pc/tools/download_sherpa_asr.py"})
+            try:
+                logger.info("transcribe: engine=sherpa-onnx model=%s lang=%s",
+                            sherpa_id, language)
+                text, lang = await asyncio.to_thread(
+                    sherpa_asr.transcribe, tmp, language, sherpa_id)
+                segments = []
+                engine = "sherpa-onnx"
+            except JobCancelled:
+                raise
+            except Exception as e:
+                _job_finish(rid, "error", str(e)[:200])
+                logger.error("sherpa transcribe failed: %s", str(e)[:400])
+                return JSONResponse(status_code=500, content={
+                    "error": "sherpa asr failed", "detail": str(e)[:300]})
         else:
             try:
                 split_enabled = auto_split
