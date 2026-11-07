@@ -20,7 +20,7 @@ from pathlib import Path
 
 BASE = Path(__file__).resolve().parent / "models"
 
-# Cancellation flags (model_id -> set by models_manager.cancel)
+# Cancellation flags (model_id -> set by model_install_manager.cancel)
 _CANCEL: set = set()
 
 
