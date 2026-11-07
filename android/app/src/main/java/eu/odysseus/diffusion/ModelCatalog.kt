@@ -87,6 +87,15 @@ object ModelCatalog {
             ),
             note = "JSON graph + external weights; engine in progress. Use PC (:8101) for NVIDIA.",
         ),
+        ModelAsset(
+            id = "hyper-sd15-1step-lora", kind = "image", engine = "onnxruntime",
+            label = "Hyper-SD 1-Step LoRA — 269 MB, 1-step generation",
+            files = listOf(
+                ModelFile("Hyper-SD15-1step-lora.safetensors",
+                    "https://huggingface.co/ByteDance/Hyper-SD/resolve/main/Hyper-SD15-1step-lora.safetensors", 269),
+            ),
+            note = "ByteDance Hyper-SD 1-step LoRA. Requires LCM-Dreamshaper base + TCDScheduler. ~7s generation.",
+        ),
     )
 
     private val upscale: List<ModelAsset> = listOf(
