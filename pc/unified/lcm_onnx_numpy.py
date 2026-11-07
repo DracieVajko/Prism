@@ -82,8 +82,10 @@ class LcmOnnxNumpy:
                 avail = ort.get_available_providers()
             except Exception:
                 pass
-            provs = (["CUDAExecutionProvider", "CPUExecutionProvider"]
-                     if "CUDAExecutionProvider" in avail else ["CPUExecutionProvider"])
+            provs = ["CUDAExecutionProvider", "QNNExecutionProvider", "CPUExecutionProvider"]
+            provs = [p for p in provs if p in avail]
+            if not provs:
+                provs = ["CPUExecutionProvider"]
         else:
             provs = ["CPUExecutionProvider"]
         # A resident diffusers pipeline and this LCM session cannot share a 6 GB
