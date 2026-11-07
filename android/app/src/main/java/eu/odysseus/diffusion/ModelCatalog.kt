@@ -153,6 +153,15 @@ object ModelCatalog {
             ),
             note = "On-device caption/chat needs the llama.cpp VLM runtime (libsmolvlm_jni), not bundled yet.",
         ),
+        ModelAsset(
+            id = "moondream2-text-v1", kind = "vlm", engine = "llama.cpp",
+            label = "Moondream2 — 1.9B VLM, fast captioning",
+            files = listOf(
+                ModelFile("moondream2-text-model-f16.gguf",
+                    "https://huggingface.co/vikhyatk/moondream2/resolve/main/moondream2-text-model-f16.gguf", 417),
+            ),
+            note = "Small VLM (~1.9B params) for fast image captioning. GGUF format for llama.cpp runtime.",
+        ),
     )
 
 /** OCR: Xiaomi-OCR-0 as the official LiteRT-LM conversion (com.google.ai.edge.litertlm). */
