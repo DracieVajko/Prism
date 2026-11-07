@@ -1423,13 +1423,9 @@ private val batchState = ConcurrentHashMap<String, BatchState>()
                 }
                 switchTo("vlm", req.model)
                 lastHeavyUse = System.currentTimeMillis()
-                if (!SmolVlmEngine.nativeAvailable) {
-                    call.respond(HttpStatusCode.ServiceUnavailable, jsonOf(
-                        "error" to "will not load",
-                        "detail" to "VLM runtime (libsmolvlm_jni.so / llama.cpp mtmd) is not bundled in this build"))
-                    return@post
-                }
-                requireModelReady("smolvlm-500m-gguf")
+                val useOnnx = req.model == "smolvlm-500m-onnx"
+                val modelId = if (useOnnx) "smolvlm-500m-onnx" else "smolvlm-500m-gguf"
+                requireModelReady(modelId)
                 val rid = req.request_id.ifEmpty { UUID.randomUUID().toString() }
                 val src = decodeB64Image(req.image)
                 if (src == null) {
@@ -1442,22 +1438,37 @@ private val batchState = ConcurrentHashMap<String, BatchState>()
                 }
                 val t0 = System.currentTimeMillis()
                 val caption = withContext(heavyDispatcher) {
-                    if (!SmolVlmEngine.isReady()) {
-                        requireMemory(900, "the SmolVLM engine")
-                        manager.setLoading("smolvlm-500m-gguf", true)
-                        try {
-                            if (!SmolVlmEngine.init(ctx, downloader.modelDir("smolvlm-500m-gguf"))) {
-                                throw ModelWillNotLoadError("SmolVLM llama.cpp init failed: " + SmolVlmEngine.lastError, -1, -1)
+                    if (useOnnx) {
+                        if (!SmolVlmOnnxEngine.isReady()) {
+                            requireMemory(900, "the SmolVLM ONNX engine")
+                            manager.setLoading("smolvlm-500m-onnx", true)
+                            try {
+                                if (!SmolVlmOnnxEngine.init(ctx, downloader.modelDir("smolvlm-500m-onnx"))) {
+                                    throw ModelWillNotLoadError("SmolVLM ONNX init failed: " + SmolVlmOnnxEngine.lastError, -1, -1)
+                                }
+                            } finally {
+                                manager.setLoading("smolvlm-500m-onnx", false)
                             }
-                        } finally {
-                            manager.setLoading("smolvlm-500m-gguf", false)
                         }
+                        SmolVlmOnnxEngine.caption(src, req.prompt, req.max_tokens ?: 256)
+                    } else {
+                        if (!SmolVlmEngine.isReady()) {
+                            requireMemory(900, "the SmolVLM engine")
+                            manager.setLoading("smolvlm-500m-gguf", true)
+                            try {
+                                if (!SmolVlmEngine.init(ctx, downloader.modelDir("smolvlm-500m-gguf"))) {
+                                    throw ModelWillNotLoadError("SmolVLM llama.cpp init failed: " + SmolVlmEngine.lastError, -1, -1)
+                                }
+                            } finally {
+                                manager.setLoading("smolvlm-500m-gguf", false)
+                            }
+                        }
+                        SmolVlmEngine.caption(src, req.prompt, req.max_tokens ?: 256)
                     }
-                    SmolVlmEngine.caption(src, req.prompt, req.max_tokens ?: 256)
                 }
                 src.recycle()
                 if (caption == null) {
-                    throw ModelWillNotLoadError("SmolVLM llama.cpp caption failed: " + SmolVlmEngine.lastError, -1, -1)
+                    throw ModelWillNotLoadError("VLM caption failed: " + (if (useOnnx) SmolVlmOnnxEngine.lastError else SmolVlmEngine.lastError), -1, -1)
                 }
                 val elapsed = (System.currentTimeMillis() - t0) / 1000.0
                 call.respond(jsonOf(
@@ -1465,7 +1476,7 @@ private val batchState = ConcurrentHashMap<String, BatchState>()
                     "outputs" to outputList(storeText(caption, rid)),
                     "elapsed" to elapsed,
                     "request_id" to rid,
-                    "engine" to "smolvlm-llama",
+                    "engine" to if (useOnnx) "smolvlm-onnx-genai" else "smolvlm-llama",
                 ))
             }
             post("/v1/images/ocr") {
@@ -1834,7 +1845,10 @@ switchTo("audio", effectiveModel) // 503 loading while switching image→audio
             RealEsrganNcnnEngine.release()
             RealEsrganOnnxEngine.release()
         }
-        if (prev == "vlm" && kind != "vlm") SmolVlmEngine.release()
+        if (prev == "vlm" && kind != "vlm") {
+            SmolVlmEngine.release()
+            SmolVlmOnnxEngine.release()
+        }
         // Image stays resident for the common generate -> inpaint flow and is
         // freed as soon as another heavy engine needs the RAM. Audio was missing
         // here: LCM (~2-3 GB) plus whisper made the system kill the process with
