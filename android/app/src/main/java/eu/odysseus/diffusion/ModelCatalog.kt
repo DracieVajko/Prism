@@ -99,6 +99,16 @@ object ModelCatalog {
             ),
             note = "Zip contains .param/.bin weights; auto-extracted.",
         ),
+        ModelAsset(
+            id = "realesrgan-x4plus-anime-6b", kind = "upscale", engine = "onnxruntime",
+            label = "Real-ESRGAN x4plus Anime 6B — 17.9 MB, 6-block, faster on CPU",
+            files = listOf(
+                ModelFile("RealESRGAN_x4plus_anime_6B.onnx",
+                    "https://huggingface.co/deepghs/imgutils-models/resolve/main/real_esrgan/RealESRGAN_x4plus_anime_6B.onnx", 17,
+                    "2648cab4c4343541c1aa291c6754e9e8edbe7a813fffc2a677423dd12cb6b7f7"),
+            ),
+            note = "6-block RRDBNet, ~4x faster on CPU than x4plus. Optimized for anime/stylized images.",
+        ),
     )
 
 /** VLM: runtime is llama.cpp (libmtmd) — not bundled yet; experimental. */

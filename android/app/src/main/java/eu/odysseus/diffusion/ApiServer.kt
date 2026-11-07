@@ -1346,7 +1346,10 @@ private val batchState = ConcurrentHashMap<String, BatchState>()
                 }
                 switchTo("upscale", req.model)
                 lastHeavyUse = System.currentTimeMillis()
-                this@ApiServer.requireModelReady("realesrgan-x4plus-ncnn")
+                val modelId = req.model
+                val useOnnx = modelId == "realesrgan-x4plus-anime-6b"
+                val modelIdForReady = if (useOnnx) "realesrgan-x4plus-anime-6b" else "realesrgan-x4plus-ncnn"
+                this@ApiServer.requireModelReady(modelIdForReady)
                 val rid = req.request_id.ifEmpty { UUID.randomUUID().toString() }
                 val src = decodeB64Image(req.image)
                 if (src == null) {
@@ -1369,22 +1372,37 @@ private val batchState = ConcurrentHashMap<String, BatchState>()
                 }
                 val t0 = System.currentTimeMillis()
                 val out = withContext(heavyDispatcher) {
-                    if (!RealEsrganNcnnEngine.isReady()) {
-                        requireMemory(400, "the Real-ESRGAN engine")
-                        manager.setLoading("realesrgan-x4plus-ncnn", true)
-                        try {
-                            if (!RealEsrganNcnnEngine.init(ctx, downloader.modelDir("realesrgan-x4plus-ncnn"))) {
-                                throw ModelWillNotLoadError("Real-ESRGAN NCNN init failed: " + RealEsrganNcnnEngine.lastError, -1, -1)
+                    if (useOnnx) {
+                        if (!RealEsrganOnnxEngine.isReady()) {
+                            requireMemory(400, "the Real-ESRGAN Anime 6B engine")
+                            manager.setLoading("realesrgan-x4plus-anime-6b", true)
+                            try {
+                                if (!RealEsrganOnnxEngine.init(ctx, downloader.modelDir("realesrgan-x4plus-anime-6b"))) {
+                                    throw ModelWillNotLoadError("Real-ESRGAN Anime 6B ONNX init failed: " + RealEsrganOnnxEngine.lastError, -1, -1)
+                                }
+                            } finally {
+                                manager.setLoading("realesrgan-x4plus-anime-6b", false)
                             }
-                        } finally {
-                            manager.setLoading("realesrgan-x4plus-ncnn", false)
                         }
+                        RealEsrganOnnxEngine.upscale(src, req.scale)
+                    } else {
+                        if (!RealEsrganNcnnEngine.isReady()) {
+                            requireMemory(400, "the Real-ESRGAN engine")
+                            manager.setLoading("realesrgan-x4plus-ncnn", true)
+                            try {
+                                if (!RealEsrganNcnnEngine.init(ctx, downloader.modelDir("realesrgan-x4plus-ncnn"))) {
+                                    throw ModelWillNotLoadError("Real-ESRGAN NCNN init failed: " + RealEsrganNcnnEngine.lastError, -1, -1)
+                                }
+                            } finally {
+                                manager.setLoading("realesrgan-x4plus-ncnn", false)
+                            }
+                        }
+                        RealEsrganNcnnEngine.upscale(src, req.scale)
                     }
-                    RealEsrganNcnnEngine.upscale(src, req.scale)
                 }
                 src.recycle()
                 if (out == null) {
-                    throw ModelWillNotLoadError("Real-ESRGAN NCNN upscale failed: " + RealEsrganNcnnEngine.lastError, -1, -1)
+                    throw ModelWillNotLoadError("Real-ESRGAN upscale failed: " + (if (useOnnx) RealEsrganOnnxEngine.lastError else RealEsrganNcnnEngine.lastError), -1, -1)
                 }
                 val elapsed = (System.currentTimeMillis() - t0) / 1000.0
                 val b64 = bitmapToB64(out)
@@ -1393,7 +1411,7 @@ private val batchState = ConcurrentHashMap<String, BatchState>()
                     "image" to b64,
                     "elapsed" to elapsed,
                     "request_id" to rid,
-                    "engine" to "realesrgan-ncnn",
+                    "engine" to if (useOnnx) "realesrgan-anime-6b-onnx" else "realesrgan-ncnn",
                     "outputs" to outputList(storeB64("image", ".png", b64, rid)),
                 ))
             }
@@ -1812,7 +1830,10 @@ switchTo("audio", effectiveModel) // 503 loading while switching image→audio
     private fun switchTo(kind: String, id: String): String {
         val prev = manager.status().loadedKind
         if (prev == "audio" && kind != "audio") WhisperLib.release()
-        if (prev == "upscale" && kind != "upscale") RealEsrganNcnnEngine.release()
+        if (prev == "upscale" && kind != "upscale") {
+            RealEsrganNcnnEngine.release()
+            RealEsrganOnnxEngine.release()
+        }
         if (prev == "vlm" && kind != "vlm") SmolVlmEngine.release()
         // Image stays resident for the common generate -> inpaint flow and is
         // freed as soon as another heavy engine needs the RAM. Audio was missing
@@ -1823,6 +1844,7 @@ switchTo("audio", effectiveModel) // 503 loading while switching image→audio
         }
         if (kind == "audio" && RealEsrganNcnnEngine.isReady()) {
             RealEsrganNcnnEngine.release()
+            RealEsrganOnnxEngine.release()
         }
         return manager.ensure(kind, id)
     }
@@ -1836,7 +1858,10 @@ switchTo("audio", effectiveModel) // 503 loading while switching image→audio
     private fun releaseResidentForOcr() {
         val prev = manager.status().loadedKind
         if (prev == "audio") WhisperLib.release()
-        if (prev == "upscale" && RealEsrganNcnnEngine.isReady()) RealEsrganNcnnEngine.release()
+        if (prev == "upscale") {
+            RealEsrganNcnnEngine.release()
+            RealEsrganOnnxEngine.release()
+        }
         if (prev == "vlm" && SmolVlmEngine.isReady()) SmolVlmEngine.release()
         if (prev == "image") LcmOnnxEngine.release()
         manager.unload("ocr")
