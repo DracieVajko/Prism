@@ -9,6 +9,7 @@ import ai.onnxruntime.OrtEnvironment
 import ai.onnxruntime.OrtSession
 import org.json.JSONObject
 import java.io.File
+import java.nio.ByteBuffer
 import java.nio.FloatBuffer
 import java.nio.IntBuffer
 import java.nio.LongBuffer
@@ -476,7 +477,13 @@ object LcmOnnxEngine {
         val h = size / 8
         val w = size / 8
         val sampleShape = longArrayOf(1, 4, h.toLong(), w.toLong())
-        val sampleTensor = OnnxTensor.createTensor(env, FloatBuffer.wrap(sample), sampleShape)
+        // Direct ByteBuffer to avoid GC and JNI copy overhead
+        val sampleBuf = java.nio.ByteBuffer.allocateDirect(4 * 4 * h * w * 4)
+            .order(java.nio.ByteOrder.nativeOrder())
+            .asFloatBuffer()
+        sampleBuf.put(sample)
+        sampleBuf.rewind()
+        val sampleTensor = OnnxTensor.createTensor(env, sampleBuf, sampleShape)
 
         val tShape = longArrayOf(1)
         val tLong = if (t < 0) 0L else t.toLong()
@@ -562,15 +569,20 @@ object LcmOnnxEngine {
         val scaled = Bitmap.createScaledBitmap(bmp, size, size, true)
         val px = IntArray(size * size)
         scaled.getPixels(px, 0, size, 0, 0, size, size)
-        val input = FloatArray(3 * size * size)
+        // Use direct ByteBuffer to avoid GC and JNI copy overhead.
+        // Allocates off-heap memory that ONNX Runtime can access directly.
+        val byteBuf = java.nio.ByteBuffer.allocateDirect(3 * size * size * 4)
+            .order(java.nio.ByteOrder.nativeOrder())
+        val floatBuf = byteBuf.asFloatBuffer()
         for (i in px.indices) {
             val c = px[i]
-            input[i] = Color.red(c) / 127.5f - 1f
-            input[size * size + i] = Color.green(c) / 127.5f - 1f
-            input[2 * size * size + i] = Color.blue(c) / 127.5f - 1f
+            floatBuf.put(Color.red(c) / 127.5f - 1f)
+            floatBuf.put(Color.green(c) / 127.5f - 1f)
+            floatBuf.put(Color.blue(c) / 127.5f - 1f)
         }
+        floatBuf.rewind()
         val shape = longArrayOf(1, 3, size.toLong(), size.toLong())
-        val tensor = OnnxTensor.createTensor(env, FloatBuffer.wrap(input), shape)
+        val tensor = OnnxTensor.createTensor(env, floatBuf, shape)
         val names = enc.inputNames.toList()
         val feed = mapOf((names.firstOrNull { it.contains("sample") } ?: names[0]) to tensor)
         val out = enc.run(feed)
@@ -580,6 +592,7 @@ object LcmOnnxEngine {
         buf.get(arr)
         for (i in arr.indices) arr[i] *= VAE_SCALE
         result.close(); tensor.close(); out.close()
+        byteBuf.clear()
         return arr
     }
 
