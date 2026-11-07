@@ -58,6 +58,15 @@ object ModelCatalog {
             files = listOf(ggml("large-v3-turbo-q5_0", 547)),
             note = "Default audio model. ~2.5x realtime on SD 8 Gen 2 (~2 h for 45 min).",
         ),
+        ModelAsset(
+            id = "silero-vad", kind = "audio", engine = "onnxruntime",
+            label = "Silero VAD — 2 MB, voice activity detection",
+            files = listOf(
+                ModelFile("silero_vad.onnx",
+                    "https://github.com/snakers4/silero-vad/raw/master/files/silero_vad.onnx", 2),
+            ),
+            note = "Voice activity detection. Pre-filter audio before transcription to skip silence.",
+        ),
     )
 
     /**
