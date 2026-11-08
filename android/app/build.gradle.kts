@@ -149,8 +149,6 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.3")
 
     implementation("com.microsoft.onnxruntime:onnxruntime-android:1.20.0")
-    // QNN Execution Provider for Snapdragon Hexagon NPU acceleration
-    implementation("com.qualcomm.qti:onnxruntime-android-qnn:1.20.0")
     // SmolVLM native runtime (llama.cpp + libmtmd) in its own CMake project
     implementation(project(":smolvlm"))
     // OCR: Xiaomi-OCR-0 through LiteRT-LM (Kotlin API + liblitertlm_jni.so,
@@ -158,8 +156,6 @@ dependencies {
     implementation("com.google.ai.edge.litertlm:litertlm-android:0.19.0")
     // EXIF orientation for OCR input photos (litertlm applies none itself).
     implementation("androidx.exifinterface:exifinterface:1.4.1")
-    // Sherpa-ONNX: streaming ASR replacement for whisper.cpp JNI
-    implementation("com.github.k2-fsa:sherpa-onnx-android:2024.12")
     // ONNX Runtime GenAI: unified VLM runtime (replaces llama.cpp JNI)
     implementation("com.microsoft.onnxruntime:onnxruntime-genai:0.4.0")
 }
