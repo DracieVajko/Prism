@@ -49,12 +49,9 @@ def lora_name_to_onnx_candidates(lora_name: str) -> list:
     if name.startswith("lora_unet_"):
         name = name[len("lora_unet_"):]
     
-    # name is now like "down_blocks_0_attentions_0_proj_in.lora_down"
-    # Strip the .lora_down suffix
-    if name.endswith(".lora_down"):
-        name = name[: -len(".lora_down")]
-    elif name.endswith(".lora_up"):
-        name = name[: -len(".lora_up")]
+    # name is now like "down_blocks_0_attentions_0_proj_in"
+    # No further suffix stripping needed - the caller has already stripped
+    # the .lora_down.weight suffix from the key
     
     # Find all underscore positions
     underscore_positions = [i for i, c in enumerate(name) if c == "_"]
@@ -109,17 +106,17 @@ def apply_lora_to_onnx(onnx_path: str, lora_path: str, output_path: str):
     skipped = 0
     
     for base_key in sorted(lora_tensors.keys()):
-        if not base_key.endswith(".lora_down"):
+        if not base_key.endswith(".down"):
             continue
         
-        base = base_key[: -len(".lora_down")]
+        base = base_key[: -len(".down")]
         alpha = lora_alphas.get(base, 1.0)
         down = lora_tensors[base + ".down"]
         up = lora_tensors[base + ".up"]
         
-        # Try candidate ONNX names
+        # Try candidate ONNX names (pass the base key including lora_unet_ prefix)
         found_onnx_name = None
-        for candidate in lora_name_to_onnx_candidates(base_key):
+        for candidate in lora_name_to_onnx_candidates(base):
             if candidate in init_map:
                 found_onnx_name = candidate
                 break
@@ -127,7 +124,7 @@ def apply_lora_to_onnx(onnx_path: str, lora_path: str, output_path: str):
         if found_onnx_name is None:
             skipped += 1
             if skipped <= 10:
-                print(f"  No ONNX match for: {base_key}")
+                print(f"  No ONNX match for: {base}")
             continue
         
         init = init_map[found_onnx_name]
@@ -141,7 +138,7 @@ def apply_lora_to_onnx(onnx_path: str, lora_path: str, output_path: str):
             # Linear: down is (rank, in_features), up is (out_features, rank)
             delta = up @ down
         else:
-            print(f"  Unexpected shapes for {base_key}: down={down.shape}, up={up.shape}")
+            print(f"  Unexpected shapes for {base}: down={down.shape}, up={up.shape}")
             skipped += 1
             continue
         
