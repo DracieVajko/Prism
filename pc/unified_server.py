@@ -1528,6 +1528,7 @@ async def transcriptions(
     max_chars_per_chunk: int = Form(default=8000),  # text chunk size for AI context limits
     keep_segments: bool = Form(default=False),      # keep segments separate vs merge into one
     use_vad: bool = Form(default=False),            # use Silero VAD to pre-filter speech segments
+    ):  # End of parameter list
     # Called directly (translations) FastAPI defaults are still Form objects.
     if not isinstance(request_id, str):
         request_id = ""
