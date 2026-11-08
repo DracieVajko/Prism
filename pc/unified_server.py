@@ -45,6 +45,16 @@ from unified.action_handlers import process_action, process_actions
 from unified.ai_client import AIClient, get_ai_client
 from unified.registry import build_registry
 from unified.sherpa_asr import transcribe as sherpa_transcribe, is_installed as sherpa_installed
+from unified.transcription_utils import (
+    format_transcription,
+    split_text_into_chunks,
+    merge_transcript_segments,
+    validate_audio_file,
+    validate_video_file,
+    get_media_duration_seconds,
+    estimate_transcription_time,
+    SUPPORTED_FORMATS,
+)
 from unified.upscale import upscale_image_b64
 from unified.vlm import MODEL_ID as VLM_ID, caption_image_b64, EngineMissing, release_vlm
 
@@ -1513,6 +1523,10 @@ async def transcriptions(
     action_extract: str = Form(default=""),
     ai_provider: str = Form(default=""),
     ai_model: str = Form(default=""),
+    # --- New OCR/transcription options ---
+    output_format: str = Form(default="txt"),       # txt, md, srt, json
+    max_chars_per_chunk: int = Form(default=8000),  # text chunk size for AI context limits
+    keep_segments: bool = Form(default=False),      # keep segments separate vs merge into one
 ):
     # Called directly (translations) FastAPI defaults are still Form objects.
     if not isinstance(request_id, str):
@@ -1559,10 +1573,14 @@ async def transcriptions(
                             content={"error": f"Unknown model '{raw_model}'"})
     if device and device.strip().lower() not in ("cuda", "cpu", ""):
         return JSONResponse(status_code=400, content={"error": "Unknown device"})
-    import os
+    # Validate file extension - support audio and video
     suffix = os.path.splitext(up.filename or "")[1].lower() or ".wav"
-    if suffix not in ALLOWED_AUDIO_EXT:
-        return JSONResponse(status_code=415, content={"error": f"Unsupported audio format: {suffix}"})
+    VIDEO_EXTS = {".mp4", ".avi", ".mov", ".mkv", ".webm", ".flv", ".wmv", ".mpeg", ".mpg", ".3gp", ".ts"}
+    AUDIO_EXTS = {".wav", ".mp3", ".m4a", ".flac", ".ogg", ".opus", ".webm", ".aac", ".wma"}
+    all_exts = VIDEO_EXTS | AUDIO_EXTS
+    if suffix not in all_exts:
+        return JSONResponse(status_code=415, content={"error": f"Unsupported format: {suffix}. Supported: {', '.join(sorted(all_exts))}"})
+    is_video = suffix in VIDEO_EXTS
     content = await up.read() if up is not None else content
     if not content:
         return JSONResponse(status_code=400, content={"error": "Empty file uploaded"})
@@ -1577,7 +1595,7 @@ async def transcriptions(
         except ModelLoadingError as e:
             return _raise_loading(e)
     _job_start(rid, "transcribe", 0.0, f"model={wanted}")
-    logger.info(f"transcribe: {len(content)} bytes, model={wanted}, lang={language}")
+    logger.info(f"transcribe: {len(content)} bytes, model={wanted}, lang={language}, format={response_format}, output_format={output_format}")
     import tempfile
     tmp = None
     segments = []
@@ -1697,31 +1715,68 @@ async def transcriptions(
             action_results = []
         _job_finish(rid, "done")
         fmt = (response_format or "json").strip().lower()
-        if fmt in ("srt", "vtt"):
-            body = _segments_to_srt(segments) if fmt == "srt" else _segments_to_vtt(segments)
-            if not segments:
-                # no timings (stub/proxy) -> one cue covering the whole text
-                dur = get_audio_duration(Path(tmp)) or 0.0
-                cue = [{"start": 0.0, "end": max(dur, 1.0), "text": text}]
-                body = _segments_to_srt(cue) if fmt == "srt" else _segments_to_vtt(cue)
-            meta = _store_output("text", f".{fmt}", body.encode("utf-8"), rid)
+        output_format_param = (output_format or "txt").strip().lower()
+        if output_format_param not in SUPPORTED_FORMATS:
+            output_format_param = "txt"
+        # Build segments list from text if no segments (e.g., whisper-service)
+        if not segments and text:
+            segments = [{"text": text, "start": 0.0, "end": duration_hint or 0.0}]
+        # Format output
+        if output_format_param == "json":
+            resp_data = {
+                "text": text,
+                "language": lang,
+                "engine": engine,
+                "duration": get_audio_duration(Path(tmp)) if tmp else 0.0,
+                "segments": segments,
+                "outputs": [{"name": f"{rid}.{output_format_param}", "size": len(text.encode("utf-8"))}],
+                "actions": [a.to_dict() for a in action_results] if action_results else [],
+            }
+            if fmt == "verbose_json":
+                meta = _store_output("text", f".{output_format_param}", text.encode("utf-8"), rid)
+                resp_data["outputs"] = [meta]
+            return resp_data
+        elif output_format_param == "txt":
+            formatted = format_transcription(segments, "txt", language or "unknown")
+            meta = _store_output("text", ".txt", formatted.encode("utf-8"), rid)
             from fastapi.responses import PlainTextResponse
-            resp = PlainTextResponse(body)
+            resp = PlainTextResponse(formatted)
             resp.headers["X-Output-Path"] = meta["path"]
+            resp.headers["X-Engine"] = engine
+            resp.headers["X-Language"] = language or "unknown"
             return resp
-        if fmt == "verbose_json":
-            meta = _store_output("text", ".txt", text.encode("utf-8"), rid)
-            return {"text": text, "language": lang, "engine": engine,
-                    "duration": get_audio_duration(Path(tmp)),
-                    "segments": segments, "outputs": [meta],
-                    "actions": [a.to_dict() for a in action_results] if action_results else []}
-        if fmt == "text":
+        elif output_format_param == "md":
+            formatted = format_transcription(segments, "md", language or "unknown")
+            meta = _store_output("text", ".md", formatted.encode("utf-8"), rid)
             from fastapi.responses import PlainTextResponse
-            return PlainTextResponse(text)
-        meta = _store_output("text", ".txt", text.encode("utf-8"), rid)
-        return {"text": text, "language": lang, "engine": engine,
-                "segments": segments, "outputs": [meta],
-                "actions": [a.to_dict() for a in action_results] if action_results else []}
+            resp = PlainTextResponse(formatted)
+            resp.headers["X-Output-Path"] = meta["path"]
+            resp.headers["X-Engine"] = engine
+            resp.headers["X-Language"] = language or "unknown"
+            return resp
+        elif output_format_param == "srt":
+            formatted = format_transcription(segments, "srt", language or "unknown")
+            meta = _store_output("text", ".srt", formatted.encode("utf-8"), rid)
+            from fastapi.responses import PlainTextResponse
+            resp = PlainTextResponse(formatted)
+            resp.headers["X-Output-Path"] = meta["path"]
+            resp.headers["X-Engine"] = engine
+            resp.headers["X-Language"] = language or "unknown"
+            return resp
+        else:  # json default
+            resp_data = {
+                "text": text,
+                "language": lang,
+                "engine": engine,
+                "duration": get_audio_duration(Path(tmp)) if tmp else 0.0,
+                "segments": segments,
+                "outputs": [{"name": f"{rid}.json", "size": len(text.encode("utf-8"))}],
+                "actions": [a.to_dict() for a in action_results] if action_results else [],
+            }
+            if fmt == "verbose_json":
+                meta = _store_output("text", ".json", text.encode("utf-8"), rid)
+                resp_data["outputs"] = [meta]
+            return resp_data
     except JobCancelled:
         _job_finish(rid, "cancelled")
         return JSONResponse(status_code=409, content={
@@ -1735,6 +1790,204 @@ async def transcriptions(
                 Path(tmp).unlink(missing_ok=True)
         except Exception:
             pass
+
+
+@app.post("/v1/audio/transcribe-batch")
+async def transcribe_batch(
+    files: List[UploadFile] = File(default=None),
+    model: str = Form(default="whisper-1"),
+    device: str = Form(default=""),
+    language: str = Form(default=None),
+    response_format: str = Form(default="json"),
+    output_format: str = Form(default="txt"),
+    auto_split: bool = Form(default=True),
+    max_chars_per_chunk: int = Form(default=8000),
+    keep_segments: bool = Form(default=False),
+    request_id: str = Form(default=""),
+    post_process: str = Form(default=""),
+    post_process_lang: str = Form(default=""),
+    action_extract: str = Form(default=""),
+    ai_provider: str = Form(default=""),
+    ai_model: str = Form(default=""),
+):
+    """Batch transcription endpoint for multiple audio/video files.
+
+    Transcribes multiple files in a single request. Returns results for each
+    file individually plus a combined result if keep_segments=False.
+
+    Supported input formats: .wav, .mp3, .m4a, .flac, .ogg, .webm, .aac, .wma,
+    .mp4, .avi, .mov, .mkv, .flv, .wmv, .mpeg, .mpg, .3gp, .ts
+
+    Output formats: txt, md, srt, json
+    """
+    if not files or all(f.filename == "" for f in files):
+        return JSONResponse(status_code=400, content={"error": "No files provided"})
+
+    rid = request_id or f"req-{uuid.uuid4().hex[:8]}"
+    results = []
+
+    for file in files:
+        if not file.filename:
+            continue
+        file_rid = f"{rid}-{file.filename}"
+        try:
+            content = await file.read()
+            if not content:
+                results.append({
+                    "name": file.filename,
+                    "status": "error",
+                    "error": "Empty file",
+                })
+                continue
+
+            if len(content) > MAX_FILE_SIZE:
+                results.append({
+                    "name": file.filename,
+                    "status": "error",
+                    "error": "File too large",
+                })
+                continue
+
+            suffix = os.path.splitext(file.filename or "")[1].lower() or ".wav"
+            VIDEO_EXTS = {".mp4", ".avi", ".mov", ".mkv", ".webm", ".flv", ".wmv", ".mpeg", ".mpg", ".3gp", ".ts"}
+            AUDIO_EXTS = {".wav", ".mp3", ".m4a", ".flac", ".ogg", ".opus", ".webm", ".aac", ".wma"}
+            all_exts = VIDEO_EXTS | AUDIO_EXTS
+            if suffix not in all_exts:
+                results.append({
+                    "name": file.filename,
+                    "status": "error",
+                    "error": f"Unsupported format: {suffix}",
+                })
+                continue
+
+            is_video = suffix in VIDEO_EXTS
+
+            import tempfile
+            tmp_path = None
+            try:
+                # Save uploaded file to temp
+                tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+                tmp.write(content)
+                tmp_path = tmp.name
+                tmp.close()
+
+                if is_video:
+                    # Extract audio first using MediaTools
+                    from unified.MediaTools import MediaTools
+                    out = MediaTools.extract_audio(tmp_path)
+                    # out is MediaTools.Output with .bytes, .name, .mime
+                    tmp_path = str(tempfile.NamedTemporaryFile(delete=False, suffix=".wav").name)
+                    Path(tmp_path).write_bytes(out.bytes)
+
+                # Determine engine
+                from unified import nemotron_asr, sherpa_asr
+                raw_model = (model or "").strip() or "whisper-1"
+                wanted = "small" if raw_model == "whisper-1" else raw_model
+                use_nemotron = wanted.startswith("nemotron") or (nemotron_asr.enabled() and raw_model == "whisper-1")
+                use_sherpa = wanted.startswith("sherpa") or (sherpa_asr.enabled() and raw_model == "whisper-1")
+
+                if use_sherpa:
+                    if not sherpa_asr.is_available():
+                        results.append({"name": file.filename, "status": "error", "error": "sherpa not installed"})
+                        continue
+                    text, lang = await asyncio.to_thread(sherpa_asr.transcribe_file, tmp_path, language)
+                    engine = "sherpa-onnx"
+                elif use_nemotron:
+                    if not nemotron_asr.is_available():
+                        results.append({"name": file.filename, "status": "error", "error": f"{nemotron_id} not installed"})
+                        continue
+                    text, lang = await asyncio.to_thread(nemotron_asr.transcribe_file, tmp_path, language)
+                    engine = "nemotron-asr"
+                else:
+                    if auto_split:
+                        text, lang, segments = await _transcribe_with_splitting(Path(tmp_path), wanted, language, f"{rid}-{file.filename}")
+                    else:
+                        text, lang, segments = await asyncio.to_thread(_transcribe_chunked, Path(tmp_path), wanted, language, f"{rid}-{file.filename}")
+                    engine = "local"
+
+                if post_process and text:
+                    try:
+                        from unified.gemma_postprocess import process as gemma_process, init as gemma_init
+                        if gemma_init():
+                            pp_lang = post_process_lang or lang or "sk"
+                            text = gemma_process(text, instruction=post_process, target_lang=pp_lang)
+                            engine = engine + "+gemma4"
+                    except Exception as e:
+                        logger.warning(f"Gemma4 post-processing failed: {e}")
+
+                if not segments and text:
+                    segments_list = [{"text": text, "start": 0.0, "end": duration_hint or 0.0}]
+                else:
+                    segments_list = []
+
+                if output_format == "json":
+                    result_text = text
+                else:
+                    result_text = format_transcription(segments_list, output_format, language or "unknown")
+
+                results.append({
+                    "name": file.filename,
+                    "status": "success",
+                    "text": text,
+                    "formatted": result_text,
+                    "model": model,
+                    "language": lang,
+                    "engine": engine,
+                    "elapsed": get_audio_duration(Path(tmp_path)) if tmp_path else 0.0,
+                    "outputs": [{"name": f"{rid}-{file.filename}.{output_format}", "size": len(result_text.encode("utf-8"))}],
+                })
+
+            except Exception as e:
+                logger.error(f"Transcription failed for {file.filename}: {e}")
+                results.append({
+                    "name": file.filename,
+                    "status": "error",
+                    "error": str(e)[:200],
+                })
+            finally:
+                if tmp_path:
+                    try:
+                        Path(tmp_path).unlink(missing_ok=True)
+                    except Exception:
+                        pass
+
+        except Exception as e:
+            logger.error(f"Batch transcription failed for {file.filename}: {e}")
+            results.append({
+                "name": file.filename,
+                "status": "error",
+                "error": str(e)[:200],
+            })
+
+    # Build combined result
+    combined_text = None
+    combined_outputs = []
+    successful = [r for r in results if r.get("status") == "success"]
+    if successful:
+        all_segments = []
+        for r in successful:
+            for seg in r.get("segments", []):
+                s = dict(seg)
+                s["file"] = r["name"]
+                all_segments.append(s)
+
+        if keep_segments:
+            combined_text = format_transcription(all_segments, output_format, language or "unknown")
+        else:
+            combined_text = format_transcription(all_segments, output_format, language or "unknown")
+
+        combined_outputs = [{"name": f"{rid}-combined.{output_format}", "size": len(combined_text.encode("utf-8"))}]
+
+    return {
+        "rid": rid,
+        "total": len(results),
+        "successful": len(successful),
+        "failed": len([r for r in results if r.get("status") == "error"]),
+        "format": output_format,
+        "results": results,
+        "combined_text": combined_text,
+        "combined_outputs": combined_outputs if combined_outputs else None,
+    }
 
 
 @app.post("/v1/audio/translations")
