@@ -387,7 +387,7 @@ def list_models():
     # The installable catalog is the source of truth for `installed` and kind;
     # build_registry's `missing` flag is not always populated.
     try:
-        from unified import model_install_manager as _mm
+        from unified import models_manager as _mm
     except Exception:
         _mm = None
     try:
@@ -1356,7 +1356,7 @@ def _transcribe_with_whisper(tmp_path: str, wanted: str, language, rid: str = ""
     # so a half-finished download is never loaded as if it were complete.
     local = Path(__file__).resolve().parent / "models" / f"faster-whisper-{wanted}"
     try:
-        from unified.model_install_manager import whisper_installed
+        from unified.models_manager import whisper_installed
         use_local = whisper_installed(wanted)
     except Exception:
         local_bin = local / "model.bin"
@@ -2371,7 +2371,7 @@ def open_outputs():
 
 # ---------- model install/uninstall (PC) ----------
 
-from unified import model_install_manager as _mm
+from unified import models_manager as _mm
 
 
 class InstallRequest(BaseModel):

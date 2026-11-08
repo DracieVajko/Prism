@@ -202,7 +202,7 @@ def cmd_caption(a):
 
 
 def cmd_models(_):
-    from unified.model_install_manager import catalog
+    from unified.models_manager import catalog
     rows = catalog()
     print(f"{'ID':<28} {'KIND':<9} {'SIZE':>9}  {'INSTALLED':<10} LABEL")
     for m in rows:
@@ -213,7 +213,7 @@ def cmd_models(_):
 
 
 def cmd_install(a):
-    from unified.model_install_manager import install_blocking, catalog
+    from unified.models_manager import install_blocking, catalog
     for mid in a.ids:
         print(f"[{mid}] installing…", flush=True)
         try:
@@ -229,7 +229,7 @@ def cmd_install(a):
 
 
 def cmd_uninstall(a):
-    from unified.model_install_manager import uninstall
+    from unified.models_manager import uninstall
     for mid in a.ids:
         try:
             res = uninstall(mid)
