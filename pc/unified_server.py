@@ -1616,14 +1616,14 @@ async def transcriptions(
         # Optional Silero VAD pre-processing: only transcribe speech segments
         if use_vad and not use_nemotron and not use_sherpa:
             try:
-                from unified.silero_vad import detect_speech_segments, transcribe_with_vad as silero_transcribe_with_vad
+                from unified.silero_vad import detect_speech_segments
                 if silero_vad.is_installed():
                     speech_segments = silero_vad.detect_speech_segments(tmp)
                     if speech_segments:
                         # Transcribe only speech segments
                         import tempfile as _tmpfile
                         from torchaudio import load as _load_audio
-                        import torch
+                        import torchaudio as _torchaudio
                         wav, sr = _load_audio(tmp)
                         all_text_parts = []
                         for start_sec, end_sec in speech_segments:
@@ -1631,12 +1631,13 @@ async def transcriptions(
                             end_sample = int(end_sec * 16000)
                             segment_wav = wav[:, start_sample:end_sample]
                             tmp_seg = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
-                            import torchaudio as _torchaudio
-                            _torchaudio.save(tmp_seg, wav, 16000)
-                            seg_text, _ = nemotron_asr.transcribe(tmp_path, language) if nemotron_asr.is_available() else (None, None)
+                            tmp_seg_path = tmp_seg.name
+                            tmp_seg.close()
+                            _torchaudio.save(tmp_seg_path, segment_wav, 16000)
+                            seg_text, _ = nemotron_asr.transcribe(tmp_seg_path, language) if nemotron_asr.is_available() else (None, None)
                             if seg_text:
                                 all_text_parts.append(seg_text)
-                            Path(tmp_seg).unlink(missing_ok=True)
+                            Path(tmp_seg_path).unlink(missing_ok=True)
                         if all_text_parts:
                             text = " ".join(all_text_parts)
                             engine = "whisper+silero_vad"
@@ -1645,11 +1646,11 @@ async def transcriptions(
                     else:
                         text, lang = "", language or "unknown"
                     engine = "whisper+silero_vad"
-                except Exception as e:
-                    logger.warning(f"Silero VAD failed, falling back to full transcription: {e}")
-                    # Fall through to normal processing
-            else:
-                logger.info("Silero VAD not installed, processing full audio")
+            except Exception as e:
+                logger.warning(f"Silero VAD failed, falling back to full transcription: {e}")
+                # Fall through to normal processing
+        else:
+            logger.info("Silero VAD not installed, processing full audio")
         if use_nemotron:
             # Nemotron is an explicit engine choice: never fall through to the
             # WhisperApi proxy when it fails, otherwise the caller silently gets
