@@ -73,6 +73,13 @@ config_data = [
     ['PRISM_LLM_API_KEY', '', 'API key for public providers'],
     ['PRISM_LLM_MODEL', 'gemma4:12b', 'Model name (recommended default in dropdown)'],
     ['PRISM_LLM_ENDPOINT', '', 'Custom endpoint path'],
+    ['PRISM_PROMPT_SUMMARY', 'Summarize the text into concise notes with key points.', 'Default prompt for summary operation'],
+    ['PRISM_PROMPT_CLEANUP', 'Fix grammar, spelling, and punctuation. Keep meaning unchanged.', 'Default prompt for cleanup operation'],
+    ['PRISM_PROMPT_GRAMMAR', 'Fix grammar and spelling only. Do not rewrite or summarize.', 'Default prompt for grammar operation'],
+    ['PRISM_PROMPT_LIST', 'Extract a bulleted list of the key items from the text.', 'Default prompt for list operation'],
+    ['PRISM_PROMPT_TRANSLATE', 'Translate the text into {target_lang}. Reply with translation only.', 'Default prompt for translate operation'],
+    ['PRISM_PROMPT_REWRITE', 'Rewrite the text to be clearer and easier to read.', 'Default prompt for rewrite operation'],
+    ['PRISM_PROMPT_MEETING_NOTES', 'Summarize meeting transcript with date, participants, topic, decisions, action items.', 'Default prompt for meeting_notes operation'],
 ]
 
 ws3.append(config_headers)
@@ -88,6 +95,33 @@ for col in range(1, len(config_headers)+1):
 for col in range(1, len(config_headers)+1):
     max_len = max(len(str(ws3.cell(row=r, column=col).value)) for r in range(1, len(config_data)+2))
     ws3.column_dimensions[get_column_letter(col)].width = min(max_len + 2, 60)
+
+# Sheet 4: Default Prompts
+ws4 = wb.create_sheet('Default Prompts')
+prompt_headers = ['Operation', 'Default Prompt', 'Env Override']
+prompt_data = [
+    ['summary', 'Summarize the text into concise notes with key points.', 'PRISM_PROMPT_SUMMARY'],
+    ['cleanup', 'Fix grammar, spelling, and punctuation. Keep meaning unchanged.', 'PRISM_PROMPT_CLEANUP'],
+    ['grammar', 'Fix grammar and spelling only. Do not rewrite or summarize.', 'PRISM_PROMPT_GRAMMAR'],
+    ['list', 'Extract a bulleted list of the key items from the text.', 'PRISM_PROMPT_LIST'],
+    ['translate', 'Translate the text into {target_lang}. Reply with translation only.', 'PRISM_PROMPT_TRANSLATE'],
+    ['rewrite', 'Rewrite the text to be clearer and easier to read.', 'PRISM_PROMPT_REWRITE'],
+    ['meeting_notes', 'Summarize meeting transcript with date, participants, topic, decisions, action items.', 'PRISM_PROMPT_MEETING_NOTES'],
+]
+
+ws4.append(prompt_headers)
+for row in prompt_data:
+    ws4.append(row)
+
+for col in range(1, len(prompt_headers)+1):
+    cell = ws4.cell(row=1, column=col)
+    cell.font = Font(bold=True, color='FFFFFF')
+    cell.fill = PatternFill(start_color='366092', end_color='366092', fill_type='solid')
+    cell.alignment = Alignment(horizontal='center')
+
+for col in range(1, len(prompt_headers)+1):
+    max_len = max(len(str(ws4.cell(row=r, column=col).value)) for r in range(1, len(prompt_data)+2))
+    ws4.column_dimensions[get_column_letter(col)].width = min(max_len + 2, 70)
 
 wb.save(r'C:\Users\DracieVajko\Desktop\PRISM_LLM_Model_Comparison.xlsx')
 print('Excel saved successfully')
