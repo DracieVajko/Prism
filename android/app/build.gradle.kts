@@ -161,6 +161,9 @@ dependencies {
     // Falls back gracefully on unsupported devices (summarize returns 503).
     implementation("com.google.mlkit:genai-prompt:1.0.0-beta1")
 
-    // ONNX Runtime GenAI: unified VLM runtime (replaces llama.cpp JNI)
-    implementation("com.microsoft.onnxruntime:onnxruntime-genai:0.4.0")
+    // ONNX Runtime GenAI: NOT used. The artifact com.microsoft.onnxruntime:onnxruntime-genai:0.4.0
+    // is not published on Maven Central or Google Maven. SmolVlmOnnxEngine.kt only has
+    // commented-out TODO references to the GenAI API; actual VLM work uses LiteRT-LM
+    // and ML Kit GenAI instead. Kept as a commented placeholder for future integration.
+    // implementation("com.microsoft.onnxruntime:onnxruntime-genai:0.4.0")
 }
