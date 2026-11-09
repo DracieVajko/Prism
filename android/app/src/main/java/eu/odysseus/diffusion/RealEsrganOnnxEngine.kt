@@ -198,13 +198,13 @@ object RealEsrganOnnxEngine {
                 floatData[idx++] = (c and 0xFF).toFloat() / 255f         // B
             }
 
-            val inputShape = longArrayOf(1, 3, srcH, srcW)
+            val inputShape = longArrayOf(1, 3, srcH.toLong(), srcW.toLong())
             val inputTensor = OnnxTensor.createTensor(env!!, FloatBuffer.wrap(floatData), inputShape)
 
             val feed = mapOf("image.1" to inputTensor)
             val results = session!!.run(feed)
-            val outputTensor = results.values().iterator().next()
-            val outputData = outputTensor.value?.asFloatBuffer()?.let { buf ->
+            val outputTensor = results.first().value
+            val outputData = (outputTensor?.getValue() as? FloatBuffer)?.let { buf ->
                 val arr = FloatArray(buf.remaining())
                 buf.get(arr)
                 arr
@@ -225,11 +225,12 @@ object RealEsrganOnnxEngine {
             val outH = srcH * 4
             val outW = srcW * 4
             val outPx = IntArray(outW * outH)
+            val od = outputData!!
             for (row in 0 until outH) {
                 for (col in 0 until outW) {
-                    val r = (outputData[(0 * outH + row) * outW + col] * 255f).coerceIn(0f, 255f).toInt()
-                    val g = (outputData[(1 * outH + row) * outW + col] * 255f).coerceIn(0f, 255f).toInt()
-                    val b = (outputData[(2 * outH + row) * outW + col] * 255f).coerceIn(0f, 255f).toInt()
+                    val r = (od[(0 * outH + row) * outW + col] * 255f).coerceIn(0f, 255f).toInt()
+                    val g = (od[(1 * outH + row) * outW + col] * 255f).coerceIn(0f, 255f).toInt()
+                    val b = (od[(2 * outH + row) * outW + col] * 255f).coerceIn(0f, 255f).toInt()
                     outPx[row * outW + col] = (0xFF shl 24) or (r shl 16) or (g shl 8) or b
                 }
             }

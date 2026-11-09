@@ -17,6 +17,7 @@ object SherpaOnnxLib {
     private const val TAG = "SherpaOnnxLib"
 
     private var recognizer: Any? = null
+    private var modelDir: File? = null
     private var isAvailable = false
     private var lastError: String = ""
 
@@ -92,10 +93,8 @@ object SherpaOnnxLib {
         return null
     }
 
-    companion object {
-        @JvmStatic
-        fun loadModel(ctx: Context, modelDir: File): Boolean {
-            return SherpaOnnxLib().init(ctx, modelDir)
-        }
+    @JvmStatic
+    fun loadModel(ctx: Context, modelDir: File): Boolean {
+        return SherpaOnnxLib.init(ctx, modelDir)
     }
 }

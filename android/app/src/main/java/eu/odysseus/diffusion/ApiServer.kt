@@ -53,8 +53,10 @@ import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
 // Gemini Nano via ML Kit GenAI (on-device summarization / cleanup)
-import com.google.mlkit.genai.Summarization
-import com.google.mlkit.genai.SummarizerParams
+// TODO: API mismatch with genai-prompt:1.0.0-beta5 - need to update imports once
+// correct class names are confirmed.
+// import com.google.mlkit.genai.Summarization
+// import com.google.mlkit.genai.SummarizerParams
 
 // ---------------------------------------------------------------------------
 // Contract: same paths + same 503 shapes as docs/ODYSSEUS-CONTRACT.md.
@@ -1601,39 +1603,9 @@ private val batchState = ConcurrentHashMap<String, BatchState>()
                     return@post
                 }
 
-                val result: String? = try {
-                    when (mode) {
-                        "summarize" -> {
-                            val summarizer = Summarization.getClient()
-                            val params = SummarizerParams.builder()
-                                .setMaxSummaryLength(maxTokens)
-                                .build()
-                            summarizer.summarize(text, params).await()
-                        }
-                        "cleanup" -> {
-                            // Cleanup: use Prompt API via Generation client
-                            val genConfig = GenerationConfig.builder()
-                                .setModelConfig(
-                                    ModelConfig.builder()
-                                        .setPreference(ModelPreference.FAST)
-                                        .setReleaseStage(ModelReleaseStage.PREVIEW)
-                                        .build()
-                                )
-                                .build()
-                            val generator = Generation.getClient(genConfig)
-                            generator.generateContent(
-                                "Clean up and fix grammar/punctuation of the following text. Reply with the cleaned text only:\n\n$text",
-                                maxTokens
-                            ).await().text
-                        }
-                        else -> {
-                            call.respond(HttpStatusCode.BadRequest, jsonOf("error" to "unknown mode: $mode"))
-                            return@post
-                        }
-                    }
-                } catch (e: Exception) {
-                    null // Gemini Nano not available on this device
-                }
+                // Gemini Nano summarization via ML Kit GenAI - API pending confirmation
+                // (genai-prompt:1.0.0-beta5 class names differ from assumed API)
+                val result: String? = null
 
                 if (result == null) {
                     call.respond(HttpStatusCode.ServiceUnavailable, jsonOf(
