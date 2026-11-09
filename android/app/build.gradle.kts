@@ -156,6 +156,11 @@ dependencies {
     implementation("com.google.ai.edge.litertlm:litertlm-android:0.19.0")
     // EXIF orientation for OCR input photos (litertlm applies none itself).
     implementation("androidx.exifinterface:exifinterface:1.4.1")
+    // Gemini Nano via ML Kit GenAI API (on-device summarization, cleanup, rewrite)
+    // Optional: works on Pixel 8+, Samsung S24+, Xiaomi, Motorola with NPU support.
+    // Falls back gracefully on unsupported devices (summarize returns 503).
+    implementation("com.google.mlkit:genai-prompt:1.0.0-beta1")
+
     // ONNX Runtime GenAI: unified VLM runtime (replaces llama.cpp JNI)
     implementation("com.microsoft.onnxruntime:onnxruntime-genai:0.4.0")
 }

@@ -381,7 +381,7 @@ def health():
         "idle_unload_seconds": IDLE_UNLOAD_SECONDS,
         "uptime_s": round(time.time() - _START_TS, 1),
         # audio sekcia (WhisperApi kompat)
-        "audio_model": whisper_name or reg.get("default_audio_model", "small"),
+        "audio_model": whisper_name or reg.get("default_audio_model", "turbo"),
         "audio_loaded": bool(whisper_name) or st["loaded_kind"] == "audio",
         "audio_whisper_models_resident": len(_WHISPER_CACHE),
         "version": "unified-0.1.0",
@@ -1096,9 +1096,9 @@ def _run_batch(bid: str, jobs: list, stop_on_error: bool) -> None:
                     out["outputs"] = [meta] if meta else []
                     results.append({"index": i, "type": "upscale", "ok": True, **out})
                 elif kind == "transcribe":
-                    wanted = job.get("model", "small") or "small"
+                    wanted = job.get("model", "turbo") or "turbo"
                     if wanted not in ALLOWED_WHISPER:
-                        wanted = "small"
+                        wanted = "turbo"
                     text, lang, segs = _transcribe_with_whisper(
                         job.get("_path", ""), wanted, job.get("language") or "sk")
                     meta = _store_output("text", ".txt", text.encode("utf-8"), bid)
@@ -1554,7 +1554,7 @@ async def transcriptions(
     if up is None and not url:
         return JSONResponse(status_code=400, content={"error": "missing file or url"})
     raw_model = (model or "").strip() or "whisper-1"
-    wanted = "small" if raw_model == "whisper-1" else raw_model
+    wanted = "turbo" if raw_model == "whisper-1" else raw_model
     # NVIDIA Nemotron 3.5 ASR: opt in per request, or globally with
     # PRISM_ASR_ENGINE=nemotron.
     from unified import nemotron_asr
@@ -1946,7 +1946,7 @@ async def transcribe_batch(
                 # Determine engine
                 from unified import nemotron_asr, sherpa_asr
                 raw_model = (model or "").strip() or "whisper-1"
-                wanted = "small" if raw_model == "whisper-1" else raw_model
+                wanted = "turbo" if raw_model == "whisper-1" else raw_model
                 use_nemotron = wanted.startswith("nemotron") or (nemotron_asr.enabled() and raw_model == "whisper-1")
                 use_sherpa = wanted.startswith("sherpa") or (sherpa_asr.enabled() and raw_model == "whisper-1")
 

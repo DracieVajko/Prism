@@ -52,6 +52,10 @@ import java.io.File
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
+// Gemini Nano via ML Kit GenAI (on-device summarization / cleanup)
+import com.google.mlkit.genai.Summarization
+import com.google.mlkit.genai.SummarizerParams
+
 // ---------------------------------------------------------------------------
 // Contract: same paths + same 503 shapes as docs/ODYSSEUS-CONTRACT.md.
 // Base: http://<phone>:8101
@@ -1576,6 +1580,74 @@ private val batchState = ConcurrentHashMap<String, BatchState>()
                     "elapsed" to elapsed,
                     "request_id" to rid,
                     "engine" to "litertlm-xiaomi-ocr-0",
+                ))
+            }
+            post("/v1/text/summarize") {
+                // On-device text summarization / cleanup via Gemini Nano (ML Kit GenAI).
+                // Returns 503 on devices without NPU support for Gemini Nano.
+                val body = call.receiveText()
+                val root: KxJsonObject = try {
+                    Json.parseToJsonElement(body).jsonObject
+                } catch (e: Exception) {
+                    call.respond(HttpStatusCode.BadRequest, jsonOf("error" to "body must be JSON"))
+                    return@post
+                }
+                val text = root["text"]?.jsonPrimitive?.contentOrNull ?: ""
+                val maxTokens = root["max_tokens"]?.jsonPrimitive?.intOrNull ?: 256
+                val mode = root["mode"]?.jsonPrimitive?.contentOrNull ?: "summarize" // summarize | cleanup
+
+                if (text.isBlank()) {
+                    call.respond(HttpStatusCode.BadRequest, jsonOf("error" to "missing text"))
+                    return@post
+                }
+
+                val result: String? = try {
+                    when (mode) {
+                        "summarize" -> {
+                            val summarizer = Summarization.getClient()
+                            val params = SummarizerParams.builder()
+                                .setMaxSummaryLength(maxTokens)
+                                .build()
+                            summarizer.summarize(text, params).await()
+                        }
+                        "cleanup" -> {
+                            // Cleanup: use Prompt API via Generation client
+                            val genConfig = GenerationConfig.builder()
+                                .setModelConfig(
+                                    ModelConfig.builder()
+                                        .setPreference(ModelPreference.FAST)
+                                        .setReleaseStage(ModelReleaseStage.PREVIEW)
+                                        .build()
+                                )
+                                .build()
+                            val generator = Generation.getClient(genConfig)
+                            generator.generateContent(
+                                "Clean up and fix grammar/punctuation of the following text. Reply with the cleaned text only:\n\n$text",
+                                maxTokens
+                            ).await().text
+                        }
+                        else -> {
+                            call.respond(HttpStatusCode.BadRequest, jsonOf("error" to "unknown mode: $mode"))
+                            return@post
+                        }
+                    }
+                } catch (e: Exception) {
+                    null // Gemini Nano not available on this device
+                }
+
+                if (result == null) {
+                    call.respond(HttpStatusCode.ServiceUnavailable, jsonOf(
+                        "error" to "summarization/cleanup not available on this device (Gemini Nano required)",
+                        "engine" to "gemini-nano"
+                    ))
+                    return@post
+                }
+
+                call.respond(jsonOf(
+                    "result" to result,
+                    "mode" to mode,
+                    "engine" to "gemini-nano",
+                    "request_id" to UUID.randomUUID().toString()
                 ))
             }
             post("/v1/chat/completions") {
