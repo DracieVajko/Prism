@@ -5,12 +5,22 @@ the user's responsibility via their own LLM loader (Ollama, LM Studio, llama.cpp
 public API, etc.). This module only provides a thin client to call an external
 endpoint that the user configures.
 
-Configuration (environment variables or AppConfig):
+Configuration (environment variables):
   PRISM_LLM_PROVIDER   : ollama | lmstudio | openai | anthropic | custom | none
   PRISM_LLM_BASE_URL   : http://localhost:11434 (ollama), http://localhost:1234 (lmstudio), etc.
   PRISM_LLM_API_KEY    : API key for public providers (optional)
   PRISM_LLM_MODEL      : model name (e.g. "gemma4:12b", "qwen3.5-9b", "gpt-4o-mini")
   PRISM_LLM_ENDPOINT   : custom endpoint path (default: /api/generate or /v1/chat/completions)
+
+Default prompts per operation (overridable via env vars PRISM_PROMPT_<OPERATION>):
+  summary       : Summarize the text into structured notes with key points and action items.
+  cleanup       : Fix grammar, spelling, and punctuation. Keep the meaning unchanged.
+  grammar       : Fix grammar and spelling only. Do not rewrite or summarize.
+  list          : Extract a bulleted list of key items from the text.
+  translate     : Translate the text into the target language.
+  rewrite       : Rewrite the text to be clearer and easier to read.
+  meeting_notes : Summarize a meeting transcript with date, participants, topic,
+                  decisions, action items, and open questions.
 """
 
 import json
@@ -21,6 +31,28 @@ from typing import Optional
 import httpx
 
 logger = logging.getLogger("llm_providers")
+
+# ---------------------------------------------------------------------------
+# Default prompts per operation. Override with PRISM_PROMPT_<OPERATION> env var.
+# ---------------------------------------------------------------------------
+_DEFAULT_PROMPTS = {
+    "summary": "Summarize the text into concise notes with key points.",
+    "cleanup": "Fix grammar, spelling, and punctuation. Keep the meaning unchanged. Reply with the corrected text only.",
+    "grammar": "Fix grammar and spelling only. Do not rewrite or summarize. Reply with the corrected text only.",
+    "list": "Extract a bulleted list of the key items from the text. Reply with the list only.",
+    "translate": "Translate the text into {target_lang}. Reply with the translation only.",
+    "rewrite": "Rewrite the text to be clearer and easier to read. Keep the meaning and original language. Reply with the rewritten text only.",
+    "meeting_notes": "Summarize this meeting transcript into structured notes with date, participants, topic, key decisions, summary points, and action items.",
+}
+
+
+def _get_prompt(operation: str) -> str:
+    """Return the prompt for the given operation, honoring env overrides."""
+    env_key = f"PRISM_PROMPT_{operation.upper()}"
+    env_val = os.environ.get(env_key, "").strip()
+    if env_val:
+        return env_val
+    return _DEFAULT_PROMPTS.get(operation, _DEFAULT_PROMPTS["cleanup"])
 
 
 def _get_config() -> dict:
@@ -94,8 +126,17 @@ def process_with_external_llm(
     text: str,
     instruction: str = "cleanup",
     target_lang: str = "en",
+    operation: Optional[str] = None,
 ) -> str:
     """Send text to an external LLM provider and return the processed result.
+
+    Args:
+        text: Source text to process.
+        instruction: Custom instruction (overrides operation default if set).
+        target_lang: Target language for translation/summary.
+        operation: Named operation (summary, cleanup, grammar, list, translate,
+                   rewrite, meeting_notes). Uses default prompt if instruction
+                   is not explicitly customized.
 
     Returns the original text unchanged if no provider is configured or the
     call fails — the caller should treat this as a best-effort enhancement.
@@ -111,9 +152,20 @@ def process_with_external_llm(
         logger.warning("LLM provider %s configured but no base URL set", provider)
         return text
 
+    # Resolve instruction: explicit instruction wins, else operation default,
+    # else fallback to cleanup.
+    if instruction and instruction != "cleanup":
+        resolved_instruction = instruction
+    elif operation:
+        resolved_instruction = _get_prompt(operation)
+        if target_lang and "{target_lang}" in resolved_instruction:
+            resolved_instruction = resolved_instruction.format(target_lang=target_lang)
+    else:
+        resolved_instruction = instruction or _DEFAULT_PROMPTS["cleanup"]
+
     try:
         payload, path = _build_payload(
-            provider, cfg["model"], instruction, text, target_lang, cfg["endpoint"]
+            provider, cfg["model"], resolved_instruction, text, target_lang, cfg["endpoint"]
         )
         url = cfg["base_url"] + path
 
@@ -149,9 +201,9 @@ def _extract_response_text(provider: str, data: dict) -> str:
         msg = choices[0].get("message", {})
         if isinstance(msg, dict):
             return msg.get("content", "")
-        text = choices[0].get("text", "")
-        if text:
-            return text
+        text_val = choices[0].get("text", "")
+        if text_val:
+            return text_val
 
     # Fallback: look for common fields
     for key in ("content", "text", "output", "result", "completion"):

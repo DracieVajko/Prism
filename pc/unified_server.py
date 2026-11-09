@@ -1528,6 +1528,7 @@ async def transcriptions(
     max_chars_per_chunk: int = Form(default=8000),  # text chunk size for AI context limits
     keep_segments: bool = Form(default=False),      # keep segments separate vs merge into one
     use_vad: bool = Form(default=False),            # use Silero VAD to pre-filter speech segments
+    post_process_operation: str = Form(default=""), # summary, cleanup, grammar, list, translate, rewrite, meeting_notes
     ):  # End of parameter list
     # Called directly (translations) FastAPI defaults are still Form objects.
     if not isinstance(request_id, str):
@@ -1875,6 +1876,7 @@ async def transcribe_batch(
     action_extract: str = Form(default=""),
     ai_provider: str = Form(default=""),
     ai_model: str = Form(default=""),
+    post_process_operation: str = Form(default=""), # summary, cleanup, grammar, list, translate, rewrite, meeting_notes
 ):
     """Batch transcription endpoint for multiple audio/video files.
 
@@ -1975,7 +1977,10 @@ async def transcribe_batch(
                     try:
                         from unified.llm_providers import process_with_external_llm
                         pp_lang = post_process_lang or lang or "sk"
-                        text = process_with_external_llm(text, instruction=post_process, target_lang=pp_lang)
+                        text = process_with_external_llm(
+                            text, instruction=post_process, target_lang=pp_lang,
+                            operation=post_process_operation or None,
+                        )
                         engine = engine + "+external-llm"
                     except Exception as e:
                         logger.warning(f"External LLM post-processing failed: {e}")
@@ -2125,6 +2130,7 @@ async def transcribe_alias(
     request_id: str = Form(default=""),
     post_process: str = Form(default=""),
     post_process_lang: str = Form(default=""),
+    post_process_operation: str = Form(default=""),
     action_extract: str = Form(default=""),
     ai_provider: str = Form(default=""),
     ai_model: str = Form(default=""),
@@ -2140,6 +2146,7 @@ async def transcribe_alias(
         request_id=request_id,
         post_process=post_process,
         post_process_lang=post_process_lang,
+        post_process_operation=post_process_operation,
         action_extract=action_extract,
         ai_provider=ai_provider,
         ai_model=ai_model,
@@ -2151,25 +2158,33 @@ async def text_process(
     text: str = Form(default=""),
     instruction: str = Form(default="cleanup"),
     target_lang: str = Form(default="sk"),
+    operation: str = Form(default=""),  # summary, cleanup, grammar, list, translate, rewrite, meeting_notes
 ):
     """Post-process text using an external LLM provider (Ollama, LM Studio, public API, etc.).
 
     The PC server does NOT download or manage any text-generation model. Configure
     via env vars: PRISM_LLM_PROVIDER, PRISM_LLM_BASE_URL, PRISM_LLM_API_KEY,
     PRISM_LLM_MODEL, PRISM_LLM_ENDPOINT.
+
+    Default prompts per operation (overridable via PRISM_PROMPT_<OPERATION> env var):
+      summary, cleanup, grammar, list, translate, rewrite, meeting_notes
     """
     if not text.strip():
         return JSONResponse(status_code=400, content={"error": "missing text"})
     try:
         from unified.llm_providers import process_with_external_llm
-        result = process_with_external_llm(text, instruction=instruction, target_lang=target_lang)
+        result = process_with_external_llm(
+            text, instruction=instruction, target_lang=target_lang,
+            operation=operation or None,
+        )
         cfg = {
             "provider": os.environ.get("PRISM_LLM_PROVIDER", "none"),
             "model": os.environ.get("PRISM_LLM_MODEL", "gemma4:12b"),
             "base_url": os.environ.get("PRISM_LLM_BASE_URL", ""),
         }
         return {"text": result, "original": text, "instruction": instruction,
-                "target_lang": target_lang, "engine": "external-llm", "config": cfg}
+                "target_lang": target_lang, "operation": operation,
+                "engine": "external-llm", "config": cfg}
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)[:200]})
 
