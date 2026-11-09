@@ -1,4 +1,4 @@
-"""Porovnanie: whisper-turbo vs whisper-large vs nemotron-asr-0.6b vs gemma4-12B (post-processing/cleanup)."""
+"""Kompletne porovnanie: whisper-turbo vs whisper-large vs nemotron-asr-0.6b vs gemma4-12B (safetensors + Q4_K_M GGUF)."""
 
 import sys
 import os
@@ -55,11 +55,11 @@ def test_nemotron():
     save("nemotron-asr-0.6b", text, lang, "nemotron-asr-0.6b")
 
 
-def test_gemma4_cleanup(source_text: str, model_variant: str):
+def test_gemma4_cleanup(source_text: str, model_dir: str, label: str):
     """Gemma4 post-processing: cleanup + summarization."""
-    print(f"\n=== Gemma4 {model_variant} post-processing ===")
+    print(f"\n=== Gemma4 {label} post-processing ===")
     try:
-        gp.MODEL_DIR = Path(model_variant)
+        gp.MODEL_DIR = Path(model_dir)
         gp._processor = None
         gp._model = None
         gp._device = None
@@ -76,12 +76,61 @@ def test_gemma4_cleanup(source_text: str, model_variant: str):
             )
             result = gp.process(source_text, instruction=instruction, target_lang="en")
             print(f"Vysledok: {result[:300]}...")
-            save(f"gemma4-{model_variant.name}-cleanup", result, "en", f"gemma4-{model_variant.name}")
+            save(f"gemma4-{label}-cleanup", result, "en", f"gemma4-{label}")
             gp.release()
     except Exception as e:
         print(f"CHYBA: {e}")
         import traceback
         traceback.print_exc()
+
+
+def test_gemma4_gguf_cleanup(source_text: str):
+    """Gemma4 12B Q4_K_M GGUF post-processing via llama-cpp-python."""
+    print("\n=== Gemma4 12B Q4_K_M GGUF post-processing ===")
+    try:
+        from llama_cpp import Llama
+        
+        model_path = r"D:\AI\Prism\pc\models\gemma-4-12B-it-q4\gemma-4-12b-it-Q4_K_M.gguf"
+        if not Path(model_path).exists():
+            print("GGUF subor neexistuje, preskakujem")
+            return
+        
+        print("Nacitavam Gemma4 12B Q4_K_M GGUF...")
+        llm = Llama(
+            model_path=model_path,
+            n_ctx=8192,  # Dynamic context, not 256K
+            n_threads=8,
+            verbose=False,
+        )
+        print("Model nacitany uspesne")
+        
+        prompt = f"""<bos><start_of_turn>user
+Clean up and summarize this meeting transcript. Fix grammar, add punctuation, structure with clear sections. Keep all important information. Reply with the cleaned text only.
+
+{source_text}<end_of_turn>
+<start_of_turn>model
+"""
+        
+        result = llm(
+            prompt,
+            max_tokens=512,
+            temperature=0.7,
+            top_p=0.95,
+            stop=["<end_of_turn>"],
+            echo=False,
+        )
+        output = result["choices"][0]["text"].strip()
+        print(f"Vysledok: {output[:300]}...")
+        save("gemma4-12B-q4-gguf-cleanup", output, "en", "gemma4-12B-q4-gguf")
+        
+    except ImportError:
+        print("llama-cpp-python nie je nainstalovany, preskakujem GGUF test")
+        save("gemma4-12B-q4-gguf-ERROR", "llama-cpp-python not installed", "en", "error")
+    except Exception as e:
+        print(f"CHYBA: {e}")
+        import traceback
+        traceback.print_exc()
+        save("gemma4-12B-q4-gguf-ERROR", str(e), "en", "error")
 
 
 def main():
@@ -94,8 +143,7 @@ def main():
     test_whisper_large()
     test_nemotron()
 
-    # Gemma4 cleanup using whisper-turbo output as source
-    # Read whisper-turbo result
+    # Read whisper-turbo result as source for Gemma cleanup
     turbo_file = OUTDIR / "whisper-turbo.txt"
     if turbo_file.exists():
         with open(turbo_file, "r", encoding="utf-8") as f:
@@ -108,16 +156,12 @@ def main():
     # Gemma4 12B safetensors (already downloaded)
     test_gemma4_cleanup(
         source_text,
-        r"D:\AI\Prism\pc\models\gemma-4-12B-it"
+        r"D:\AI\Prism\pc\models\gemma-4-12B-it",
+        "12B-safetensors"
     )
 
-    # Gemma4 12B Q4_K_M quantized (being downloaded)
-    q4_dir = r"D:\AI\Prism\pc\models\gemma-4-12B-it-q4"
-    if Path(q4_dir).exists():
-        test_gemma4_cleanup(
-            source_text,
-            q4_dir
-        )
+    # Gemma4 12B Q4_K_M quantized GGUF
+    test_gemma4_gguf_cleanup(source_text)
 
     print("\n" + "=" * 60)
     print("VYSLEDKY ULOZENE V:")

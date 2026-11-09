@@ -1,0 +1,6 @@
+=== gemma4-12B-q4-gguf-ERROR ===
+Engine: error
+Jazyk: en
+============================================================
+
+llama-cpp-python not installed

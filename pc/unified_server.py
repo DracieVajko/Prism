@@ -1727,17 +1727,19 @@ async def transcriptions(
                     text, lang = "[unified stub — start the WhisperApi service or install faster-whisper]", language
                     segments = []
                     engine = "stub"
-        # Optional Gemma4 post-processing (cleanup, translate, summarize, rewrite)
+        # External LLM post-processing via user-configured provider (Ollama, LM Studio,
+        # public API, llama.cpp, etc.). The PC server does NOT download or manage any
+        # text-generation model — that is the user's responsibility via their own LLM loader.
         if post_process and text and not text.startswith("[unified stub"):
             try:
-                from unified.gemma_postprocess import process as gemma_process, init as gemma_init
-                if gemma_init():
-                    pp_lang = post_process_lang or lang or "sk"
-                    text = gemma_process(text, instruction=post_process, target_lang=pp_lang)
-                    engine = engine + "+gemma4"
-                    logger.info("Gemma4 post-processing applied: %s", post_process)
+                from unified.llm_providers import process_with_external_llm
+                pp_lang = post_process_lang or lang or "sk"
+                text = process_with_external_llm(text, instruction=post_process, target_lang=pp_lang)
+                if text and not text.startswith("[external llm"):
+                    engine = engine + "+external-llm"
+                    logger.info("External LLM post-processing applied: %s", post_process)
             except Exception as e:
-                logger.warning("Gemma4 post-processing failed: %s", str(e)[:200])
+                logger.warning("External LLM post-processing failed: %s", str(e)[:200])
 
         # Optional AI action extraction (calendar, todo, email, reminder, etc.)
         if action_extract and text and not text.startswith("[unified stub"):
@@ -1971,13 +1973,12 @@ async def transcribe_batch(
 
                 if post_process and text:
                     try:
-                        from unified.gemma_postprocess import process as gemma_process, init as gemma_init
-                        if gemma_init():
-                            pp_lang = post_process_lang or lang or "sk"
-                            text = gemma_process(text, instruction=post_process, target_lang=pp_lang)
-                            engine = engine + "+gemma4"
+                        from unified.llm_providers import process_with_external_llm
+                        pp_lang = post_process_lang or lang or "sk"
+                        text = process_with_external_llm(text, instruction=post_process, target_lang=pp_lang)
+                        engine = engine + "+external-llm"
                     except Exception as e:
-                        logger.warning(f"Gemma4 post-processing failed: {e}")
+                        logger.warning(f"External LLM post-processing failed: {e}")
 
                 if not segments and text:
                     segments_list = [{"text": text, "start": 0.0, "end": duration_hint or 0.0}]
@@ -2151,21 +2152,24 @@ async def text_process(
     instruction: str = Form(default="cleanup"),
     target_lang: str = Form(default="sk"),
 ):
-    """Post-process text with Gemma4 (cleanup, translate, summarize, rewrite)."""
+    """Post-process text using an external LLM provider (Ollama, LM Studio, public API, etc.).
+
+    The PC server does NOT download or manage any text-generation model. Configure
+    via env vars: PRISM_LLM_PROVIDER, PRISM_LLM_BASE_URL, PRISM_LLM_API_KEY,
+    PRISM_LLM_MODEL, PRISM_LLM_ENDPOINT.
+    """
     if not text.strip():
         return JSONResponse(status_code=400, content={"error": "missing text"})
     try:
-        from unified.gemma_postprocess import process as gemma_process, init as gemma_init, is_installed
-        if not is_installed():
-            return JSONResponse(status_code=503, content={
-                "error": "Gemma4 not installed",
-                "detail": "Download google/gemma-4-E2B-it to pc/models/gemma-4-E2B-it/",
-            })
-        if not gemma_init():
-            return JSONResponse(status_code=503, content={"error": "Gemma4 failed to load"})
-        result = gemma_process(text, instruction=instruction, target_lang=target_lang)
+        from unified.llm_providers import process_with_external_llm
+        result = process_with_external_llm(text, instruction=instruction, target_lang=target_lang)
+        cfg = {
+            "provider": os.environ.get("PRISM_LLM_PROVIDER", "none"),
+            "model": os.environ.get("PRISM_LLM_MODEL", "gemma4:12b"),
+            "base_url": os.environ.get("PRISM_LLM_BASE_URL", ""),
+        }
         return {"text": result, "original": text, "instruction": instruction,
-                "target_lang": target_lang, "engine": "gemma4-E2B"}
+                "target_lang": target_lang, "engine": "external-llm", "config": cfg}
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)[:200]})
 
