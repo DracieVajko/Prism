@@ -105,28 +105,19 @@ def test_text_chunking(text: str, max_chars: int = 2000):
         print(f"Chunk {i+1}: {len(chunk)} znakov - {chunk[:80]}...")
 
 
-def test_gemma_postprocess(text: str):
-    """Test Gemma4 E2B post-processing for meeting summarization."""
+def test_external_llm_postprocess(text: str):
+    """Test external LLM post-processing for meeting summarization."""
     print("\n" + "=" * 70)
-    print("KROK 6: Gemma4 E2B post-processing (sumarizacia stretnutia)")
+    print("KROK 6: External LLM post-processing (sumarizacia stretnutia)")
     print("=" * 70)
     try:
-        from unified.gemma_postprocess import process as gemma_process, init as gemma_init
-        print("Inicializujem Gemma4 E2B (10.2 GB)...")
-        if not gemma_init():
-            print("CHYBA: Gemma4 nie je dostupny")
-            return None
-        instruction = (
-            "Summarize this meeting transcript into structured notes with date, "
-            "participants, topic, key decisions, summary points, and action items."
-        )
-        result = gemma_process(text, instruction=instruction, target_lang="en")
-        print(f"Instrukcia: {instruction}")
+        from unified.llm_providers import process_with_external_llm
+        result = process_with_external_llm(text, operation="meeting_notes")
         print(f"Vysledok (prvych 1000 znakov): {result[:1000]}")
-        results["gemma4-summary"] = result
+        results["external-llm-summary"] = result
         return result
     except Exception as e:
-        print(f"CHYBA gemma4: {e}")
+        print(f"CHYBA external LLM: {e}")
         import traceback
         traceback.print_exc()
         return None
@@ -161,10 +152,10 @@ def main():
             test_text_chunking(text, max_chars=2000)
             break
 
-    # Step 6: Gemma4 post-processing
+    # Step 6: External LLM post-processing
     if results:
         first_text = list(results.values())[0][0]
-        test_gemma_postprocess(first_text)
+        test_external_llm_postprocess(first_text)
 
     # Cleanup
     try:

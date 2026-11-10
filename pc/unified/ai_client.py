@@ -106,6 +106,7 @@ class AIClient:
             self.add_provider("lm_studio", AIProviderConfig(
                 provider=AIProvider.LM_STUDIO,
                 base_url=os.getenv("LM_STUDIO_BASE_URL"),
+                api_key=os.getenv("LM_STUDIO_API_KEY"),
                 model=os.getenv("LM_STUDIO_MODEL", "local-model"),
             ))
         if os.getenv("CUSTOM_AI_BASE_URL"):
@@ -203,7 +204,9 @@ class AIClient:
         except ImportError:
             raise RuntimeError("httpx is required for OpenAI provider")
 
-        headers = {"Authorization": f"Bearer {prov.api_key}"}
+        headers = {"Content-Type": "application/json"}
+        if prov.api_key:
+            headers["Authorization"] = f"Bearer {prov.api_key}"
         payload = {
             "model": model or prov.model,
             "messages": [{"role": "user", "content": prompt}],
@@ -335,10 +338,11 @@ class AIClient:
         model: str | None = None, temperature: float | None = None,
         max_tokens: int | None = None,
     ) -> AIResponse:
-        # LM Studio uses OpenAI-compatible API
+        # LM Studio uses OpenAI-compatible API. Its key is optional (only when
+        # the server is configured to require one), so no placeholder is sent.
         prov2 = AIProviderConfig(
             provider=AIProvider.OPENAI,
-            api_key="lm-studio",
+            api_key=prov.api_key,
             base_url=prov.base_url,
             model=model or prov.model,
             temperature=temperature if temperature is not None else prov.temperature,

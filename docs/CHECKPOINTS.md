@@ -820,3 +820,46 @@ split into 300 s chunks and transcribed sequentially with the previous text as
 `initial_prompt`; progress is per chunk and `POST /v1/jobs/{id}/cancel` is
 honoured at the boundary. On a CPU-bound machine a chunk can take minutes, so
 the cancel latency is bounded by the chunk, not by the request.
+
+## 2026-11-10 - Gemini Nano summarize, LLM concurrency gate, Desloppify rescan
+
+**Android `/v1/text/summarize` (Gemini Nano).**
+- The assumed `Summarization`/`SummarizerParams` classes do not exist in
+  `genai-prompt:1.0.0-beta5`. The real entry point is
+  `com.google.mlkit.genai.prompt.Generation.getClient()` ->
+  `GenerativeModel.generateContent(...)` ->
+  `GenerateContentResponse.candidates[].text` (confirmed by decompiling the AAR
+  with `javap`).
+- The endpoint builds an operation-aware prompt (`summarize`, `cleanup`,
+  `grammar`, `list`), honours `max_tokens` through
+  `GenerateContentRequest.Builder`, closes the client per request (every
+  `getClient()` allocates a worker executor) and answers 503 when the device
+  cannot run Gemini Nano.
+- Verified: `:app:compileDebugKotlin` BUILD SUCCESSFUL. Not verified on device:
+  `adb devices` lists no phone, so the request path was never exercised.
+
+**External LLM concurrency gate (PC).**
+- New `pc/unified/llm_monitor.py`: before calling an external provider it counts
+  the models already resident (`/api/ps` on Ollama, `/v1/models` on LM Studio).
+  With `PRISM_LLM_MAX_CONCURRENT=1` (default) Prism waits and re-checks every
+  `PRISM_LLM_POLL_INTERVAL=120` s; after `PRISM_LLM_WAIT_TIMEOUT=3600` s the
+  request returns the unprocessed text instead of failing.
+- The model is unloaded when the job ends (`keep_alive=0`, or LM Studio
+  `/api/v0/models/unload`) unless it was already resident before the request.
+- Env vars documented in `pc/docs/UNIFIED-OPS.md`.
+- Verified: `python -m pytest tests/ -q` -> 109 passed (was 44).
+
+**Desloppify.**
+- Root cause of the stalled scans: the dynamic-import detector walks `**/*.py`
+  from the project root and ignores the configured excludes, so it parsed
+  11 618 files (197 MB) of `.venv`. Scans now run with `.venv` moved outside the
+  tree and restored afterwards.
+- Stale state: 2 074 security issues came from vendored `android/third_party`
+  trees that were already excluded; `desloppify exclude` pruned them.
+- Score: strict 65.9 -> 68.2, objective 59.6 -> 79.4, open issues 2 498 -> 416.
+- Fixes: no fabricated LM Studio API key (`ai_client`), the shadowed `event`
+  response renamed in `action_handlers`, chunk cleanup no longer swallows
+  errors silently, and new tests for `llm_monitor`, `onnx_env`, both ASR
+  engines, the LCM helpers and the model catalog.
+- Open: 61 subjective review items (need the review workflow) and 3 C++ JNI
+  modules that only Android instrumentation can cover.

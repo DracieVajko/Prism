@@ -148,15 +148,15 @@ def cleanup_chunks(chunks: List[Tuple[Path, float, float]], keep_original: bool 
         if chunk_path.name.startswith("chunk_"):
             try:
                 chunk_path.unlink(missing_ok=True)
-            except Exception:
-                pass
+            except OSError as e:
+                logger.debug("could not remove chunk %s: %s", chunk_path, e)
         # Also try to remove parent dir if empty
         try:
             parent = chunk_path.parent
             if parent.name.endswith("_chunks") and not any(parent.iterdir()):
                 parent.rmdir()
-        except Exception:
-            pass
+        except OSError as e:
+            logger.debug("could not remove chunk dir %s: %s", chunk_path.parent, e)
 
 
 # Integration helper for unified_server

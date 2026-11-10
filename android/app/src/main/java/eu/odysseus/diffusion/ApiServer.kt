@@ -52,11 +52,12 @@ import java.io.File
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
-// Gemini Nano via ML Kit GenAI (on-device summarization / cleanup)
-// TODO: API mismatch with genai-prompt:1.0.0-beta5 - need to update imports once
-// correct class names are confirmed.
-// import com.google.mlkit.genai.Summarization
-// import com.google.mlkit.genai.SummarizerParams
+// Gemini Nano via ML Kit GenAI (on-device summarization / cleanup).
+// genai-prompt:1.0.0-beta5 exposes com.google.mlkit.genai.prompt.Generation,
+// GenerativeModel, GenerationConfig, Content, TextPart, GenerateContentRequest/Response.
+import com.google.mlkit.genai.prompt.GenerateContentRequest
+import com.google.mlkit.genai.prompt.Generation
+import com.google.mlkit.genai.prompt.TextPart
 
 // ---------------------------------------------------------------------------
 // Contract: same paths + same 503 shapes as docs/ODYSSEUS-CONTRACT.md.
@@ -1072,9 +1073,10 @@ private val batchState = ConcurrentHashMap<String, BatchState>()
                 )
             }
             post("/v1/images/edits") {
-// Multipart: image (binary) + prompt, model, n, size, quality, strength, request_id.
+// Multipart: image (binary) + prompt, n, size, quality, strength, request_id.
+// `model` is accepted and ignored: the device ships one img2img model
+// (lcm-dreamshaper-int8-onnx), so a client-sent model name cannot be honoured.
                 var prompt = ""
-                var model = ""
                 var n = 1
                 var size = "512x512"
                 var quality = "medium"
@@ -1085,7 +1087,6 @@ private val batchState = ConcurrentHashMap<String, BatchState>()
                     when (part) {
                         is PartData.FormItem -> when (part.name) {
                             "prompt" -> prompt = part.value
-                            "model" -> model = part.value
                             "n" -> n = part.value.toIntOrNull() ?: 1
                             "size" -> size = part.value
                             "quality" -> quality = part.value
@@ -1456,7 +1457,7 @@ private val batchState = ConcurrentHashMap<String, BatchState>()
                                 manager.setLoading("smolvlm-500m-onnx", false)
                             }
                         }
-                        SmolVlmOnnxEngine.caption(src, req.prompt, req.max_tokens ?: 256)
+                        SmolVlmOnnxEngine.caption(src, req.prompt, req.max_tokens)
                     } else {
                         if (!SmolVlmEngine.isReady()) {
                             requireMemory(900, "the SmolVLM engine")
@@ -1469,7 +1470,7 @@ private val batchState = ConcurrentHashMap<String, BatchState>()
                                 manager.setLoading("smolvlm-500m-gguf", false)
                             }
                         }
-                        SmolVlmEngine.caption(src, req.prompt, req.max_tokens ?: 256)
+                        SmolVlmEngine.caption(src, req.prompt, req.max_tokens)
                     }
                 }
                 src.recycle()
@@ -1603,11 +1604,36 @@ private val batchState = ConcurrentHashMap<String, BatchState>()
                     return@post
                 }
 
-                // Gemini Nano summarization via ML Kit GenAI - API pending confirmation
-                // (genai-prompt:1.0.0-beta5 class names differ from assumed API)
-                val result: String? = null
+                // On-device text generation via ML Kit GenAI (Gemini Nano through AICore).
+                // Generation.getClient() hands back a GenerativeModel backed by the
+                // device's AICore service; availability varies by device/OEM.
+                val prompt = when (mode) {
+                    "cleanup" -> "Clean up the following text: fix typos, normalize whitespace, keep meaning. Return only the cleaned text:\n\n$text"
+                    "grammar" -> "Fix grammar and punctuation in the following text. Return only the corrected text:\n\n$text"
+                    "list" -> "Extract a concise bullet list of the key points from the following text:\n\n$text"
+                    "summary" -> "Summarize the following text in a few sentences. Return only the summary:\n\n$text"
+                    else -> "Summarize the following text in a few sentences. Return only the summary:\n\n$text"
+                }
+                val result: String? = try {
+                    val model = Generation.getClient()
+                    try {
+                        // Ensure the on-device model is present; download if needed.
+                        try { model.checkStatus() } catch (_: Exception) { }
+                        val request: GenerateContentRequest =
+                            GenerateContentRequest.Builder(TextPart(prompt)).apply {
+                                maxOutputTokens = maxTokens.coerceIn(32, 1024)
+                            }.build()
+                        model.generateContent(request).candidates.firstOrNull()?.text
+                    } finally {
+                        // getClient() allocates a worker executor per call.
+                        runCatching { model.close() }
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.w("ApiServer", "genai generate failed: ${e.message}", e)
+                    null
+                }
 
-                if (result == null) {
+                if (result.isNullOrBlank()) {
                     call.respond(HttpStatusCode.ServiceUnavailable, jsonOf(
                         "error" to "summarization/cleanup not available on this device (Gemini Nano required)",
                         "engine" to "gemini-nano"

@@ -1197,7 +1197,7 @@ def load_model(device: str | None = None, dtype: str | None = None):
     # Ensure HF token is available for gated repos
     _hf_token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGING_FACE_HUB_TOKEN")
     if _hf_token:
-        logger.info("HF token found in environment")
+        logger.info("HF token found in environment (value redacted)")
         # Login so all huggingface_hub calls use the token
         try:
             from huggingface_hub import login

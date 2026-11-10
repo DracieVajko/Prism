@@ -108,14 +108,14 @@ class CalendarHandler(ActionHandler):
                 },
             }
 
-            event = service.events().insert(calendarId="primary", body=event).execute()
+            created = service.events().insert(calendarId="primary", body=event).execute()
 
             return {
                 "action": "calendar_event",
                 "status": "created",
                 "provider": "google_calendar",
-                "event_id": event.get("id"),
-                "event_link": event.get("htmlLink"),
+                "event_id": created.get("id"),
+                "event_link": created.get("htmlLink"),
                 "title": action.title,
             }
         except Exception as e:

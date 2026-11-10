@@ -155,7 +155,7 @@ def transcribe_with_vad(
         tmp_dir = tempfile.mkdtemp()
         tmp_path = os.path.join(tmp_dir, f"segment_{start_sec}_{end_sec}.wav")
         import torchaudio
-        torchaudio.save(tmp_path, wav, sample_rate)
+        torchaudio.save(tmp_path, segment_wav, sample_rate)
 
         try:
             text, lang = transcribe_fn(tmp_path, language)

@@ -1508,6 +1508,30 @@ async def _transcribe_with_splitting(audio_path: Path, wanted: str, language,
         return _transcribe_single(audio_path, language)
 
 
+async def _transcribe_with_vad(audio_path: Path, wanted: str, language,
+                               rid: str = "") -> tuple[str, str]:
+    """Transcribe only Silero-detected speech segments.
+
+    Returns ("", language) when the VAD model is not installed so the caller
+    can fall back to full-audio transcription without raising.
+    """
+    from unified import silero_vad
+
+    if not silero_vad.is_installed():
+        logger.info("Silero VAD model not installed; processing full audio")
+        return "", language or "unknown"
+
+    def _transcribe_segment(segment_path: str, lang):
+        text, out_lang, _ = _transcribe_with_whisper(
+            str(segment_path), wanted, lang, rid)
+        return text, out_lang
+
+    text, out_lang, _segments = await asyncio.to_thread(
+        silero_vad.transcribe_with_vad, str(audio_path), language,
+        _transcribe_segment)
+    return text, out_lang
+
+
 @app.post("/v1/audio/transcriptions")
 async def transcriptions(
     file: UploadFile = File(default=None),
@@ -1603,55 +1627,14 @@ async def transcriptions(
     segments = []
     duration_hint = 0.0
     try:
-        try:
-            duration_hint = float(get_audio_duration(Path(tmp)) or 0.0) if tmp else 0.0
-        except Exception:
-            duration_hint = 0.0
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as t:
             tmp = t.name
             t.write(content)
         try:
-            _job_update(rid, total=float(get_audio_duration(Path(tmp)) or 0.0))
+            duration_hint = float(get_audio_duration(Path(tmp)) or 0.0)
+            _job_update(rid, total=duration_hint)
         except Exception:
             pass
-        # Optional Silero VAD pre-processing: only transcribe speech segments
-        if use_vad and not use_nemotron and not use_sherpa:
-            try:
-                from unified.silero_vad import detect_speech_segments
-                if silero_vad.is_installed():
-                    speech_segments = silero_vad.detect_speech_segments(tmp)
-                    if speech_segments:
-                        # Transcribe only speech segments
-                        import tempfile as _tmpfile
-                        from torchaudio import load as _load_audio
-                        import torchaudio as _torchaudio
-                        wav, sr = _load_audio(tmp)
-                        all_text_parts = []
-                        for start_sec, end_sec in speech_segments:
-                            start_sample = int(start_sec * 16000)
-                            end_sample = int(end_sec * 16000)
-                            segment_wav = wav[:, start_sample:end_sample]
-                            tmp_seg = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
-                            tmp_seg_path = tmp_seg.name
-                            tmp_seg.close()
-                            _torchaudio.save(tmp_seg_path, segment_wav, 16000)
-                            seg_text, _ = nemotron_asr.transcribe(tmp_seg_path, language) if nemotron_asr.is_available() else (None, None)
-                            if seg_text:
-                                all_text_parts.append(seg_text)
-                            Path(tmp_seg_path).unlink(missing_ok=True)
-                        if all_text_parts:
-                            text = " ".join(all_text_parts)
-                            engine = "whisper+silero_vad"
-                        else:
-                            text, lang = "", language or "unknown"
-                    else:
-                        text, lang = "", language or "unknown"
-                    engine = "whisper+silero_vad"
-            except Exception as e:
-                logger.warning(f"Silero VAD failed, falling back to full transcription: {e}")
-                # Fall through to normal processing
-        else:
-            logger.info("Silero VAD not installed, processing full audio")
         if use_nemotron:
             # Nemotron is an explicit engine choice: never fall through to the
             # WhisperApi proxy when it fails, otherwise the caller silently gets
@@ -1702,13 +1685,29 @@ async def transcriptions(
             try:
                 split_enabled = auto_split
                 logger.info(f"transcribe: starting engine (split={split_enabled})")
-                if split_enabled:
-                    text, lang, segments = await _transcribe_with_splitting(
-                        Path(tmp), wanted, language, rid)
-                else:
-                    text, lang, segments = await asyncio.to_thread(
-                        _transcribe_chunked, Path(tmp), wanted, language, rid)
-                engine = "local"
+                text = ""
+                if use_vad and not split_enabled:
+                    # Silero VAD pre-filter: transcribe only detected speech.
+                    # Long files stay on the splitting path, which already
+                    # chunks audio and reports progress.
+                    try:
+                        text, lang = await _transcribe_with_vad(
+                            Path(tmp), wanted, language, rid)
+                        if text:
+                            segments = []
+                            engine = "whisper+silero_vad"
+                    except Exception as e:
+                        logger.warning(
+                            "Silero VAD failed, falling back to full transcription: %s",
+                            str(e)[:200])
+                if not text:
+                    if split_enabled:
+                        text, lang, segments = await _transcribe_with_splitting(
+                            Path(tmp), wanted, language, rid)
+                    else:
+                        text, lang, segments = await asyncio.to_thread(
+                            _transcribe_chunked, Path(tmp), wanted, language, rid)
+                    engine = "local"
             except JobCancelled:
                 # Must not fall through to the proxy: the user asked to stop.
                 raise
@@ -1834,31 +1833,6 @@ async def transcriptions(
             pass
 
 
-@app.post("/v1/images/ocr")
-async def ocr_endpoint(
-    file: UploadFile = File(default=None),
-    language: str = Form(default="auto"),
-    model: str = Form(default="xiaomi-ocr-0"),
-):
-    """OCR endpoint for Xiaomi-OCR-0 via LiteRT-LM.
-    
-    Note: Xiaomi-OCR-0 is an on-device (Android) model. On PC, this returns
-    503 as the LiteRT-LM runtime and model weights are Android-only.
-    """
-    if not file:
-        return JSONResponse(status_code=400, content={"error": "missing file"})
-
-    content = await file.read()
-    if not content:
-        return JSONResponse(status_code=400, content={"error": "Empty file uploaded"})
-
-    return JSONResponse(status_code=503, content={
-        "error": "OCR model not available on PC",
-        "detail": "Xiaomi-OCR-0 via LiteRT-LM is an Android-only feature. Use the Android app for OCR.",
-        "engine": "litertlm-xiaomi-ocr-0",
-    })
-
-
 @app.post("/v1/audio/transcribe-batch")
 async def transcribe_batch(
     files: List[UploadFile] = File(default=None),
@@ -1928,43 +1902,45 @@ async def transcribe_batch(
                 })
                 continue
 
-            is_video = suffix in VIDEO_EXTS
-
             import tempfile
             tmp_path = None
+            segments = []
+            duration_hint = 0.0
             try:
                 # Save uploaded file to temp
                 tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
                 tmp.write(content)
                 tmp_path = tmp.name
                 tmp.close()
-
-                if is_video:
-                    # Extract audio first using MediaTools
-                    from unified.MediaTools import MediaTools
-                    out = MediaTools.extract_audio(tmp_path)
-                    # out is MediaTools.Output with .bytes, .name, .mime
-                    tmp_path = str(tempfile.NamedTemporaryFile(delete=False, suffix=".wav").name)
-                    Path(tmp_path).write_bytes(out.bytes)
+                # faster-whisper shells out to ffmpeg for video containers, so
+                # video files go straight to the engine without a pre-pass.
+                try:
+                    duration_hint = float(get_audio_duration(Path(tmp_path)) or 0.0)
+                except Exception:
+                    duration_hint = 0.0
 
                 # Determine engine
                 from unified import nemotron_asr, sherpa_asr
                 raw_model = (model or "").strip() or "whisper-1"
                 wanted = "turbo" if raw_model == "whisper-1" else raw_model
+                nemotron_id = wanted if wanted.startswith("nemotron") else nemotron_asr.MODEL_ID
+                sherpa_id = wanted if wanted.startswith("sherpa") else sherpa_asr.MODEL_ID
                 use_nemotron = wanted.startswith("nemotron") or (nemotron_asr.enabled() and raw_model == "whisper-1")
                 use_sherpa = wanted.startswith("sherpa") or (sherpa_asr.enabled() and raw_model == "whisper-1")
 
                 if use_sherpa:
-                    if not sherpa_asr.is_available():
-                        results.append({"name": file.filename, "status": "error", "error": "sherpa not installed"})
+                    if not sherpa_asr.is_installed(sherpa_id):
+                        results.append({"name": file.filename, "status": "error", "error": f"{sherpa_id} not installed"})
                         continue
-                    text, lang = await asyncio.to_thread(sherpa_asr.transcribe_file, tmp_path, language)
+                    text, lang = await asyncio.to_thread(
+                        sherpa_asr.transcribe, tmp_path, language, sherpa_id)
                     engine = "sherpa-onnx"
                 elif use_nemotron:
-                    if not nemotron_asr.is_available():
+                    if not nemotron_asr.is_installed(nemotron_id):
                         results.append({"name": file.filename, "status": "error", "error": f"{nemotron_id} not installed"})
                         continue
-                    text, lang = await asyncio.to_thread(nemotron_asr.transcribe_file, tmp_path, language)
+                    text, lang = await asyncio.to_thread(
+                        nemotron_asr.transcribe, tmp_path, language, nemotron_id)
                     engine = "nemotron-asr"
                 else:
                     if auto_split:
@@ -2126,7 +2102,7 @@ async def transcribe_alias(
     language: str = Form(default=None),
     model: str = Form(default="whisper-1"),
     response_format: str = Form(default="json"),
-    auto_split: str = Form(default="true"),
+    auto_split: bool = Form(default=True),
     request_id: str = Form(default=""),
     post_process: str = Form(default=""),
     post_process_lang: str = Form(default=""),
@@ -2139,7 +2115,6 @@ async def transcribe_alias(
         file=file,
         language=language,
         model=model,
-        model_name=model,
         device="",
         response_format=response_format,
         auto_split=auto_split,

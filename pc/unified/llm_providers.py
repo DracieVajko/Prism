@@ -30,6 +30,8 @@ from typing import Optional
 
 import httpx
 
+from unified.llm_monitor import acquire, loaded_models, release
+
 logger = logging.getLogger("llm_providers")
 
 # ---------------------------------------------------------------------------
@@ -152,6 +154,17 @@ def process_with_external_llm(
         logger.warning("LLM provider %s configured but no base URL set", provider)
         return text
 
+    # Local AI resource gate: respect the configured concurrent-model limit.
+    # Wait for a slot instead of failing when another model is busy; only
+    # fall back (return original text) after the configured timeout.
+    model = cfg["model"]
+    # A model that was already resident belongs to the user, not to this call.
+    before_loaded = model in loaded_models()
+    acquired = acquire(model)
+    if not acquired:
+        logger.warning("Could not acquire an LLM slot in time; skipping post-processing")
+        return text
+
     # Resolve instruction: explicit instruction wins, else operation default,
     # else fallback to cleanup.
     if instruction and instruction != "cleanup":
@@ -188,6 +201,12 @@ def process_with_external_llm(
     except Exception as e:
         logger.warning("External LLM call failed: %s", str(e)[:200])
         return text
+    finally:
+        if acquired and not before_loaded:
+            try:
+                release(model)
+            except Exception:
+                pass
 
 
 def _extract_response_text(provider: str, data: dict) -> str:

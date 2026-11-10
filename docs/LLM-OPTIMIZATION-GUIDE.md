@@ -235,7 +235,7 @@ For extreme compression:
 | File | Change |
 |------|--------|
 | `pc/unified_server.py` | Default whisper model changed from "small" to "turbo" |
-| `pc/tests/test_compare_v2.py` | Comparison test: turbo vs large vs nemotron vs gemma4-12B |
+| `pc/scripts/compare_models/test_all_models.py` | Comparison test: whisper variants vs nemotron vs external LLM post-processing |
 | `pc/models/gemma-4-E2B-it/` | DELETED (2B model, replaced by 12B) |
 | `pc/models/gemma-4-12B-it-q4/` | Q4_K_M quantized download (in progress) |
 
@@ -244,7 +244,7 @@ For extreme compression:
 ## 8. Next Steps
 
 1. Wait for Gemma 4 12B Q4_K_M download to complete
-2. Run `test_compare_v2.py` to compare all models
+2. Run `pc/scripts/compare_models/test_all_models.py` to compare all models
 3. Add Gemini Nano dependency to Android `build.gradle.kts`
 4. Implement summarization endpoint in `ApiServer.kt`
 5. Add KV cache quantization option to `gemma_postprocess.py`

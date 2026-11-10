@@ -75,6 +75,33 @@ pip install onnxruntime-directml
 - Requires `torch` + `transformers`; without them the endpoint returns
   503 will-not-load (never fake output).
 
+### External LLM post-processing (local model gate)
+
+Summaries, cleanup, grammar fixes and meeting notes can be sent to an external
+LLM instead of loading a model inside the server process.
+
+- `PRISM_LLM_PROVIDER=ollama|lmstudio|openai|anthropic|custom|none`
+  (default `none`: no post-processing).
+- `PRISM_LLM_BASE_URL` — e.g. `http://127.0.0.1:11434` for Ollama,
+  `http://127.0.0.1:1234` for LM Studio.
+- `PRISM_LLM_API_KEY` — sent as `Authorization: Bearer` when set.
+- `PRISM_LLM_MODEL` (default `gemma4:12b`).
+- `PRISM_LLM_ENDPOINT` — override the request path.
+
+A local model occupies the same memory as the models the user loads by hand, so
+every call first checks what is already resident on the provider:
+
+- `PRISM_LLM_MAX_CONCURRENT=1` — resident models allowed, ours included. With
+  `1` (default) Prism waits while another model is loaded.
+- `PRISM_LLM_POLL_INTERVAL=120` — seconds between re-checks while waiting.
+- `PRISM_LLM_WAIT_TIMEOUT=3600` — seconds to wait before giving up. On timeout
+  the request still succeeds and returns the unprocessed text.
+
+Ollama is inspected via `/api/ps`, preloaded with `keep_alive=10m` and unloaded
+with `keep_alive=0` when the job ends. LM Studio is inspected via `/v1/models`
+and unloaded through `/api/v0/models/unload`. A model that was already resident
+before the request is left loaded.
+
 ### Install / uninstall from WebUI and CLI
 
 WebUI → **Models** tab: model list, installed/not installed status,
