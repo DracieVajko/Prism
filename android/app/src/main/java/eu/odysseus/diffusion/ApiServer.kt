@@ -34,10 +34,12 @@ import io.ktor.http.content.PartData
 import io.ktor.http.content.forEachPart
 import io.ktor.utils.io.core.readBytes
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
@@ -55,9 +57,12 @@ import java.util.concurrent.ConcurrentHashMap
 // Gemini Nano via ML Kit GenAI (on-device summarization / cleanup).
 // genai-prompt:1.0.0-beta5 exposes com.google.mlkit.genai.prompt.Generation,
 // GenerativeModel, GenerationConfig, Content, TextPart, GenerateContentRequest/Response.
+import com.google.mlkit.genai.common.DownloadStatus
 import com.google.mlkit.genai.prompt.GenerateContentRequest
 import com.google.mlkit.genai.prompt.Generation
 import com.google.mlkit.genai.prompt.TextPart
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
 
 // ---------------------------------------------------------------------------
 // Contract: same paths + same 503 shapes as docs/ODYSSEUS-CONTRACT.md.
@@ -73,6 +78,35 @@ import com.google.mlkit.genai.prompt.TextPart
 // ---------------------------------------------------------------------------
 
 const val SERVER_PORT = 8101
+
+// ML Kit GenAI FeatureStatus values (com.google.mlkit.genai.common.FeatureStatus).
+// checkStatus() returns one of these; only AVAILABLE may call generateContent().
+private const val NANO_UNAVAILABLE = 0
+private const val NANO_DOWNLOADABLE = 1
+private const val NANO_DOWNLOADING = 2
+private const val NANO_AVAILABLE = 3
+
+private class NanoStatusException(val status: Int) :
+    Exception("Gemini Nano feature status $status")
+
+private fun nanoStatusName(status: Int): String = when (status) {
+    NANO_UNAVAILABLE -> "unavailable"
+    NANO_DOWNLOADABLE -> "downloadable"
+    NANO_DOWNLOADING -> "downloading"
+    NANO_AVAILABLE -> "available"
+    else -> "unknown($status)"
+}
+
+/** Download progress for the Gemini Nano model, shared across requests. */
+private object NanoDownloadState {
+    @Volatile var downloading = false
+    @Volatile var downloadedBytes = 0L
+    @Volatile var totalBytes = 0L
+    @Volatile var completed = false
+    @Volatile var error: String? = null
+}
+
+private val nanoScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 const val MOBILE_STEPS_MIN = 4
 const val MOBILE_STEPS_MAX = 8
 const val MAX_CANVAS_PX = 8192
@@ -1614,20 +1648,48 @@ private val batchState = ConcurrentHashMap<String, BatchState>()
                     "summary" -> "Summarize the following text in a few sentences. Return only the summary:\n\n$text"
                     else -> "Summarize the following text in a few sentences. Return only the summary:\n\n$text"
                 }
+                // checkStatus()/generateContent() are suspend ML Kit calls. On a
+                // device without AICore, generateContent() blocks indefinitely
+                // waiting for a model that will never appear, so gate on the
+                // status first and bound the call so the route can never hang.
                 val result: String? = try {
-                    val model = Generation.getClient()
-                    try {
-                        // Ensure the on-device model is present; download if needed.
-                        try { model.checkStatus() } catch (_: Exception) { }
-                        val request: GenerateContentRequest =
-                            GenerateContentRequest.Builder(TextPart(prompt)).apply {
-                                maxOutputTokens = maxTokens.coerceIn(32, 1024)
-                            }.build()
-                        model.generateContent(request).candidates.firstOrNull()?.text
-                    } finally {
-                        // getClient() allocates a worker executor per call.
-                        runCatching { model.close() }
+                    withTimeout(75_000L) {
+                        val model = Generation.getClient()
+                        try {
+                            val status = model.checkStatus()
+                            if (status != NANO_AVAILABLE) throw NanoStatusException(status)
+                            val request: GenerateContentRequest =
+                                GenerateContentRequest.Builder(TextPart(prompt)).apply {
+                                    maxOutputTokens = maxTokens.coerceIn(32, 1024)
+                                }.build()
+                            model.generateContent(request).candidates.firstOrNull()?.text
+                        } finally {
+                            // getClient() allocates a worker executor per call.
+                            runCatching { model.close() }
+                        }
                     }
+                } catch (e: NanoStatusException) {
+                    android.util.Log.i("ApiServer",
+                        "genai not available: ${nanoStatusName(e.status)}")
+                    val body = jsonOf(
+                        "error" to "summarization/cleanup not available on this device (Gemini Nano required)",
+                        "feature_status" to e.status,
+                        "feature_status_name" to nanoStatusName(e.status),
+                        "engine" to "gemini-nano"
+                    )
+                    if (e.status == NANO_DOWNLOADABLE || e.status == NANO_DOWNLOADING) {
+                        body.addProperty("download", "POST /v1/text/summarize/download")
+                        body.addProperty("status_url", "/v1/text/summarize/status")
+                    }
+                    call.respond(HttpStatusCode.ServiceUnavailable, body)
+                    return@post
+                } catch (e: TimeoutCancellationException) {
+                    android.util.Log.w("ApiServer", "genai timed out after 75s", e)
+                    call.respond(HttpStatusCode.ServiceUnavailable, jsonOf(
+                        "error" to "Gemini Nano did not answer in time",
+                        "engine" to "gemini-nano"
+                    ))
+                    return@post
                 } catch (e: Exception) {
                     android.util.Log.w("ApiServer", "genai generate failed: ${e.message}", e)
                     null
@@ -1647,6 +1709,81 @@ private val batchState = ConcurrentHashMap<String, BatchState>()
                     "engine" to "gemini-nano",
                     "request_id" to UUID.randomUUID().toString()
                 ))
+            }
+            post("/v1/text/summarize/download") {
+                // Explicit one-time install of the Gemini Nano model. Returns as
+                // soon as the download is queued; poll /v1/text/summarize/status.
+                if (NanoDownloadState.downloading) {
+                    call.respond(HttpStatusCode.Accepted, jsonOf(
+                        "state" to "downloading",
+                        "downloaded_bytes" to NanoDownloadState.downloadedBytes,
+                        "total_bytes" to NanoDownloadState.totalBytes))
+                    return@post
+                }
+                NanoDownloadState.downloading = true
+                NanoDownloadState.completed = false
+                NanoDownloadState.error = null
+                NanoDownloadState.downloadedBytes = 0L
+                NanoDownloadState.totalBytes = 0L
+                nanoScope.launch {
+                    val model = try {
+                        Generation.getClient()
+                    } catch (e: Exception) {
+                        NanoDownloadState.error = e.message ?: e.javaClass.simpleName
+                        NanoDownloadState.downloading = false
+                        return@launch
+                    }
+                    try {
+                        model.download().collect { status ->
+                            when (status) {
+                                is DownloadStatus.DownloadStarted ->
+                                    NanoDownloadState.totalBytes = status.bytesToDownload
+                                is DownloadStatus.DownloadProgress ->
+                                    NanoDownloadState.downloadedBytes = status.totalBytesDownloaded
+                                is DownloadStatus.DownloadCompleted -> {
+                                    NanoDownloadState.completed = true
+                                    NanoDownloadState.downloadedBytes =
+                                        maxOf(NanoDownloadState.downloadedBytes,
+                                              NanoDownloadState.totalBytes)
+                                }
+                                is DownloadStatus.DownloadFailed ->
+                                    NanoDownloadState.error = status.e.message
+                                else -> {}
+                            }
+                        }
+                    } catch (e: Exception) {
+                        NanoDownloadState.error = e.message ?: e.javaClass.simpleName
+                        android.util.Log.w("ApiServer", "nano download failed: ${e.message}", e)
+                    } finally {
+                        NanoDownloadState.downloading = false
+                        runCatching { model.close() }
+                    }
+                }
+                call.respond(HttpStatusCode.Accepted, jsonOf(
+                    "state" to "downloading",
+                    "downloaded_bytes" to 0L,
+                    "total_bytes" to 0L))
+            }
+            get("/v1/text/summarize/status") {
+                var status = -1
+                try {
+                    status = withTimeout(10_000L) {
+                        val model = Generation.getClient()
+                        try { model.checkStatus() } finally { runCatching { model.close() } }
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.w("ApiServer", "genai status failed: ${e.message}", e)
+                }
+                call.respond(jsonOf(
+                    "available" to (status == NANO_AVAILABLE),
+                    "feature_status" to status,
+                    "feature_status_name" to nanoStatusName(status),
+                    "downloading" to NanoDownloadState.downloading,
+                    "completed" to NanoDownloadState.completed,
+                    "downloaded_bytes" to NanoDownloadState.downloadedBytes,
+                    "total_bytes" to NanoDownloadState.totalBytes,
+                    "error" to NanoDownloadState.error,
+                    "engine" to "gemini-nano"))
             }
             post("/v1/chat/completions") {
                 // Vision chat on device: the same SmolVLM engine that captions,

@@ -863,3 +863,51 @@ the cancel latency is bounded by the chunk, not by the request.
   engines, the LCM helpers and the model catalog.
 - Open: 61 subjective review items (need the review workflow) and 3 C++ JNI
   modules that only Android instrumentation can cover.
+
+## 2026-11-11 — Android on-device verification, Gemini Nano summarize fixed
+
+**Android device reachable again.** Rebuilt `app-debug.apk` (Gradle 8.10.2,
+BUILD SUCCESSFUL) and installed it on `10AEBU1ZU8001GK`. The PC reaches the
+phone server with `adb forward tcp:8101 tcp:8101` (NOT `adb reverse`: reverse
+makes the phone listen and forward to the PC, which collided with the app's own
+listener and failed with "Address already in use"). Health returned 200 with
+`device=vulkan-ncnn`.
+
+**`/v1/text/summarize` hung (real bug, fixed).** The handler called
+`Generation.getClient()` and `generateContent()` while ignoring
+`checkStatus()`. On a device without AICore `generateContent()` blocks forever,
+so the request never answered (observed: 120 s timeout). The fix:
+- `checkStatus()` first; `0=unavailable, 1=downloadable, 2=downloading,
+  3=available` (`FeatureStatus` from `genai-common:1.0.0-beta5`).
+- Only call `generateContent()` when the status is `AVAILABLE`, inside
+  `withTimeout(75 s)`, and always `close()` the client.
+- Unavailable/downloadable answers `503` immediately with `feature_status` and
+  `feature_status_name`.
+
+**Model install + status endpoints.** Added
+`POST /v1/text/summarize/download` (202, background `model.download()` Flow,
+progress in `NanoDownloadState`) and `GET /v1/text/summarize/status`
+(`available`, `feature_status`, `downloading`, `downloaded_bytes`,
+`total_bytes`, `error`). The phone reported `downloadable`, the download
+completed, and `status` flipped to `available`.
+
+**Verified on device (PC → `adb forward` → phone :8101).**
+- cleanup: `200` in 3.1 s, `engine=gemini-nano`, fixed text.
+- summary: `200` in 2.2 s, three-sentence summary.
+- missing text → `400 {"error":"missing text"}`; bad JSON → `400`.
+- before install: `503` in 0.07 s with `feature_status: 1`.
+- smoke: `/v1/models` 200, `/v1/settings` 200,
+  `/v1/images/progress/unknown` 200 `status=unknown`, unsupported audio ext 415.
+
+**Model cleanup (2026-11-11).** Removed the two unused Gemma 4 12B downloads
+(22.31 GB safetensors + 6.63 GB GGUF) and the whisper small/tiny weights
+(0.52 GB). `pc/models` now holds Whisper turbo + large only; tiny/base/small/
+medium remain in the Models catalog as optional downloads (`WHISPER_SOURCES`).
+Freed ~29.5 GB. Decision queue lives in `docs/MODEL-CHECKLIST.md` (Nemotron
+comparison still open).
+
+**Also in this session (PC, commit `e22e1c8`).** Desloppify final scan:
+overall 68.5, objective 81.0, strict 65.5 (target 85.0), 127 tests passing;
+ASR engine facade (`pc/unified/asr.py`, `asr_common.py`), post-processing
+operation prompts, WebUI audit fixes (XSS, `use_vad`, `post_process_operation`,
+object-URL leak, tab ARIA).

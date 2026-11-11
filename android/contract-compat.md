@@ -134,6 +134,34 @@ curl -s http://$PHONE:8101/v1/images/progress/t1
 - [ ] there are never 2 heavy models at once (limit ~3–4 GB)
 - [ ] concurrent generations during a load → `503 loading`, not a corrupt pipe
 
+## 11. POST /v1/text/summarize (Gemini Nano)
+
+```bash
+curl -s http://$PHONE:8101/v1/text/summarize \
+  -H 'Content-Type: application/json' \
+  -d '{"text":"...","mode":"cleanup","max_tokens":64}'
+```
+
+- [x] `200` → `{result, mode, engine:"gemini-nano", request_id}`
+- [x] `400` on missing `text` or non-JSON body
+- [x] `503` **immediately** (not a hang) when the model is not available, with
+      `feature_status` (`0=unavailable, 1=downloadable, 2=downloading,
+      3=available`) and `feature_status_name`
+
+Model install / status (new):
+
+```bash
+curl -s -X POST http://$PHONE:8101/v1/text/summarize/download   # 202
+curl -s http://$PHONE:8101/v1/text/summarize/status
+```
+
+- [x] `status` returns `available`, `feature_status`, `downloading`,
+      `downloaded_bytes`, `total_bytes`, `error`
+- [x] on a device that supports Nano, `downloadable` → `download` → `available`
+
+Verified on device (2026-11-11): cleanup in 3.1 s, summary in 2.2 s;
+pre-install request answered `503` in 0.07 s.
+
 ## Known stub limitations of this scaffold
 
 - Without downloaded weights the image/audio/upscale routes return `503 will-not-load`
