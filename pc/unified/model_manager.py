@@ -3,8 +3,11 @@
 SD and Whisper compete for the same VRAM (6 GB card, 3-4 GB limit on mobile).
 Switching kind/id = unload + load. Cold load returns the 503 loading shape.
 """
+import logging
 import threading
 import time
+
+logger = logging.getLogger("model_manager")
 
 
 class ModelLoadingError(Exception):
@@ -58,8 +61,8 @@ class ModelManager:
                 if callable(self.on_unload):
                     try:
                         self.on_unload("switch")
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        logger.debug("on_unload(switch) failed: %s", exc)
             self._loaded_kind = kind
             self._loaded_id = model_id
             self.load_count += 1
@@ -73,14 +76,14 @@ class ModelManager:
         try:
             import gc
             gc.collect()
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("gc.collect failed: %s", exc)
         try:
             import torch
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("CUDA cache clear failed: %s", exc)
         return had
 
     def unload(self, reason="idle"):
@@ -89,8 +92,8 @@ class ModelManager:
             if had and callable(self.on_unload):
                 try:
                     self.on_unload(reason)
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug("on_unload(%s) failed: %s", reason, exc)
             return had
 
     def _refresh_busy_locked(self):

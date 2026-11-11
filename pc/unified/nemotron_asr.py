@@ -12,6 +12,8 @@ import os
 from pathlib import Path
 from typing import Optional
 
+from unified.asr_common import model_dir, ram_allows, total_ram_gb
+
 logger = logging.getLogger("nemotron_asr")
 
 MODEL_ID = "nemotron-asr-0.6b"
@@ -37,8 +39,7 @@ _active_id = MODEL_ID
 
 def _model_dir(model_id: str = None) -> Path:
     mid = model_id or _active_id
-    sub = MODEL_DIRS.get(mid, mid)
-    return Path(__file__).resolve().parent.parent / "models" / sub
+    return model_dir(MODEL_DIRS.get(mid, mid), MODEL_ID)
 
 
 def is_installed(model_id: str = None) -> bool:
@@ -48,11 +49,8 @@ def is_installed(model_id: str = None) -> bool:
 
 
 def _total_ram_gb() -> float:
-    try:
-        import psutil
-        return psutil.virtual_memory().total / 1e9
-    except Exception:
-        return 0.0
+    """Installed RAM in GB, or 0.0 when psutil is unavailable."""
+    return total_ram_gb()
 
 
 def enabled() -> bool:
@@ -71,8 +69,8 @@ def _auto_device():
             free, _total = torch.cuda.mem_get_info()
             if free > 3 * 1024 ** 3:
                 return "cuda"
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("CUDA probe failed: %s", exc)
     return "cpu"
 
 
@@ -89,8 +87,8 @@ def init(model_id: str = None) -> bool:
         logger.warning("Nemotron ASR not installed at %s", _model_dir(mid))
         return False
     needed = MODEL_MIN_RAM_GB.get(mid, 4.0)
-    have = _total_ram_gb()
-    if have and have + 0.5 < needed:
+    fits, have = ram_allows(needed)
+    if not fits:
         logger.error("Nemotron %s needs ~%.0f GB RAM, this machine has %.1f GB",
                      mid, needed, have)
         return False
@@ -114,8 +112,9 @@ def init(model_id: str = None) -> bool:
             if callable(flatten) and type(module).__name__ in ("LSTM", "GRU", "RNN"):
                 try:
                     flatten()
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug("flatten_parameters failed for %s: %s",
+                                 type(module).__name__, exc)
         logger.info("Nemotron ASR %s loaded on %s", mid, _device)
         return True
     except Exception as e:
@@ -131,8 +130,8 @@ def _clear_cuda_cache():
         import torch
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("CUDA cache clear failed: %s", exc)
 
 
 def release():
@@ -188,8 +187,8 @@ def transcribe(audio_path: str, language: Optional[str] = None,
     model_dtype = None
     try:
         model_dtype = next(_model.parameters()).dtype
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("could not read model dtype: %s", exc)
 
     chunk = int(MAX_SECONDS_PER_CALL * 16000)
     parts: list[str] = []

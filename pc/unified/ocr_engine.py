@@ -83,8 +83,8 @@ class OCREngine:
             import torch
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("OCR CUDA cache clear failed: %s", exc)
 
     def transcribe(self, image_path: str, language: str = "auto") -> str:
         """Perform OCR on an image file.

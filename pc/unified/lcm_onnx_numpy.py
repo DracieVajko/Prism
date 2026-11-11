@@ -80,8 +80,8 @@ class LcmOnnxNumpy:
             avail = []
             try:
                 avail = ort.get_available_providers()
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("ONNX provider query failed: %s", exc)
             provs = ["CUDAExecutionProvider", "QNNExecutionProvider", "CPUExecutionProvider"]
             provs = [p for p in provs if p in avail]
             if not provs:
@@ -103,8 +103,8 @@ class LcmOnnxNumpy:
                             "LCM ONNX: only %.0f MB VRAM free -> CPU provider "
                             "(a torch pipeline is resident)", free_mb)
                         provs = ["CPUExecutionProvider"]
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("VRAM probe failed: %s", exc)
         logger.info("ONNX providers: %s", provs)
         so = ort.SessionOptions()
         so.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_BASIC
@@ -116,8 +116,8 @@ class LcmOnnxNumpy:
         if provs == ["CPUExecutionProvider"]:
             try:
                 so.intra_op_num_threads = max(1, (os.cpu_count() or 4) - 1)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("could not set ONNX thread count: %s", exc)
         unet = self.dir / "unet" / "model_qdq_inline.onnx"
         if not unet.is_file():
             unet = self.dir / "unet" / "model.onnx"
@@ -427,8 +427,8 @@ def _run_with_cuda_fallback(fn, model_dir: Path):
         try:
             import gc
             gc.collect()
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("gc.collect failed: %s", exc)
         return fn()
 
 
@@ -440,8 +440,8 @@ def release_pipeline() -> bool:
     try:
         import gc
         gc.collect()
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("gc.collect failed: %s", exc)
     return had
 
 

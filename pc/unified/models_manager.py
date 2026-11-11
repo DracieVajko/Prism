@@ -398,8 +398,8 @@ def _run_install(task: dict):
                 _dm._CANCEL.discard(task["id"])
                 logger.info("install %s cancelled", task["id"])
                 return
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("could not inspect download cancellation: %s", exc)
         logger.warning("install %s failed: %s", task["id"], e)
         _set_state(task["id"], state="error", progress=0, error=str(e)[:300])
 
@@ -414,8 +414,8 @@ def start_install(model_id: str) -> dict:
     try:
         import download_models as _dm
         _dm._CANCEL.discard(model_id)
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("could not clear download cancellation flag: %s", exc)
     threading.Thread(target=_run_install, args=(task,), daemon=True).start()
     return {"id": model_id, "state": "downloading"}
 
@@ -533,8 +533,8 @@ def cancel(model_id: str) -> dict:
     try:
         import download_models as _dm
         _dm._CANCEL.add(model_id)
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("could not set download cancellation flag: %s", exc)
     return {
         "id": model_id,
         "cancelled": True,

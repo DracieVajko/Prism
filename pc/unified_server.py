@@ -32,7 +32,8 @@ from pydantic import BaseModel
 from typing import Optional, Tuple, List
 
 from unified.audio_proxy import transcribe_via_service
-from unified.audio_splitter import transcribe_with_splitting, get_audio_duration
+from unified.audio_splitter import get_audio_duration
+from unified.asr import resolve_engine
 from unified.ffmpeg_tools import (
     VIDEO_PRESETS, AUDIO_PRESETS, IMAGE_PRESETS, RESIZE_PRESETS,
     convert_video, convert_audio, convert_image, extract_audio, trim_media, compress_video,
@@ -44,7 +45,6 @@ from unified.action_extractor import ActionExtractor, ActionType
 from unified.action_handlers import process_action, process_actions
 from unified.ai_client import AIClient, get_ai_client
 from unified.registry import build_registry
-from unified.sherpa_asr import transcribe as sherpa_transcribe, is_installed as sherpa_installed
 from unified.transcription_utils import (
     format_transcription,
     split_text_into_chunks,
@@ -1579,22 +1579,10 @@ async def transcriptions(
     if up is None and not url:
         return JSONResponse(status_code=400, content={"error": "missing file or url"})
     raw_model = (model or "").strip() or "whisper-1"
-    wanted = "turbo" if raw_model == "whisper-1" else raw_model
-    # NVIDIA Nemotron 3.5 ASR: opt in per request, or globally with
-    # PRISM_ASR_ENGINE=nemotron.
-    from unified import nemotron_asr
-    from unified import sherpa_asr
-    use_nemotron = (
-        wanted.startswith("nemotron")
-        or (nemotron_asr.enabled() and raw_model == "whisper-1")
-    )
-    use_sherpa = (
-        wanted.startswith("sherpa")
-        or (sherpa_asr.enabled() and raw_model == "whisper-1")
-    )
-    nemotron_id = wanted if wanted.startswith("nemotron") else nemotron_asr.MODEL_ID
-    sherpa_id = wanted if wanted.startswith("sherpa") else sherpa_asr.MODEL_ID
-    if not use_nemotron and not use_sherpa and wanted not in ALLOWED_WHISPER:
+    # One resolution for the optional engines: an explicit `nemotron-*` /
+    # `sherpa-*` name wins, otherwise `whisper-1` follows PRISM_ASR_ENGINE.
+    asr_engine, wanted = resolve_engine(raw_model)
+    if asr_engine is None and wanted not in ALLOWED_WHISPER:
         return JSONResponse(status_code=400,
                             content={"error": f"Unknown model '{raw_model}'"})
     if device and device.strip().lower() not in ("cuda", "cpu", ""):
@@ -1613,13 +1601,10 @@ async def transcriptions(
     if len(content) > MAX_FILE_SIZE:
         return JSONResponse(status_code=413, content={"error": "File too large"})
     # Determine which engine handles this request
-    if use_sherpa:
-        _manager.ensure("audio", sherpa_id)
-    else:
-        try:
-            _manager.ensure("audio", wanted)
-        except ModelLoadingError as e:
-            return _raise_loading(e)
+    try:
+        _manager.ensure("audio", wanted)
+    except ModelLoadingError as e:
+        return _raise_loading(e)
     _job_start(rid, "transcribe", 0.0, f"model={wanted}")
     logger.info(f"transcribe: {len(content)} bytes, model={wanted}, lang={language}, format={response_format}, output_format={output_format}")
     import tempfile
@@ -1635,52 +1620,31 @@ async def transcriptions(
             _job_update(rid, total=duration_hint)
         except Exception:
             pass
-        if use_nemotron:
-            # Nemotron is an explicit engine choice: never fall through to the
-            # WhisperApi proxy when it fails, otherwise the caller silently gets
-            # a different engine's output.
-            if not nemotron_asr.is_installed(nemotron_id):
-                _job_finish(rid, "error", "nemotron not installed")
+        if asr_engine is not None:
+            # An explicit engine choice must never fall through to the
+            # WhisperApi proxy: that would silently return another engine's
+            # output.
+            if not asr_engine.installed(wanted):
+                _job_finish(rid, "error", f"{wanted} not installed")
                 return JSONResponse(status_code=503, content={
-                    "error": f"{nemotron_id} not installed",
+                    "error": f"{wanted} not installed",
                     "detail": "install it from the Models tab, or run "
-                              "python pc/tools/download_nemotron_asr.py"})
+                              + asr_engine.install_hint})
             try:
-                logger.info("transcribe: engine=nemotron-asr model=%s lang=%s",
-                            nemotron_id, language)
+                logger.info("transcribe: engine=%s model=%s lang=%s",
+                            asr_engine.name, wanted, language)
                 text, lang = await asyncio.to_thread(
-                    nemotron_asr.transcribe, tmp, language, nemotron_id)
+                    asr_engine.transcribe, tmp, language, wanted)
                 segments = []
-                engine = "nemotron-asr"
+                engine = asr_engine.name
             except JobCancelled:
                 raise
             except Exception as e:
                 _job_finish(rid, "error", str(e)[:200])
-                logger.error("nemotron transcribe failed: %s", str(e)[:400])
+                logger.error("%s transcribe failed: %s",
+                             asr_engine.name, str(e)[:400])
                 return JSONResponse(status_code=500, content={
-                    "error": "nemotron asr failed", "detail": str(e)[:300]})
-        elif use_sherpa:
-            # Sherpa-ONNX streaming ASR: causal streaming, low latency
-            if not sherpa_asr.is_installed(sherpa_id):
-                _job_finish(rid, "error", "sherpa not installed")
-                return JSONResponse(status_code=503, content={
-                    "error": f"{sherpa_id} not installed",
-                    "detail": "install Sherpa-ONNX model files, or run "
-                              "python pc/tools/download_sherpa_asr.py"})
-            try:
-                logger.info("transcribe: engine=sherpa-onnx model=%s lang=%s",
-                            sherpa_id, language)
-                text, lang = await asyncio.to_thread(
-                    sherpa_asr.transcribe, tmp, language, sherpa_id)
-                segments = []
-                engine = "sherpa-onnx"
-            except JobCancelled:
-                raise
-            except Exception as e:
-                _job_finish(rid, "error", str(e)[:200])
-                logger.error("sherpa transcribe failed: %s", str(e)[:400])
-                return JSONResponse(status_code=500, content={
-                    "error": "sherpa asr failed", "detail": str(e)[:300]})
+                    "error": f"{asr_engine.name} failed", "detail": str(e)[:300]})
         else:
             try:
                 split_enabled = auto_split
@@ -1734,7 +1698,14 @@ async def transcriptions(
             try:
                 from unified.llm_providers import process_with_external_llm
                 pp_lang = post_process_lang or lang or "sk"
-                text = process_with_external_llm(text, instruction=post_process, target_lang=pp_lang)
+                # The provider gate can block for a long time waiting on a
+                # local model slot; keep it off the event loop.
+                text = await asyncio.to_thread(
+                    process_with_external_llm, text,
+                    instruction=post_process,
+                    target_lang=pp_lang,
+                    operation=post_process_operation or None,
+                )
                 if text and not text.startswith("[external llm"):
                     engine = engine + "+external-llm"
                     logger.info("External LLM post-processing applied: %s", post_process)
@@ -1868,10 +1839,17 @@ async def transcribe_batch(
     rid = request_id or f"req-{uuid.uuid4().hex[:8]}"
     results = []
 
+    raw_model = (model or "").strip() or "whisper-1"
+    asr_engine, wanted = resolve_engine(raw_model)
+    if asr_engine is None and wanted not in ALLOWED_WHISPER:
+        return JSONResponse(status_code=400,
+                            content={"error": f"Unknown model '{raw_model}'"})
+
     for file in files:
         if not file.filename:
             continue
         file_rid = f"{rid}-{file.filename}"
+        t_start = time.perf_counter()
         try:
             content = await file.read()
             if not content:
@@ -1919,29 +1897,17 @@ async def transcribe_batch(
                 except Exception:
                     duration_hint = 0.0
 
-                # Determine engine
-                from unified import nemotron_asr, sherpa_asr
-                raw_model = (model or "").strip() or "whisper-1"
-                wanted = "turbo" if raw_model == "whisper-1" else raw_model
-                nemotron_id = wanted if wanted.startswith("nemotron") else nemotron_asr.MODEL_ID
-                sherpa_id = wanted if wanted.startswith("sherpa") else sherpa_asr.MODEL_ID
-                use_nemotron = wanted.startswith("nemotron") or (nemotron_asr.enabled() and raw_model == "whisper-1")
-                use_sherpa = wanted.startswith("sherpa") or (sherpa_asr.enabled() and raw_model == "whisper-1")
-
-                if use_sherpa:
-                    if not sherpa_asr.is_installed(sherpa_id):
-                        results.append({"name": file.filename, "status": "error", "error": f"{sherpa_id} not installed"})
+                if asr_engine is not None:
+                    if not asr_engine.installed(wanted):
+                        results.append({
+                            "name": file.filename,
+                            "status": "error",
+                            "error": f"{wanted} not installed",
+                        })
                         continue
                     text, lang = await asyncio.to_thread(
-                        sherpa_asr.transcribe, tmp_path, language, sherpa_id)
-                    engine = "sherpa-onnx"
-                elif use_nemotron:
-                    if not nemotron_asr.is_installed(nemotron_id):
-                        results.append({"name": file.filename, "status": "error", "error": f"{nemotron_id} not installed"})
-                        continue
-                    text, lang = await asyncio.to_thread(
-                        nemotron_asr.transcribe, tmp_path, language, nemotron_id)
-                    engine = "nemotron-asr"
+                        asr_engine.transcribe, tmp_path, language, wanted)
+                    engine = asr_engine.name
                 else:
                     if auto_split:
                         text, lang, segments = await _transcribe_with_splitting(Path(tmp_path), wanted, language, f"{rid}-{file.filename}")
@@ -1953,23 +1919,23 @@ async def transcribe_batch(
                     try:
                         from unified.llm_providers import process_with_external_llm
                         pp_lang = post_process_lang or lang or "sk"
-                        text = process_with_external_llm(
-                            text, instruction=post_process, target_lang=pp_lang,
+                        text = await asyncio.to_thread(
+                            process_with_external_llm, text,
+                            instruction=post_process,
+                            target_lang=pp_lang,
                             operation=post_process_operation or None,
                         )
                         engine = engine + "+external-llm"
                     except Exception as e:
                         logger.warning(f"External LLM post-processing failed: {e}")
 
-                if not segments and text:
-                    segments_list = [{"text": text, "start": 0.0, "end": duration_hint or 0.0}]
-                else:
-                    segments_list = []
+                segments_list = segments or (
+                    [{"text": text, "start": 0.0, "end": duration_hint or 0.0}]
+                    if text else []
+                )
 
-                if output_format == "json":
-                    result_text = text
-                else:
-                    result_text = format_transcription(segments_list, output_format, language or "unknown")
+                result_text = format_transcription(
+                    segments_list, output_format, language or "unknown")
 
                 results.append({
                     "name": file.filename,
@@ -1979,7 +1945,9 @@ async def transcribe_batch(
                     "model": model,
                     "language": lang,
                     "engine": engine,
-                    "elapsed": get_audio_duration(Path(tmp_path)) if tmp_path else 0.0,
+                    "elapsed": round(time.perf_counter() - t_start, 2),
+                    "duration": round(duration_hint, 2),
+                    "segments": segments_list,
                     "outputs": [{"name": f"{rid}-{file.filename}.{output_format}", "size": len(result_text.encode("utf-8"))}],
                 })
 
@@ -2018,9 +1986,17 @@ async def transcribe_batch(
                 all_segments.append(s)
 
         if keep_segments:
-            combined_text = format_transcription(all_segments, output_format, language or "unknown")
+            # One labelled block per input file, keeping each file's own result.
+            if output_format == "json":
+                combined_text = json.dumps(
+                    {r["name"]: r.get("segments", []) for r in successful},
+                    ensure_ascii=False, indent=1)
+            else:
+                combined_text = "\n\n".join(
+                    f"## {r['name']}\n\n{r['formatted']}" for r in successful)
         else:
-            combined_text = format_transcription(all_segments, output_format, language or "unknown")
+            combined_text = format_transcription(
+                all_segments, output_format, language or "unknown")
 
         combined_outputs = [{"name": f"{rid}-combined.{output_format}", "size": len(combined_text.encode("utf-8"))}]
 

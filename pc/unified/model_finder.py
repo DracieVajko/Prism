@@ -69,16 +69,16 @@ def _custom_dirs() -> list:
             p = prof.get("path") or prof.get("file")
             if p:
                 known.add(Path(p).parts[-2] if Path(p).is_file() else Path(p).name)
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("models.json not readable: %s", exc)
     # Catalog models (download_models.py) are also not "custom".
     try:
         import download_models as dm
         for t in (dm.TASKS + dm.UPSCALE_TASKS + dm.VLM_TASKS):
             if t.get("target"):
                 known.add(t["target"])
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("model catalog not importable: %s", exc)
     out = []
     if not MODELS_DIR.is_dir():
         return out

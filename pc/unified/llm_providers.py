@@ -57,6 +57,41 @@ def _get_prompt(operation: str) -> str:
     return _DEFAULT_PROMPTS.get(operation, _DEFAULT_PROMPTS["cleanup"])
 
 
+# The UI says "summarize"; the prompt map key is "summary".
+_OPERATION_ALIASES = {"summarize": "summary", "summarise": "summary"}
+
+
+def _resolve_instruction(instruction: str, operation: Optional[str],
+                         target_lang: str) -> str:
+    """Pick the prompt to send: explicit instruction > named operation > cleanup.
+
+    The UI posts the operation name in both ``post_process`` and
+    ``post_process_operation``, so a known operation name must select the
+    prompt rather than being sent to the model as the whole instruction.
+    """
+    instr = (instruction or "").strip()
+    instr_key = _OPERATION_ALIASES.get(instr.lower(), instr.lower())
+    op = _OPERATION_ALIASES.get((operation or "").strip().lower(),
+                                (operation or "").strip().lower())
+
+    if not instr:
+        selected = op
+    elif instr_key in _DEFAULT_PROMPTS:
+        # A bare operation name ("translate") selects its prompt; it is not a
+        # custom instruction to send to the model.
+        selected = instr_key
+    elif op:
+        # A genuinely custom instruction overrides the operation default.
+        return instr
+    else:
+        return instr
+
+    resolved = _get_prompt(selected) if selected else _DEFAULT_PROMPTS["cleanup"]
+    if target_lang and "{target_lang}" in resolved:
+        resolved = resolved.format(target_lang=target_lang)
+    return resolved
+
+
 def _get_config() -> dict:
     return {
         "provider": os.environ.get("PRISM_LLM_PROVIDER", "none").strip().lower(),
@@ -165,16 +200,7 @@ def process_with_external_llm(
         logger.warning("Could not acquire an LLM slot in time; skipping post-processing")
         return text
 
-    # Resolve instruction: explicit instruction wins, else operation default,
-    # else fallback to cleanup.
-    if instruction and instruction != "cleanup":
-        resolved_instruction = instruction
-    elif operation:
-        resolved_instruction = _get_prompt(operation)
-        if target_lang and "{target_lang}" in resolved_instruction:
-            resolved_instruction = resolved_instruction.format(target_lang=target_lang)
-    else:
-        resolved_instruction = instruction or _DEFAULT_PROMPTS["cleanup"]
+    resolved_instruction = _resolve_instruction(instruction, operation, target_lang)
 
     try:
         payload, path = _build_payload(

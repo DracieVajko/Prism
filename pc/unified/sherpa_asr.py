@@ -8,10 +8,15 @@ Enabled with PRISM_ASR_ENGINE=sherpa, or per-request with
 `model=sherpa-zipformer-small` on /v1/audio/transcriptions.
 """
 
+import io
 import logging
 import os
+import subprocess
+import wave
 from pathlib import Path
 from typing import Optional
+
+from unified.asr_common import model_dir, ram_allows
 
 logger = logging.getLogger("sherpa_asr")
 
@@ -37,8 +42,7 @@ _active_id = MODEL_ID
 
 def _model_dir(model_id: str = None) -> Path:
     mid = model_id or _active_id
-    sub = MODEL_DIRS.get(mid, mid)
-    return Path(__file__).resolve().parent.parent / "models" / sub
+    return model_dir(MODEL_DIRS.get(mid, mid), MODEL_ID)
 
 
 def is_installed(model_id: str = None) -> bool:
@@ -49,14 +53,6 @@ def is_installed(model_id: str = None) -> bool:
     has_joiner = any(d.glob("*joiner*.onnx")) if d.exists() else False
     has_tokens = (d / "tokens.txt").exists() if d.exists() else False
     return has_encoder and has_decoder and has_joiner and has_tokens
-
-
-def _total_ram_gb() -> float:
-    try:
-        import psutil
-        return psutil.virtual_memory().total / 1e9
-    except Exception:
-        return 0.0
 
 
 def enabled() -> bool:
@@ -83,8 +79,8 @@ def init(model_id: str = None) -> bool:
         logger.warning("Sherpa-ONNX ASR not installed at %s", _model_dir(mid))
         return False
     needed = MODEL_MIN_RAM_GB.get(mid, 0.5)
-    have = _total_ram_gb()
-    if have and have + 0.5 < needed:
+    fits, have = ram_allows(needed)
+    if not fits:
         logger.error("Sherpa-ONNX %s needs ~%.0f GB RAM, this machine has %.1f GB",
                      mid, needed, have)
         return False
@@ -162,6 +158,39 @@ def _normalise_language(code: Optional[str] = None) -> str:
     return "en"  # Sherpa-ONNX defaults to English
 
 
+def _read_audio_16k(path: str):
+    """Return (float32 samples, sample_rate) for any container ffmpeg reads.
+
+    Sherpa-ONNX only consumes raw samples, so mp3/mp4 uploads are normalised
+    through ffmpeg instead of being mistaken for raw PCM.
+    """
+    try:
+        with wave.open(path, "rb") as wf:
+            sample_rate = wf.getframerate()
+            channels = wf.getnchannels()
+            raw = wf.readframes(wf.getnframes())
+    except (wave.Error, EOFError, OSError) as exc:
+        logger.debug("wave.open failed for %s (%s); decoding with ffmpeg", path, exc)
+        proc = subprocess.run(
+            ["ffmpeg", "-v", "error", "-i", path, "-ac", "1", "-ar", "16000",
+             "-f", "wav", "pipe:1"],
+            capture_output=True, check=False,
+        )
+        if proc.returncode != 0 or not proc.stdout:
+            detail = (proc.stderr or b"").decode("utf-8", "replace")[-300:]
+            raise RuntimeError(f"could not decode audio: {detail}") from exc
+        with wave.open(io.BytesIO(proc.stdout), "rb") as wf:
+            sample_rate = wf.getframerate()
+            channels = wf.getnchannels()
+            raw = wf.readframes(wf.getnframes())
+
+    import numpy as np
+    samples = np.frombuffer(raw, dtype=np.int16).astype(np.float32) / 32768.0
+    if channels > 1:
+        samples = samples.reshape(-1, channels).mean(axis=1)
+    return samples, sample_rate
+
+
 def transcribe(audio_path: str, language: Optional[str] = None,
                model_id: str = None) -> tuple[str, str]:
     """Transcribe one audio file using Sherpa-ONNX streaming.
@@ -174,49 +203,20 @@ def transcribe(audio_path: str, language: Optional[str] = None,
     elif _recognizer is None and not init():
         raise RuntimeError("Sherpa-ONNX ASR not available")
 
-    import sherpa_onnx
-    import wave
-
     lang = _normalise_language(language)
-
-    # Read audio file
-    try:
-        with wave.open(str(audio_path), "rb") as wf:
-            sample_rate = wf.getframerate()
-            n_channels = wf.getnchannels()
-            n_frames = wf.getnframes()
-            audio_data = wf.readframes(n_frames)
-    except Exception:
-        # Fallback: try reading as raw PCM
-        audio_data = Path(audio_path).read_bytes()
-        sample_rate = 16000
-
-    # Convert to float32 array
-    import numpy as np
-    samples = np.frombuffer(audio_data, dtype=np.int16).astype(np.float32) / 32768.0
-    if n_channels > 1:
-        samples = samples.reshape(-1, n_channels).mean(axis=1)
+    samples, sample_rate = _read_audio_16k(str(audio_path))
 
     # Stream through Sherpa-ONNX recognizer
     stream = _recognizer.create_stream()
     chunk_size = int(sample_rate * 0.1)  # 100 ms chunks
-    parts = []
     for i in range(0, len(samples), chunk_size):
-        chunk = samples[i:i + chunk_size]
-        stream.accept_waveform(sample_rate, chunk)
+        stream.accept_waveform(sample_rate, samples[i:i + chunk_size])
         while stream.is_ready():
             stream.decode()
-        text = stream.result.text
-        if text:
-            parts.append(text)
 
-    # Flush remaining
+    # ``stream.result.text`` is cumulative, so read it once after the audio is
+    # finished instead of appending the whole transcript after every chunk.
     stream.input_finished()
     while stream.is_ready():
         stream.decode()
-    text = stream.result.text
-    if text:
-        parts.append(text)
-
-    final_text = " ".join(parts).strip()
-    return final_text, lang or "en"
+    return (stream.result.text or "").strip(), lang or "en"

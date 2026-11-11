@@ -26,6 +26,7 @@ main { display: grid; grid-template-columns: 400px 1fr; gap: 16px; padding: 16px
 .tabs { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
 .tabs button { flex: 1; min-width: 70px; padding: 8px 4px; font-size: 12px; border-radius: 6px; border: 1px solid var(--border2); background: var(--panel2); color: var(--text); cursor: pointer; }
 .tabs button.active { background: #2f81f7; border-color: #2f81f7; }
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid #2f81f7; outline-offset: 2px; }
 label { display: block; font-size: 13px; margin: 10px 0 4px; color: var(--muted); }
 input[type=text], input[type=number], textarea, select { width: 100%; box-sizing: border-box; background: var(--input); color: var(--text); border: 1px solid var(--border2); border-radius: 6px; padding: 8px; }
 select option { background: var(--panel); color: var(--text); }
@@ -66,18 +67,18 @@ canvas#maskpad { width: 100%; border-radius: 6px; border: 1px solid var(--border
 <main>
 <div class="panel">
 <div id="warn"></div>
-<div class="tabs">
-<button id="tabTxt" class="active" onclick="showTab('txt')">Generate</button>
-<button id="tabTr" onclick="showTab('tr')">Transcribe</button>
-<button id="tabUp" onclick="showTab('up')">Upscale</button>
-<button id="tabCap" onclick="showTab('cap')">Caption</button>
-<button id="tabPaint" onclick="showTab('paint')">Inpaint</button>
-<button id="tabImg" onclick="showTab('img')">Edit</button>
-<button id="tabTools" onclick="showTab('tools')">Tools</button>
-<button id="tabOutputs" onclick="showTab('outputs')">Outputs</button>
-<button id="tabBatch" onclick="showTab('batch')">Batch</button>
-<button id="tabModels" onclick="showTab('models')">Models</button>
-<button id="tabSettings" onclick="showTab('settings')">Settings</button>
+<div class="tabs" role="tablist">
+<button id="tabTxt" role="tab" aria-selected="true" class="active" onclick="showTab('txt')">Generate</button>
+<button id="tabTr" role="tab" aria-selected="false" onclick="showTab('tr')">Transcribe</button>
+<button id="tabUp" role="tab" aria-selected="false" onclick="showTab('up')">Upscale</button>
+<button id="tabCap" role="tab" aria-selected="false" onclick="showTab('cap')">Caption</button>
+<button id="tabPaint" role="tab" aria-selected="false" onclick="showTab('paint')">Inpaint</button>
+<button id="tabImg" role="tab" aria-selected="false" onclick="showTab('img')">Edit</button>
+<button id="tabTools" role="tab" aria-selected="false" onclick="showTab('tools')">Tools</button>
+<button id="tabOutputs" role="tab" aria-selected="false" onclick="showTab('outputs')">Outputs</button>
+<button id="tabBatch" role="tab" aria-selected="false" onclick="showTab('batch')">Batch</button>
+<button id="tabModels" role="tab" aria-selected="false" onclick="showTab('models')">Models</button>
+<button id="tabSettings" role="tab" aria-selected="false" onclick="showTab('settings')">Settings</button>
 </div>
 <div id="imagemodelwrap">
 <label>Image model</label>
@@ -150,7 +151,7 @@ canvas#maskpad { width: 100%; border-radius: 6px; border: 1px solid var(--border
 <textarea id="negprompt3" placeholder="blurry, low quality, distorted"></textarea>
 <div class="row">
 <div><label>Resolution</label><select id="size3" onchange="toggleCustom('size3','sizecustom3')">
-<option>256x256</option><option>512x512</option><option selected>512x512</option><option>768x768</option><option value="custom">custom…</option></select>
+<option>256x256</option><option selected>512x512</option><option>768x768</option><option value="custom">custom…</option></select>
 <input id="sizecustom3" type="text" placeholder="WxH" style="display:none"></div>
 <div><label>Guidance</label><input type="number" id="guidance3" value="1.0" min="1" max="3" step="0.1" style="width:100%"></div>
 </div>
@@ -180,6 +181,7 @@ canvas#maskpad { width: 100%; border-radius: 6px; border: 1px solid var(--border
 </div>
 <div class="row">
 <div><label><input type="checkbox" id="trsplit"> Split into 30s chunks (remote WhisperApi only)</label></div>
+<div><label><input type="checkbox" id="trvad"> Silero VAD (skip silence; falls back to full audio)</label></div>
 </div>
 <div class="row">
 <div><label>Post-process (Gemma4 E2B, loads on first use)</label><select id="trpp"><option value="" selected>none</option><option value="cleanup">cleanup (fix spelling/punctuation)</option><option value="translate">translate</option><option value="summarize">summarize</option><option value="rewrite">rewrite</option></select></div>
@@ -311,14 +313,24 @@ function showTab(t){ if(t==='models'){ loadCatalog(); loadCustom(); } if(t==='se
   const imw = document.getElementById('imagemodelwrap');
   if (imw) imw.style.display = (t==='txt'||t==='img'||t==='paint') ? 'block' : 'none';
   for (const x of TABS) {
-    document.getElementById('tab'+x[0].toUpperCase()+x.slice(1)).classList.toggle('active', x===t);
+    const btn = document.getElementById('tab'+x[0].toUpperCase()+x.slice(1));
+    btn.classList.toggle('active', x===t);
+    btn.setAttribute('aria-selected', x===t ? 'true' : 'false');
     document.getElementById('form'+x[0].toUpperCase()+x.slice(1)).style.display = x===t?'block':'none';
   }
 }
 function previewRef(inp, id){
   const f = inp.files[0]; if(!f) return;
   const img = document.getElementById(id);
-  img.src = URL.createObjectURL(f); img.style.display='block';
+  if (img.dataset.objUrl) URL.revokeObjectURL(img.dataset.objUrl);
+  const url = URL.createObjectURL(f);
+  img.dataset.objUrl = url;
+  img.src = url; img.style.display='block';
+}
+function esc(value){
+  return String(value == null ? '' : value).replace(/[&<>"']/g, function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+  });
 }
 function sizeLabel(x){
   const mb = x && x.size_mb;
@@ -448,12 +460,12 @@ async function refresh(){
     syncDownloads();
     const miss = m.missing_models || [];
     const w = document.getElementById('warn');
-    if (miss.length && !localStorage.getItem('hideMissing')) { w.style.display='block'; w.innerHTML = 'Missing model files: '+miss.join(', ')+' <button onclick="localStorage.setItem(\'hideMissing\',\'1\');document.getElementById(\'warn\').style.display=\'none\'" style="background:none;border:none;color:#79c0ff;cursor:pointer;font-size:11px">hide</button>'; }
+    if (miss.length && !localStorage.getItem('hideMissing')) { w.style.display='block'; w.innerHTML = 'Missing model files: '+esc(miss.join(', '))+' <button onclick="localStorage.setItem(\'hideMissing\',\'1\');document.getElementById(\'warn\').style.display=\'none\'" style="background:none;border:none;color:#79c0ff;cursor:pointer;font-size:11px">hide</button>'; }
     else { w.style.display='none'; }
-    st.innerHTML = 'server <b class="ok">OK</b> · img models: '+imageModels.length+' · loaded: '+(h.current_model||h.model||'none (lazy)')
-      +' · audio: '+(h.audio_model||m.default_audio_model||'?')+(h.audio_loaded?' (loaded)':'')
+    st.innerHTML = 'server <b class="ok">OK</b> · img models: '+imageModels.length+' · loaded: '+esc(h.current_model||h.model||'none (lazy)')
+      +' · audio: '+esc(h.audio_model||m.default_audio_model||'?')+(h.audio_loaded?' (loaded)':'')
       + (h.busy ? ' · <b class="bad">BUSY</b> (queue: '+(h.queue||0)+')' : '');
-  } catch(e){ st.innerHTML = 'server <b class="bad">UNREACHABLE</b> · '+e; }
+  } catch(e){ st.innerHTML = 'server <b class="bad">UNREACHABLE</b> · '+esc(e); }
 }
 function rid(){ return Math.random().toString(16).slice(2)+Date.now().toString(16); }
 function addCard(src, caption, fname){
@@ -684,12 +696,12 @@ async function generateUp(){
   } catch(e){ log('ERROR: '+e); } finally { btn.disabled=false; btn.textContent='Upscale'; refresh(); }
 }
 let JOB_TIMER = null;
-let JOB_RID = null;
 function watchJob(rid){
-  JOB_RID = rid;
   const text = document.getElementById('trjobText');
   const stop = document.getElementById('trstop');
   stop.style.display = 'inline';
+  stop.dataset.rid = rid;
+  stop.onclick = (e) => { e.preventDefault(); cancelJob(rid); };
   clearInterval(JOB_TIMER);
   JOB_TIMER = setInterval(async () => {
     try {
@@ -707,10 +719,11 @@ function watchJob(rid){
     } catch(e){ /* job gone */ }
   }, 2000);
 }
-async function cancelJob(){
-  if(!JOB_RID) return;
+async function cancelJob(rid){
+  const target = rid || document.getElementById('trstop').dataset.rid;
+  if(!target) return;
   try {
-    const j = await (await fetch('/v1/jobs/' + JOB_RID + '/cancel', {method:'POST'})).json();
+    const j = await (await fetch('/v1/jobs/' + target + '/cancel', {method:'POST'})).json();
     log('cancel: ' + JSON.stringify(j));
     document.getElementById('trjobText').textContent = 'cancelling…';
   } catch(e){ log('cancel error: ' + e); }
@@ -735,11 +748,13 @@ async function generateTr(){
   if (lang) fd.append('language', lang);
   const split = document.getElementById('trsplit').checked;
   fd.append('auto_split', split ? 'true' : 'false');
+  fd.append('use_vad', document.getElementById('trvad').checked ? 'true' : 'false');
   const fmt = document.getElementById('trformat').value;
   fd.append('response_format', fmt);
   const pp = document.getElementById('trpp').value;
   if (pp) {
     fd.append('post_process', pp);
+    fd.append('post_process_operation', pp);
     fd.append('post_process_lang', document.getElementById('trpplang').value || 'sk');
   }
   btn.disabled = true; btn.textContent = pp ? 'Transcribing + Gemma4…' : 'Transcribing…';
@@ -846,8 +861,18 @@ async function loadOutputs(){
       row.style.cssText = 'display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)';
       const info = document.createElement('div');
       info.style.cssText = 'flex:1;min-width:0';
-      info.innerHTML = '<a href="'+f.url+'" target="_blank" style="color:#58a6ff;font-size:12px;text-decoration:none" title="'+(f.path||'')+'">'
-        + f.name + '</a><div class="hint" style="margin:0">'+f.kind+' · '+fmtSize(f.size)+' · '+fmtDate(f.mtime)+'</div>';
+      const link = document.createElement('a');
+      link.href = f.url;
+      link.target = '_blank';
+      link.rel = 'noopener';
+      link.style.cssText = 'color:#58a6ff;font-size:12px;text-decoration:none';
+      link.title = f.path || '';
+      link.textContent = f.name;
+      const meta = document.createElement('div');
+      meta.className = 'hint';
+      meta.style.margin = '0';
+      meta.textContent = (f.kind||'')+' · '+fmtSize(f.size)+' · '+fmtDate(f.mtime);
+      info.appendChild(link); info.appendChild(meta);
       const del = document.createElement('button');
       del.className = 'dl';
       del.style.cssText = 'background:#da3633;padding:5px 8px;font-size:11px';
@@ -857,7 +882,7 @@ async function loadOutputs(){
       box.appendChild(row);
     }
   } catch(e){
-    box.innerHTML = '<div class="hint">outputs error: '+e+'</div>';
+    box.textContent = 'outputs error: '+e;
   }
 }
 async function deleteOutput(path){
@@ -914,10 +939,19 @@ function pollBatch(id){
         const card = document.createElement('div');
         card.style.cssText = 'padding:6px 0;border-bottom:1px solid var(--border);font-size:12px';
         if(r.ok){
-          card.innerHTML = '<b>'+r.index+1+'. OK</b> '+ (r.engine||'') +
-            (r.outputs&&r.outputs[0] ? ' <a href="'+r.outputs[0].url+'" target="_blank" style="color:#58a6ff">open</a>' : '');
+          card.innerHTML = '<b>'+esc((r.index||0)+1)+'. OK</b> '+ esc(r.engine||'');
+          if (r.outputs && r.outputs[0]) {
+            const link = document.createElement('a');
+            link.href = r.outputs[0].url || '#';
+            link.target = '_blank';
+            link.rel = 'noopener';
+            link.style.color = '#58a6ff';
+            link.textContent = 'open';
+            card.appendChild(document.createTextNode(' '));
+            card.appendChild(link);
+          }
         } else {
-          card.innerHTML = '<b style="color:#ff7b72">'+r.index+1+'. FAIL</b> '+ (r.error||'');
+          card.innerHTML = '<b style="color:#ff7b72">'+esc((r.index||0)+1)+'. FAIL</b> '+ esc(r.error||'');
         }
         box.appendChild(card);
       }
@@ -957,11 +991,11 @@ function catalogRow(m){
   const color = m.installed ? '#7ee787'
     : ((m.install_state==='error'||m.install_state==='failed') ? '#ff7b72' : '#d29922');
   const engine = m.engine ? ' · '+m.engine : '';
-  info.innerHTML = '<b style="font-size:13px">'+(m.label||m.id)+'</b>'
-    + '<div style="font-size:11px;color:#7d8590">'+m.id+engine+' · '
-    + (m.size_mb ? m.size_mb+' MB' : fmtGb(m.size_gb))
-    + ' · <span style="color:'+color+'">'+state+'</span></div>'
-    + (m.install_error ? '<div style="font-size:11px;color:#ff7b72">'+m.install_error+'</div>' : '');
+  info.innerHTML = '<b style="font-size:13px">'+esc(m.label||m.id)+'</b>'
+    + '<div style="font-size:11px;color:#7d8590">'+esc(m.id)+esc(engine)+' · '
+    + esc(m.size_mb ? m.size_mb+' MB' : fmtGb(m.size_gb))
+    + ' · <span style="color:'+color+'">'+esc(state)+'</span></div>'
+    + (m.install_error ? '<div style="font-size:11px;color:#ff7b72">'+esc(m.install_error)+'</div>' : '');
 
   const btn = document.createElement('button');
   btn.className = 'go';
@@ -1032,9 +1066,9 @@ async function findModels(){
       row.style.cssText = 'display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)';
       const info = document.createElement('div');
       info.style.cssText = 'flex:1;font-size:12px';
-      info.innerHTML = '<b>'+m.id+'</b>'
-        + '<div style="color:#7d8590;font-size:11px">'+(m.pipeline_tag||m.library||'?')
-        + ' · ↓'+m.downloads+' · ♥'+m.likes+(m.gated?' · gated':'')+'</div>';
+      info.innerHTML = '<b>'+esc(m.id)+'</b>'
+        + '<div style="color:#7d8590;font-size:11px">'+esc(m.pipeline_tag||m.library||'?')
+        + ' · ↓'+esc(m.downloads)+' · ♥'+esc(m.likes)+(m.gated?' · gated':'')+'</div>';
       const btn = document.createElement('button');
       btn.className = 'go';
       btn.style.cssText = 'margin:0;width:96px;padding:5px;font-size:11px;background:#1f6feb';
@@ -1083,8 +1117,8 @@ async function loadCustom(){
       const info = document.createElement('div');
       info.style.cssText = 'flex:1;font-size:12px';
       const state = m.state === 'downloading' ? 'DOWNLOADING '+m.progress+'%' : (m.state === 'error' ? 'ERROR' : '');
-      info.innerHTML = '<b>'+m.name+'</b><div style="color:#7d8590;font-size:11px">'
-        + fmtGb(m.size_gb)+(state?' · <span style="color:#d29922">'+state+'</span>':'')+'</div>';
+      info.innerHTML = '<b>'+esc(m.name)+'</b><div style="color:#7d8590;font-size:11px">'
+        + esc(fmtGb(m.size_gb))+(state?' · <span style="color:#d29922">'+esc(state)+'</span>':'')+'</div>';
       const btn = document.createElement('button');
       btn.className = 'go';
       btn.style.cssText = 'margin:0;width:96px;padding:5px;font-size:11px;background:#da3633';
