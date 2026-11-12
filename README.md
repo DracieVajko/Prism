@@ -85,7 +85,7 @@ python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
 python download_models.py --preset odysseus-default   # optional, downloads models
-python -m uvicorn unified_server:app --host 0.0.0.0 --port 8101
+python -m uvicorn unified_server:app --host 127.0.0.1 --port 8101
 ```
 
 Open `http://127.0.0.1:8101/webui`.
@@ -205,7 +205,7 @@ See `docs/ONDEVICE-PLAN.md` and `docs/RESEARCH-IMPROVEMENTS.md` for the full pla
 
 ## Security
 
-LAN-only, no authentication. Do not expose ports 8101/8102 to the internet; bind Tailscale or your LAN. The NSFW safety checker is disabled in the launchers.
+LAN-only, no authentication. The server defaults to binding `127.0.0.1` (localhost only). To allow LAN access, pass `--host 0.0.0.0` (or `-Remote` in the PowerShell launchers, or `PRISM_HOST=0.0.0.0`). **Do not expose ports 8101 / 8102 to the internet** — the API has no authentication. Use Tailscale or your LAN firewall to restrict access. The NSFW safety checker is disabled in the launchers.
 
 ## License
 

@@ -3,4 +3,4 @@
 Set-Location "D:\AI\DiffusionServer\pc"
 $log = "D:\AI\DiffusionServer\pc\logs\service.out.log"
 New-Item -ItemType Directory -Force -Path (Split-Path $log) | Out-Null
-& "C:\Python314\python.exe" -m uvicorn unified_server:app --host 0.0.0.0 --port 8101 *>> $log
+& "C:\Python314\python.exe" -m uvicorn unified_server:app --host 127.0.0.1 --port 8101 *>> $log

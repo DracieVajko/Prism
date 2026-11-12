@@ -40,7 +40,7 @@ android/
   app/build.gradle.kts        # Min/LGPL deps, abiFilters
   app/src/main/AndroidManifest.xml
   app/src/main/java/eu/odysseus/diffusion/
-    MainActivity.kt           # UI: Local/Remote/Auto, Start/Stop, download status
+    MainActivity.kt           # UI: tabs, actions, Start/Stop, download status
     ApiServer.kt              # Ktor routes, same paths as server :8101
     ModelManager.kt           # single-resident gate (mirror of pc/unified/model_manager.py)
     ModelDownloader.kt        # lazy download stub (DownloadManager)
@@ -77,13 +77,12 @@ present** (`SDK/ndk/<ver>` or `ANDROID_NDK_HOME`), otherwise a pure Kotlin build
 with a warning — `WhisperLib` then takes the stub path. For a full audio build
 install **NDK r27 + CMake 3.22.1** (SDK Manager) and rebuild.
 
-## Modes (Local / Remote / Auto)
+## Operating mode
 
-- **Local** — inference on the phone (NCNN/Vulkan + whisper.cpp JNI).
-- **Remote** — the phone is a thin client to the PC server `http://<pc>:8101`
-  (same contract, no change to the calls).
-- **Auto** (default) — try Local, on `503 will-not-load` / OOM fall back to
-  the Remote host from settings.
+The Android app is a **standalone local server**. Every request is served on
+the phone; there is no remote/PC mode and no remote host field. If a feature
+cannot run on the device (e.g. VLM runtime not bundled, FFmpeg binary missing),
+the endpoint returns `503 will-not-load` with a clear reason.
 
 ## Ktor routes (full match with the server)
 

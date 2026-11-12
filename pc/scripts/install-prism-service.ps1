@@ -17,11 +17,14 @@
 
 .EXAMPLE
     powershell -ExecutionPolicy Bypass -File pc\scripts\install-prism-service.ps1
+.EXAMPLE
+    powershell -ExecutionPolicy Bypass -File pc\scripts\install-prism-service.ps1 -Remote
 #>
 [CmdletBinding()]
 param(
     [int]$Port = 8101,
     [string]$Python = "C:\Python314\python.exe",
+    [switch]$Remote,
     [switch]$RemoveLegacy,
     [switch]$Uninstall
 )
@@ -42,16 +45,24 @@ function Test-Admin {
 }
 
 function Get-ServerArgs {
-    "-m uvicorn unified_server:app --host 0.0.0.0 --port $Port"
+    $BindHost = if ($Remote) { "0.0.0.0" } else { "127.0.0.1" }
+    "-m uvicorn unified_server:app --host $BindHost --port $Port"
 }
 
 $isAdmin = Test-Admin
+$BindHost = if ($Remote) { "0.0.0.0" } else { "127.0.0.1" }
 Write-Host "Prism installer"
 Write-Host "  repo      : $repoRoot"
 Write-Host "  python    : $Python"
 Write-Host "  port      : $Port"
+Write-Host "  host      : $BindHost"
 Write-Host "  elevated  : $isAdmin"
 Write-Host ""
+if ($Remote) {
+    Write-Host "WARNING: LAN binding (0.0.0.0) exposes an UNAUTHENTICATED API to the network." -ForegroundColor Yellow
+    Write-Host "         Only use this on a trusted LAN. Do NOT expose port $Port to the internet." -ForegroundColor Yellow
+    Write-Host ""
+}
 
 if (-not (Test-Path $Python)) {
     throw "python not found: $Python (pass -Python <path>)"

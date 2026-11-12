@@ -18,7 +18,7 @@ This does, in order:
 | Step | Effect |
 |---|---|
 | `nssm install Prism C:\Python314\python.exe` | new service entry |
-| `AppParameters = -m uvicorn unified_server:app --host 0.0.0.0 --port 8101` | one endpoint for everything |
+| `AppParameters = -m uvicorn unified_server:app --host 127.0.0.1 --port 8101` | one endpoint for everything (default; use `-Remote` for LAN) |
 | `AppDirectory = D:\AI\DiffusionServer\pc` | imports `unified_server` |
 | `Start = SERVICE_AUTO_START` | starts at boot, before logon |
 | `AppStdout/AppStderr = pc\logs\service-*.log`, 10 MB rotation | logs you can read |

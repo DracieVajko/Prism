@@ -97,7 +97,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 WorkingDirectory=$PC_DIR
-ExecStart=$PYTHON -m uvicorn unified_server:app --host 0.0.0.0 --port $PORT
+ExecStart=$PYTHON -m uvicorn unified_server:app --host 127.0.0.1 --port $PORT
 Restart=on-failure
 RestartSec=5
 Environment=PRISM_PORT=$PORT
@@ -151,7 +151,7 @@ elif [ "$(uname -s)" = "Darwin" ]; then
         <string>uvicorn</string>
         <string>unified_server:app</string>
         <string>--host</string>
-        <string>0.0.0.0</string>
+        <string>127.0.0.1</string>
         <string>--port</string>
         <string>$PORT</string>
     </array>

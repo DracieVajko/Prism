@@ -69,12 +69,14 @@ Notes:
       optional downloads in the Models tab. Verified:
       `whisper_installed()` is true for turbo/large and false for the rest.
 - [x] **Gemma 4 12B (PC)** — removed both downloads (2026-11-11).
-- [ ] **Nemotron ASR 0.6B (PC, 3.07 GB)** — finish the comparison against
-      Whisper turbo/large on the same Slovak sample, then decide keep/delete.
-      The engine runs (CUDA, 40 languages, native punctuation), but there is
-      no WER/quality number yet. Use
-      `pc/scripts/compare_models/test_all_models.py` and store its results
-      next to this file.
+- [ ] **Nemotron ASR 0.6B (PC, 3.07 GB)** — measured 2026-11-11 on
+      `testdata/video/test_1min_audio.wav`: **128.93 s** total (43 s model
+      load, ~86 s inference for 60 s audio), **997 chars**, language `auto`.
+      Sample: `pc/scripts/compare_models/results-2026-11-11-nemotron.txt`.
+      Quality is usable but has visible errors ("I'd Scene" for "seen",
+      "for us time" for "for some time", "back in away" for "back in a way").
+      Still need the same sample through Whisper turbo/large for a direct
+      side-by-side before deciding keep/delete.
 - [ ] **Gemma 4 E2B GGUF (Android, 3.0 GB)** — the catalog entry exists but the
       model is not downloaded and the post-processing switch is inert. Decide:
       keep the optional download and document it, or remove the entry so the UI
@@ -86,8 +88,10 @@ Notes:
 |-------|---------------|--------|----------|-------|-------|
 | Whisper Turbo | ~1.6 GB | CPU | en | 1.00 | working |
 | Whisper Large | ~3.0 GB | CPU | en | 0.99 | partially working |
-| Nemotron ASR 0.6B | ~2.5 GB | CUDA | auto | — | **not measured yet** |
+| Nemotron ASR 0.6B | 3.07 GB on disk | CUDA | auto | measured 2026-11-11: 128.93 s (43 s load), 997 chars | usable, a few visible errors |
 
-These numbers are the user-reported run, not a fresh measurement. Re-run the
-comparison before deleting Nemotron so the decision is based on the current
-engine (the ASR facade and gain handling changed in November).
+The Whisper rows are the user-reported run. Nemotron was measured fresh on
+2026-11-11 (RTX 3060, `testdata/video/test_1min_audio.wav`); it is usable but
+less accurate than Whisper turbo/large on this sample. Run the same sample
+through Whisper turbo/large for a direct side-by-side before deciding
+keep/delete.

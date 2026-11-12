@@ -11,7 +11,7 @@ python -m venv .venv
 pip install -r requirements.txt
 copy models.json.example models.json      # adjust if needed
 python download_models.py --preset odysseus-default
-python -m uvicorn unified_server:app --host 0.0.0.0 --port 8101
+python -m uvicorn unified_server:app --host 127.0.0.1 --port 8101
 ```
 
 Open `http://127.0.0.1:8101/webui`.
@@ -114,6 +114,17 @@ To delete the old services and their files later:
 powershell -ExecutionPolicy Bypass -File pc\scripts\remove-legacy-services.ps1 -WhatIf   # preview
 powershell -ExecutionPolicy Bypass -File pc\scripts\remove-legacy-services.ps1           # delete
 ```
+
+## Security and LAN access
+
+By default, the server binds to **127.0.0.1** (localhost only). To allow LAN
+access, pass `--host 0.0.0.0` (or use `-Remote` in the PowerShell launchers,
+or set `PRISM_HOST=0.0.0.0`).
+
+**WARNING:** The API has **no authentication**. Binding to 0.0.0.0 exposes an
+unauthenticated API to the network. Only use LAN binding on a trusted network.
+Do **not** expose port 8101 to the internet. Use Tailscale or your LAN firewall
+to restrict access.
 
 ## Docs
 
