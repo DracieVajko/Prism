@@ -24,6 +24,10 @@ android {
         }
     }
 
+    buildFeatures {
+        buildConfig = true
+    }
+
     // Release signing is optional. When keystore.properties (or the matching
     // env vars) is absent the release variant is signed with the debug key so
     // `assembleRelease` still produces an installable APK for side-loading.
@@ -69,6 +73,7 @@ android {
                 signingConfigs.getByName("release")
             } else {
                 logger.warn("odysseus: no release keystore, signing release with the debug key")
+                versionNameSuffix = "-dev"
                 signingConfigs.getByName("debug")
             }
         }

@@ -44,8 +44,10 @@ jobs:
             sleep 1
           done
           schemathesis run http://127.0.0.1:8101/openapi.json --checks all \
-            --max-time 300 --exit-code-on-first-failure || true
+             --max-time 300 --exit-code-on-first-failure
+          SCHEMATHESIS_EXIT=$?
           kill $SERVER_PID 2>/dev/null || true
+          exit $SCHEMATHESIS_EXIT
 
   android:
     name: Android build

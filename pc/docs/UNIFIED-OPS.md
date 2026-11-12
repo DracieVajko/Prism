@@ -7,7 +7,7 @@ All paths below are relative to the repository root. The PC product lives in
 
 ```powershell
 .\pc\Start-Prism.bat                    # :8101 (falls back to 8102 if busy), opens the WebUI
-powershell -File pc\scripts\Start-Prism.ps1 -Remote    # + bind 0.0.0.0 (Tailscale/LAN)
+powershell -File pc\scripts\Start-Prism.ps1 -Remote    # binds 0.0.0.0 (Tailscale/LAN) - UNAUTHENTICATED API
 .\pc\Stop-Prism.bat                     # stop the service, the autostart runner, or whatever holds the port
 
 # Linux / macOS

@@ -15,7 +15,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PC_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 PORT="${PRISM_PORT:-8101}"
-HOST="${PRISM_HOST:-0.0.0.0}"
+HOST="${PRISM_HOST:-127.0.0.1}"
 PYTHON="${PRISM_PYTHON:-python3}"
 
 # Colors for output
@@ -32,6 +32,11 @@ echo "Port: $PORT"
 echo "Host: $HOST"
 echo "Python: $PYTHON"
 echo ""
+if [ "$HOST" != "127.0.0.1" ] && [ "$HOST" != "localhost" ]; then
+    echo -e "${YELLOW}WARNING: Binding to $HOST exposes an UNAUTHENTICATED API on the network.${NC}"
+    echo -e "${YELLOW}         Only use this on a trusted LAN. Do NOT expose port $PORT to the internet.${NC}"
+    echo ""
+fi
 
 # Check Python exists
 if ! command -v "$PYTHON" &> /dev/null; then

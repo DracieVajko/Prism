@@ -129,6 +129,13 @@ async def lifespan(application):
     except Exception as e:
         logger.warning(f"engine init skipped: {e}")
     _manager.on_unload = _release_engines
+    logger.warning(
+        "SECURITY: Prism API has NO authentication. "
+        "Bind to 127.0.0.1 (default) for local use only. "
+        "LAN access (--host 0.0.0.0 / -Remote) exposes an unauthenticated API "
+        "to the network. Do NOT expose port %s to the internet.",
+        os.getenv("PORT", "8101"),
+    )
     task = asyncio.create_task(_idle_unloader())
     try:
         yield
