@@ -57,6 +57,7 @@ Status legend: [x] done, [~] in progress, [ ] todo, [!] experimental/blocked.
 - [ ] POST /v1/images/upscale — NCNN skeleton wired, JNI placeholder, **503**
 - [ ] POST /v1/images/caption — llama.cpp skeleton wired, JNI placeholder, **503**
 - [x] POST /v1/images/ocr — LiteRT-LM (multipart or JSON image); **503** with reason when not installed or too little RAM
+- [x] POST /v1/documents/extract — text (txt/md/csv), DOCX (zip XML), PDF (text layer via pdfminer / scanned via PDF render + OCR), images (OCR)
 - [ ] POST /v1/chat/completions — llama.cpp skeleton wired, JNI placeholder, **503**
 - [x] POST /v1/audio/transcriptions, /translations — local whisper.cpp
 - [ ] GET /v1/ffmpeg/presets / POST /v1/ffmpeg/{op} — 503 until ffmpeg lands

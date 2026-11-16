@@ -1629,6 +1629,9 @@ private val batchState = ConcurrentHashMap<String, BatchState>()
                     "engine" to "litertlm-xiaomi-ocr-0",
                 ))
             }
+            post("/v1/documents/extract") {
+                handleDocumentExtract(call)
+            }
             post("/v1/text/summarize") {
                 // On-device text summarization / cleanup via Gemini Nano (ML Kit GenAI).
                 // Returns 503 on devices without NPU support for Gemini Nano.
@@ -1975,6 +1978,190 @@ private val batchState = ConcurrentHashMap<String, BatchState>()
             return
         }
         call.respond(io.ktor.http.content.ByteArrayContent(bytes, io.ktor.http.ContentType.parse("audio/wav")))
+    }
+
+    private suspend fun handleDocumentExtract(call: io.ktor.server.application.ApplicationCall) {
+        var bytes = ByteArray(0)
+        var filename = "document"
+        var password = ""
+        var language = "auto"
+        val ct = call.request.contentType()
+        if (ct.match(io.ktor.http.ContentType.MultiPart.FormData)) {
+            call.receiveMultipart().forEachPart { part ->
+                when (part) {
+                    is PartData.FileItem -> {
+                        filename = part.originalFileName ?: filename
+                        bytes = part.provider().readBytes()
+                    }
+                    is PartData.FormItem -> when (part.name) {
+                        "password" -> password = part.value
+                        "language" -> language = part.value.ifBlank { "auto" }
+                        "file" -> {} // ignore
+                        else -> {}
+                    }
+                    else -> {}
+                }
+                part.dispose()
+            }
+        } else {
+            val body = call.receiveText()
+            if (body.isNotBlank()) {
+                val root = try { Json.parseToJsonElement(body).jsonObject } catch (e: Exception) {
+                    call.respond(HttpStatusCode.BadRequest, jsonOf("error" to "body must be JSON or multipart"))
+                    return
+                }
+                val b64 = root["file"]?.jsonPrimitive?.contentOrNull
+                    ?: root["image"]?.jsonPrimitive?.contentOrNull
+                    ?: root["data"]?.jsonPrimitive?.contentOrNull
+                    ?: ""
+                if (b64.isNotEmpty()) {
+                    try { bytes = android.util.Base64.decode(b64, android.util.Base64.DEFAULT) } catch (e: Exception) {
+                        call.respond(HttpStatusCode.BadRequest, jsonOf("error" to "invalid base64"))
+                        return
+                    }
+                }
+                filename = root["filename"]?.jsonPrimitive?.contentOrNull ?: filename
+                password = root["password"]?.jsonPrimitive?.contentOrNull ?: password
+                language = root["language"]?.jsonPrimitive?.contentOrNull ?: language
+            }
+        }
+        if (bytes.isEmpty()) {
+            call.respond(HttpStatusCode.BadRequest, jsonOf("error" to "missing file"))
+            return
+        }
+        val ext = filename.substringAfterLast('.', "").lowercase()
+        val ctx = appContext
+        if (ctx == null) {
+            call.respond(HttpStatusCode.InternalServerError, jsonOf("error" to "no app context"))
+            return
+        }
+
+        // Plain text / markdown / csv
+        if (ext in setOf("txt", "md", "markdown", "csv", "log", "json", "xml", "html", "htm")) {
+            val text = try { String(bytes, Charsets.UTF_8) } catch (e: Exception) { bytes.toString(Charsets.UTF_8) }
+            call.respond(jsonOf("text" to text, "method" to "text", "pages" to 0, "filename" to filename))
+            return
+        }
+
+        // DOCX: zip + word/document.xml
+        if (ext == "docx") {
+            val text = parseDocxText(bytes)
+            call.respond(jsonOf("text" to text, "method" to "docx-xml", "pages" to 0, "filename" to filename))
+            return
+        }
+
+        // Images: OCR
+        if (ext in setOf("jpg", "jpeg", "png", "webp", "bmp", "tif", "tiff")) {
+            requireModelReady(XiaomiOcrEngine.MODEL_ID)
+            releaseResidentForOcr()
+            val text: String? = try {
+                withContext(heavyDispatcher) {
+                    requireThermal(ctx)
+                    val avail = availableMb()
+                    val needed = XiaomiOcrEngine.effectiveNeededMb(avail)
+                    requireMemory(needed, "the Xiaomi-OCR-0 engine")
+                    val png = XiaomiOcrEngine.prep(bytes)
+                    if (png == null) null
+                    else XiaomiOcrEngine.run(
+                        java.io.File(downloader.modelDir(XiaomiOcrEngine.MODEL_ID), XiaomiOcrEngine.MODEL_FILE),
+                        png,
+                        XiaomiOcrEngine.prompt(language),
+                        cacheDir = java.io.File(ctx.cacheDir, "litertlm-ocr"),
+                    )
+                }
+            } catch (t: Throwable) {
+                if (t is ModelWillNotLoadError) throw t
+                throw ModelWillNotLoadError("OCR engine failed: ${t.javaClass.simpleName}: ${t.message}", -1, -1)
+            }
+            if (text == null) {
+                call.respond(HttpStatusCode.BadRequest, jsonOf("error" to "invalid image"))
+                return
+            }
+            call.respond(jsonOf("text" to text, "method" to "ocr", "pages" to 1, "filename" to filename, "engine" to "litertlm-xiaomi-ocr-0"))
+            return
+        }
+
+        // PDF: render pages and OCR each
+        if (ext == "pdf") {
+            requireModelReady(XiaomiOcrEngine.MODEL_ID)
+            releaseResidentForOcr()
+            val tmpPdf = java.io.File(ctx.cacheDir, "doc_${System.nanoTime()}.pdf")
+            tmpPdf.writeBytes(bytes)
+            val parts = mutableListOf<String>()
+            var pages = 0
+            try {
+                val pfd = android.os.ParcelFileDescriptor.open(tmpPdf, android.os.ParcelFileDescriptor.MODE_READ_ONLY)
+                val renderer = android.graphics.pdf.PdfRenderer(pfd)
+                pages = renderer.pageCount
+                val cap = 20
+                for (i in 0 until minOf(pages, cap)) {
+                    val page = renderer.openPage(i)
+                    val scale = 2
+                    val bmp = android.graphics.Bitmap.createBitmap(page.width * scale, page.height * scale, android.graphics.Bitmap.Config.ARGB_8888)
+                    page.render(bmp, null, null, android.graphics.pdf.PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                    page.close()
+                    val baos = java.io.ByteArrayOutputStream()
+                    bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, baos)
+                    bmp.recycle()
+                    val pngBytes = baos.toByteArray()
+                    val pageText = try {
+                        withContext(heavyDispatcher) {
+                            requireThermal(ctx)
+                            val avail = availableMb()
+                            val needed = XiaomiOcrEngine.effectiveNeededMb(avail)
+                            requireMemory(needed, "the Xiaomi-OCR-0 engine")
+                            val png = XiaomiOcrEngine.prep(pngBytes)
+                            if (png == null) null
+                            else XiaomiOcrEngine.run(
+                                java.io.File(downloader.modelDir(XiaomiOcrEngine.MODEL_ID), XiaomiOcrEngine.MODEL_FILE),
+                                png,
+                                XiaomiOcrEngine.prompt(language),
+                                cacheDir = java.io.File(ctx.cacheDir, "litertlm-ocr"),
+                            )
+                        }
+                    } catch (t: Throwable) {
+                        null
+                    }
+                    if (!pageText.isNullOrBlank()) {
+                        parts.add("--- Page ${i + 1} ---\\n${pageText.trim()}")
+                    }
+                }
+                renderer.close()
+                pfd.close()
+            } finally {
+                tmpPdf.delete()
+            }
+            val text = parts.joinToString("\\n\\n")
+            call.respond(jsonOf("text" to text, "method" to "pdf-ocr", "pages" to pages, "filename" to filename, "engine" to "litertlm-xiaomi-ocr-0"))
+            return
+        }
+
+        call.respond(HttpStatusCode.UnsupportedMediaType, jsonOf("error" to "unsupported file type .$ext"))
+    }
+
+    private fun parseDocxText(bytes: ByteArray): String {
+        return try {
+            val zis = java.util.zip.ZipInputStream(java.io.ByteArrayInputStream(bytes))
+            var entry = zis.nextEntry
+            var xml = ""
+            while (entry != null) {
+                if (entry.name == "word/document.xml") {
+                    xml = zis.readBytes().toString(Charsets.UTF_8)
+                    break
+                }
+                entry = zis.nextEntry
+            }
+            zis.close()
+            if (xml.isEmpty()) return ""
+            // Split paragraphs and extract w:t text
+            val paraRegex = Regex("<w:p[ >].*?</w:p>", RegexOption.DOT_MATCHES_ALL)
+            val tRegex = Regex("<w:t[^>]*>(.*?)</w:t>", RegexOption.DOT_MATCHES_ALL)
+            paraRegex.findAll(xml).map { p ->
+                tRegex.findAll(p.value).joinToString("") { it.groupValues[1] }
+            }.filter { it.isNotBlank() }.joinToString("\\n")
+        } catch (e: Exception) {
+            ""
+        }
     }
 
     private suspend fun handleAudio(call: io.ktor.server.application.ApplicationCall, translation: Boolean) {

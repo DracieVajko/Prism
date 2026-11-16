@@ -2230,6 +2230,26 @@ async def ocr_endpoint(
         return JSONResponse(status_code=500, content={"error": str(e)[:200]})
 
 
+@app.post("/v1/documents/extract")
+async def document_extract(
+    file: UploadFile = File(default=None),
+    password: str = Form(default=""),
+    language: str = Form(default="auto"),
+):
+    """Extract text from txt/md/docx/pdf/image files."""
+    if file is None:
+        return JSONResponse(status_code=400, content={"error": "missing file"})
+    try:
+        from unified import document_extract as _de
+        content = await file.read()
+        result = _de.extract_bytes(content, file.filename or "document", password=password, language=language)
+        return {"text": result.get("text", ""), "method": result.get("method", ""),
+                "pages": result.get("pages", 0), "filename": file.filename}
+    except Exception as e:
+        logger.error(f"document extract failed: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)[:200]})
+
+
 @app.post("/transcribe")
 async def transcribe_alias(
     file: UploadFile = File(...),
