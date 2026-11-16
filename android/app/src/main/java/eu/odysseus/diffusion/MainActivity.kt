@@ -92,12 +92,14 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnCopyLog: TextView
     private lateinit var btnSaveImage: MaterialButton
     private lateinit var btnSaveTranscript: MaterialButton
+    private lateinit var btnCopyTranscript: MaterialButton
 
     private var inpaintUri: android.net.Uri? = null
     private var maskUri: android.net.Uri? = null
     private var lastInpaintBitmap: android.graphics.Bitmap? = null
     private var lastBitmap: android.graphics.Bitmap? = null
     private var lastTranscript: String = ""
+    private var lastTranscriptTitle: String = ""
 
     // navigation + screen refs
     private lateinit var tabBar: android.widget.LinearLayout
@@ -118,6 +120,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var spinnerTheme: android.widget.Spinner
     private lateinit var spinnerLanguage: android.widget.Spinner
     private lateinit var spinnerAcceleration: android.widget.Spinner
+    private lateinit var spinnerConnectionMode: android.widget.Spinner
+    private lateinit var editRemoteHost: EditText
+    private lateinit var textRemoteStatus: TextView
     private var settingsReady = false
     private lateinit var screenInpaint: View
     private lateinit var btnPickInpaint: MaterialButton
@@ -142,6 +147,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var activityLog: TextView
     private lateinit var btnClearLog: TextView
+    private lateinit var btnCleanup: TextView
 
     private val logLines = ArrayDeque<String>()
     private val handler = Handler(Looper.getMainLooper())
@@ -181,7 +187,9 @@ class MainActivity : AppCompatActivity() {
         spinnerTheme = findViewById(R.id.spinnerTheme)
         spinnerLanguage = findViewById(R.id.spinnerLanguage)
         spinnerAcceleration = findViewById(R.id.spinnerAcceleration)
-
+        spinnerConnectionMode = findViewById(R.id.spinnerConnectionMode)
+        editRemoteHost = findViewById(R.id.editRemoteHost)
+        textRemoteStatus = findViewById(R.id.textRemoteStatus)
 
         genPrompt = findViewById(R.id.genPrompt)
         genResolution = findViewById(R.id.genResolution)
@@ -214,6 +222,7 @@ class MainActivity : AppCompatActivity() {
         btnCopyLog = findViewById(R.id.btnCopyLog)
         btnSaveImage = findViewById(R.id.btnSaveImage)
         btnSaveTranscript = findViewById(R.id.btnSaveTranscript)
+        btnCopyTranscript = findViewById(R.id.btnCopyTranscript)
 
         tabBar = findViewById(R.id.tabBar)
         screenHost = findViewById(R.id.screenHost)
@@ -247,14 +256,21 @@ class MainActivity : AppCompatActivity() {
 
         activityLog = findViewById(R.id.activityLog)
         btnClearLog = findViewById(R.id.btnClearLog)
+        btnCleanup = findViewById(R.id.btnCleanup)
 
         btnToggle.setOnClickListener { toggleServer() }
         btnAddModel.setOnClickListener { showAddModelDialog() }
         btnClearLog.setOnClickListener { logLines.clear(); renderLog() }
+        btnCleanup.setOnClickListener {
+            val n = OutputStore.deleteAll(this, null)
+            downloader.allAssets().forEach { a -> downloader.uninstall(a.id) }
+            log("cleanup: removed $n output file(s) + all installed models")
+            renderModels()
+        }
         btnCopyLog.setOnClickListener {
             val cm = getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-            cm.setPrimaryClip(android.content.ClipData.newPlainText("Prism log", activityLog.text))
-            toast("Log copied")
+            cm.setPrimaryClip(android.content.ClipData.newPlainText("Prism log", logLines.joinToString("\n")))
+            toast("Full log copied (${logLines.size} lines)")
         }
         btnSaveImage.setOnClickListener {
             val bmp = lastBitmap
@@ -263,7 +279,14 @@ class MainActivity : AppCompatActivity() {
         }
         btnSaveTranscript.setOnClickListener {
             if (lastTranscript.isBlank()) { toast("No transcript"); return@setOnClickListener }
-            if (saveTextToDownloads(lastTranscript)) toast("Saved to Download/Prism") else toast("Save failed")
+            val title = lastTranscriptTitle.ifBlank { null }
+            if (saveTextToDownloads(lastTranscript, title)) toast("Saved to Download/Prism") else toast("Save failed")
+        }
+        btnCopyTranscript.setOnClickListener {
+            if (lastTranscript.isBlank()) { toast("No transcript"); return@setOnClickListener }
+            val cm = getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+            cm.setPrimaryClip(android.content.ClipData.newPlainText("Prism transcript", lastTranscript))
+            toast("Transcript copied (${lastTranscript.length} chars)")
         }
 
 
@@ -594,6 +617,18 @@ class MainActivity : AppCompatActivity() {
         }.start()
     }
 
+    private fun updateRemoteStatusText() {
+        val host = AppConfig.remoteHost.trim()
+        val mode = AppConfig.connectionMode
+        textRemoteStatus.text = when (mode) {
+            "remote" -> if (host.isBlank()) "Remote mode — no host set"
+                       else "Remote — forwarding to $host"
+            "auto" -> if (host.isBlank()) "Auto mode — no host set (local only)"
+                      else "Auto — local first, then $host"
+            else -> "Local mode — offline, no PC needed"
+        }
+    }
+
     // ---------- models ----------
 
 /** Models grouped by kind; sections are closed by default and animated. */
@@ -745,7 +780,11 @@ class MainActivity : AppCompatActivity() {
                 action.isEnabled = true
                 action.setBackgroundColor(0xFFDA3633.toInt())
                 action.setTextColor(0xFFE8EAF0.toInt())
-                action.setOnClickListener { downloader.cancel(asset.id) }
+                action.setOnClickListener {
+                    downloader.cancel(asset.id)
+                    log("cancelled ${asset.id}")
+                    renderModelRow(asset)
+                }
                 meta.text = if (p.state == InstallState.VERIFYING) "verifying…"
                 else "${fmtBytes(p.bytesDone)} / ${fmtBytes(p.bytesTotal)} · ${asset.engine}"
             }
@@ -1006,6 +1045,18 @@ class MainActivity : AppCompatActivity() {
         spinnerLanguage.setSelection(langs.indexOfFirst { it.first == lang }.coerceAtLeast(0))
         spinnerAcceleration.setSelection(accels.indexOfFirst { it.first == accel }.coerceAtLeast(0))
 
+        // ---------- connection mode (local / remote / auto) ----------
+        val connModes = listOf("local" to "Local (offline)", "remote" to "Remote (PC server)", "auto" to "Auto (try local, then PC)")
+        val savedMode = prefs.getString("connection_mode", "local") ?: "local"
+        val savedHost = prefs.getString("remote_host", "") ?: ""
+        AppConfig.connectionMode = savedMode
+        AppConfig.remoteHost = savedHost
+        spinnerConnectionMode.adapter = android.widget.ArrayAdapter(this,
+            android.R.layout.simple_spinner_dropdown_item, connModes.map { it.second })
+        spinnerConnectionMode.setSelection(connModes.indexOfFirst { it.first == savedMode }.coerceAtLeast(0))
+        editRemoteHost.setText(savedHost)
+        updateRemoteStatusText()
+
         fun applyTheme(mode: String) {
             val m = when (mode) {
                 "light" -> androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_NO
@@ -1056,6 +1107,28 @@ class MainActivity : AppCompatActivity() {
             }
             override fun onNothingSelected(parent: android.widget.AdapterView<*>?) {}
         }
+
+        spinnerConnectionMode.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: View?, position: Int, id: Long) {
+                if (!settingsReady) return
+                val mode = connModes[position].first
+                prefs.edit().putString("connection_mode", mode).apply()
+                AppConfig.connectionMode = mode
+                updateRemoteStatusText()
+                log("connection mode -> $mode")
+            }
+            override fun onNothingSelected(parent: android.widget.AdapterView<*>?) {}
+        }
+
+        editRemoteHost.setOnFocusChangeListener { _, hasFocus ->
+            if (!hasFocus) {
+                val host = editRemoteHost.text.toString().trim()
+                prefs.edit().putString("remote_host", host).apply()
+                AppConfig.remoteHost = host
+                updateRemoteStatusText()
+            }
+        }
+
         settingsReady = true
 
         btnPickAudio.setOnClickListener { openDocument("*/*", "Recordings", pickAudio) }
@@ -1160,6 +1233,7 @@ class MainActivity : AppCompatActivity() {
                     val text = j.optString("text", "")
                     if (text.isNotEmpty()) {
                         var finalText = text
+                        lastTranscriptTitle = ""
                         // Only claim Gemma4 ran when it actually produced the text.
                         var ppNote = ""
                         if (switchGemma.isChecked) {
@@ -1189,6 +1263,13 @@ class MainActivity : AppCompatActivity() {
                                             && !result.contains('\uFFFD')) {
                                             finalText = result.trim()
                                             ppNote = " (Gemma4 $mode)"
+                                            try {
+                                                val tp = "Generate a short (max 6 words) title for this text. Return only the title, no quotes:\n\n$finalText"
+                                                val tr = GemmaLib.generateText(handle, tp, 32)
+                                                if (tr != null && tr.isNotBlank()) {
+                                                    lastTranscriptTitle = tr.trim().trim('"').take(60)
+                                                }
+                                            } catch (_: Exception) { /* ignore */ }
                                         } else {
                                             ppNote = " (Gemma4 returned nothing usable)"
                                         }
@@ -1199,6 +1280,8 @@ class MainActivity : AppCompatActivity() {
                             }
                             transcribeProgress.visibility = android.view.View.GONE
                         }
+                        lastTranscript = finalText
+                        lastTranscript = finalText
                         transcribeOut.setText(finalText)
                         transcribeStatus.text = "done: ${finalText.length} chars, " +
                             "${j.optInt("chunks", 1)} chunk(s)$ppNote"
@@ -1436,12 +1519,14 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun saveTextToDownloads(text: String): Boolean {
+    private fun saveTextToDownloads(text: String, title: String? = null): Boolean {
         return try {
-            val name = "prism_${System.currentTimeMillis()}.txt"
+            val safeTitle = title?.replace(Regex("[^A-Za-z0-9 _-]"), "")?.trim()?.replace(" ", "_")
+            val base = if (safeTitle.isNullOrBlank()) "prism_${System.currentTimeMillis()}" else safeTitle
+            val name = "$base.md"
             val values = android.content.ContentValues().apply {
                 put(android.provider.MediaStore.Downloads.DISPLAY_NAME, name)
-                put(android.provider.MediaStore.Downloads.MIME_TYPE, "text/plain")
+                put(android.provider.MediaStore.Downloads.MIME_TYPE, "text/markdown")
                 put(android.provider.MediaStore.Downloads.RELATIVE_PATH, "Download/Prism")
             }
             val uri = contentResolver.insert(
@@ -1675,7 +1760,8 @@ class MainActivity : AppCompatActivity() {
     private fun log(msg: String) {
         val ts = SimpleDateFormat("HH:mm:ss", Locale.US).format(Date())
         logLines.addFirst("$ts  $msg")
-        while (logLines.size > 40) logLines.removeLast()
+        // keep full history since app start (no 40-line cap)
+        while (logLines.size > 5000) logLines.removeLast()
         renderLog()
     }
 

@@ -302,6 +302,7 @@ def _catalog_tasks():
     out += [dict(t, group="upscale") for t in dm.UPSCALE_TASKS]
     out += [dict(t, group="vlm") for t in dm.VLM_TASKS]
     out += [dict(t, group="audio") for t in getattr(dm, "AUDIO_TASKS", [])]
+    out += [dict(t, group="restoration") for t in getattr(dm, "RESTORATION_TASKS", [])]
     return out
 
 

@@ -50,6 +50,24 @@ object OutputStore {
             n++
         }
         target.writeBytes(data)
+        // Auto-publish to the public Download/Prism folder so the user can
+        // open the result from any file manager without a separate "Save".
+        try {
+            val values = ContentValues().apply {
+                put(MediaStore.MediaColumns.DISPLAY_NAME, target.name)
+                put(MediaStore.MediaColumns.MIME_TYPE, mimeOf(target))
+                put(MediaStore.MediaColumns.RELATIVE_PATH,
+                    "${android.os.Environment.DIRECTORY_DOWNLOADS}/Prism")
+            }
+            val uri: Uri? = ctx.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+            if (uri != null) {
+                ctx.contentResolver.openOutputStream(uri)?.use { out ->
+                    target.inputStream().use { it.copyTo(out) }
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "auto-save to Downloads failed for ${target.name}: ${e.message}")
+        }
         return mapOf(
             "name" to target.name,
             "kind" to safeKind,

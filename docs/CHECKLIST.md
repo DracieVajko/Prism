@@ -729,3 +729,14 @@ Android (`Android/data/<pkg>/files/output/<kind>/`):
       `job 40% (120/300 s) · chunk 1/2` with a Stop link.
 - [x] Batch queue, Android video re-encode/compress, subtitles — all verified on device (27/27, Oct 29, 2026)., Android video re-encode/compress, on-device
       subtitle verification (needs the phone free with START pressed).
+
+### Text-to-speech (TTS) (2026-11-16)
+
+- [x] PC: `POST /v1/audio/speech` (OpenAI-compatible) using Supertonic 3 (int8)
+      via sherpa-onnx; auto-downloads model tarball on first use; supports
+      mp3/aac/m4a/wav/opus/ogg/flac, 10 voices, 31 languages incl. Slovak.
+- [x] PC: `GET /v1/audio/voices`.
+- [x] Android: `POST /v1/audio/speech` using on-device Android TextToSpeech
+      (system voice packs), returns WAV; honest 503 when a language is unavailable.
+- [ ] Android: Supertonic 3 on-device (Sherpa-ONNX JNI) — not integrated yet;
+      system TTS is the current engine.

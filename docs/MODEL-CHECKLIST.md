@@ -25,6 +25,9 @@ downloaded automatically.
 | `JuggernautXL_v9` | 6.62 GB | image generations | Working | keep |
 | `AnimagineXL_3.1` | 6.46 GB | image generations | Working | keep |
 | `AbsoluteReality_1.8` | 1.99 GB | image generations | Working | keep |
+| `ddcolor-tiny` | 0.13 GB | `/v1/images/colorize` | Working (verified 2026-11-12) | keep |
+| `gfpgan-v1.4` | 0.16 GB | `/v1/images/face-restore` | Working (verified 2026-11-12) | keep |
+| `swinir-realsr-x4` | 0.12 GB | `/v1/images/restore-upscale` | Working (verified 2026-11-12) | keep |
 | `RealESRGAN_x4v3` | 0.12 GB | `/v1/images/upscale` | Working | keep |
 
 Notes:

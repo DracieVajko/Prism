@@ -58,15 +58,8 @@ object ModelCatalog {
             files = listOf(ggml("large-v3-turbo-q5_0", 547)),
             note = "Default audio model. ~2.5x realtime on SD 8 Gen 2 (~2 h for 45 min).",
         ),
-        ModelAsset(
-            id = "silero-vad", kind = "audio", engine = "onnxruntime",
-            label = "Silero VAD — 2 MB, voice activity detection",
-            files = listOf(
-                ModelFile("silero_vad.onnx",
-                    "https://github.com/snakers4/silero-vad/raw/master/files/silero_vad.onnx", 2),
-            ),
-            note = "Voice activity detection. Pre-filter audio before transcription to skip silence.",
-        ),
+        // silero-vad removed: URL 404 + redundant (VAD is a pre-filter, not a primary job).
+        // Whisper large-v3-turbo is the single audio model.
     )
 
     /**
@@ -117,16 +110,7 @@ object ModelCatalog {
             ),
             note = "Zip contains .param/.bin weights; auto-extracted.",
         ),
-        ModelAsset(
-            id = "realesrgan-x4plus-anime-6b", kind = "upscale", engine = "onnxruntime",
-            label = "Real-ESRGAN x4plus Anime 6B — 17.9 MB, 6-block, faster on CPU",
-            files = listOf(
-                ModelFile("RealESRGAN_x4plus_anime_6B.onnx",
-                    "https://huggingface.co/deepghs/imgutils-models/resolve/main/real_esrgan/RealESRGAN_x4plus_anime_6B.onnx", 17,
-                    "2648cab4c4343541c1aa291c6754e9e8edbe7a813fffc2a677423dd12cb6b7f7"),
-            ),
-            note = "6-block RRDBNet, ~4x faster on CPU than x4plus. Optimized for anime/stylized images.",
-        ),
+        // realesrgan-x4plus-anime-6b removed: keep single best upscale model (x4plus general).
     )
 
 /** VLM: runtime is llama.cpp (libmtmd) — not bundled yet; experimental. */
@@ -140,17 +124,7 @@ object ModelCatalog {
             ),
             note = "Gemma4 E2B for text post-processing (cleanup, translate, rewrite). Text-only, no vision.",
         ),
-        ModelAsset(
-            id = "smolvlm-500m-gguf", kind = "vlm", engine = "llama.cpp",
-            label = "SmolVLM 500M Instruct Q8_0 + vision mmproj — 520 MB",
-            files = listOf(
-                ModelFile("SmolVLM-500M-Instruct-Q8_0.gguf",
-                    "https://huggingface.co/ggml-org/SmolVLM-500M-Instruct-GGUF/resolve/main/SmolVLM-500M-Instruct-Q8_0.gguf", 417),
-                ModelFile("mmproj-SmolVLM-500M-Instruct-Q8_0.gguf",
-                    "https://huggingface.co/ggml-org/SmolVLM-500M-Instruct-GGUF/resolve/main/mmproj-SmolVLM-500M-Instruct-Q8_0.gguf", 104),
-            ),
-            note = "On-device caption/chat needs the llama.cpp VLM runtime (libsmolvlm_jni), not bundled yet.",
-        ),
+        // smolvlm-500m-gguf removed: superseded by smolvlm2-500m-gguf (newer, video-capable).
         ModelAsset(
             id = "smolvlm2-500m-gguf", kind = "vlm", engine = "llama.cpp",
             label = "SmolVLM2 500M Video Instruct Q8_0 + mmproj — 520 MB",
@@ -162,15 +136,7 @@ object ModelCatalog {
             ),
             note = "On-device caption/chat needs the llama.cpp VLM runtime (libsmolvlm_jni), not bundled yet.",
         ),
-        ModelAsset(
-            id = "moondream2-text-v1", kind = "vlm", engine = "llama.cpp",
-            label = "Moondream2 — 1.9B VLM, fast captioning",
-            files = listOf(
-                ModelFile("moondream2-text-model-f16.gguf",
-                    "https://huggingface.co/vikhyatk/moondream2/resolve/main/moondream2-text-model-f16.gguf", 417),
-            ),
-            note = "Small VLM (~1.9B params) for fast image captioning. GGUF format for llama.cpp runtime.",
-        ),
+        // moondream2-text-v1 removed: URL 404 + redundant (smolvlm2 covers captioning).
     )
 
 /** OCR: Xiaomi-OCR-0 as the official LiteRT-LM conversion (com.google.ai.edge.litertlm). */

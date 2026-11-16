@@ -27,7 +27,7 @@ from pathlib import Path
 from fastapi import FastAPI, File, Form, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import (FileResponse, HTMLResponse, JSONResponse,
-                               RedirectResponse)
+                               RedirectResponse, Response)
 from pydantic import BaseModel
 from typing import Optional, Tuple, List
 
@@ -302,6 +302,28 @@ class UpscaleRequest(BaseModel):
     model: Optional[str] = "RealESRGAN_x4v3"
     request_id: Optional[str] = ""
 
+class ColorizeRequest(BaseModel):
+    image: str = ""
+    model: Optional[str] = "ddcolor-tiny"
+    request_id: Optional[str] = ""
+
+class RestoreRequest(BaseModel):
+    image: str = ""
+    prompt: Optional[str] = "restore and colorize this old photo, remove damage, enhance clarity, natural daylight colors, preserve original faces and clothing"
+    strength: float = 0.5
+    steps: int = 20
+    guidance: float = 7.5
+    image_guidance: float = 1.5
+    request_id: Optional[str] = ""
+
+class FaceRestoreRequest(BaseModel):
+    image: str = ""
+    request_id: Optional[str] = ""
+
+class SwinIRRequest(BaseModel):
+    image: str = ""
+    request_id: Optional[str] = ""
+
 
 class CaptionRequest(BaseModel):
     image: str = ""
@@ -469,6 +491,24 @@ def list_models():
             "install_progress": 0,
             "downloadable": True,
             "has_source": _nemo.is_installed(),
+        })
+    except Exception:
+        pass
+
+    # TTS: Supertonic 3 (multilingual, on-device on PC).
+    try:
+        from unified import tts_engine as _tts
+        data.append({
+            "id": "supertonic-3", "object": "model", "owned_by": "supertone",
+            "kind": "tts", "label": "Supertonic 3 TTS (31 languages)",
+            "engine": "supertonic-3",
+            "installed": _tts.is_installed(),
+            "available": True,
+            "size_mb": 123,
+            "install_state": "idle",
+            "install_progress": 0,
+            "downloadable": True,
+            "has_source": _tts.is_installed(),
         })
     except Exception:
         pass
@@ -921,6 +961,92 @@ def upscale(req: UpscaleRequest):
     return out
 
 
+@app.post("/v1/images/colorize")
+def colorize(req: ColorizeRequest):
+    rid = req.request_id or f"req-{uuid.uuid4().hex[:8]}"
+    if not req.image:
+        return JSONResponse(status_code=400, content={"error": "missing image b64"})
+    try:
+        from unified.colorize import colorize_b64, release as release_colorize
+        out = colorize_b64(req.image)
+    except FileNotFoundError:
+        return JSONResponse(status_code=503, content={
+            "error": "will not load", "detail": "DDColor model not installed",
+            "hint": "Run: python download_models.py ddcolor-tiny"})
+    except Exception as e:
+        logger.warning(f"colorize failed: {str(e)[:200]}")
+        return JSONResponse(status_code=500, content={"error": str(e)[:200]})
+    out["request_id"] = rid
+    meta = _store_b64("image", ".png", out.get("image", ""), rid)
+    out["outputs"] = [meta] if meta else []
+    return out
+
+
+@app.post("/v1/images/restore")
+def restore(req: RestoreRequest):
+    rid = req.request_id or f"req-{uuid.uuid4().hex[:8]}"
+    if not req.image:
+        return JSONResponse(status_code=400, content={"error": "missing image b64"})
+    try:
+        from unified.restore import restore_b64
+        out = restore_b64(req.image, prompt=req.prompt or "restore and colorize this old photo",
+                          strength=req.strength, steps=req.steps,
+                          guidance=req.guidance, image_guidance=req.image_guidance)
+    except RuntimeError as e:
+        return JSONResponse(status_code=503, content={
+            "error": "will not load", "detail": str(e)[:200],
+            "hint": "Run: python download_models.py instruct-pix2pix"})
+    except Exception as e:
+        logger.warning(f"restore failed: {str(e)[:200]}")
+        return JSONResponse(status_code=500, content={"error": str(e)[:200]})
+    out["request_id"] = rid
+    meta = _store_b64("image", ".png", out.get("image", ""), rid)
+    out["outputs"] = [meta] if meta else []
+    return out
+
+
+@app.post("/v1/images/face-restore")
+def face_restore(req: FaceRestoreRequest):
+    rid = req.request_id or f"req-{uuid.uuid4().hex[:8]}"
+    if not req.image:
+        return JSONResponse(status_code=400, content={"error": "missing image b64"})
+    try:
+        from unified.gfpgan import restore_face_b64
+        out = restore_face_b64(req.image)
+    except RuntimeError as e:
+        return JSONResponse(status_code=503, content={
+            "error": "will not load", "detail": str(e)[:200],
+            "hint": "Run: python download_models.py gfpgan-v1.4"})
+    except Exception as e:
+        logger.warning(f"face-restore failed: {str(e)[:200]}")
+        return JSONResponse(status_code=500, content={"error": str(e)[:200]})
+    out["request_id"] = rid
+    meta = _store_b64("image", ".png", out.get("image", ""), rid)
+    out["outputs"] = [meta] if meta else []
+    return out
+
+
+@app.post("/v1/images/restore-upscale")
+def restore_upscale(req: SwinIRRequest):
+    rid = req.request_id or f"req-{uuid.uuid4().hex[:8]}"
+    if not req.image:
+        return JSONResponse(status_code=400, content={"error": "missing image b64"})
+    try:
+        from unified.swinir import upscale_b64
+        out = upscale_b64(req.image)
+    except RuntimeError as e:
+        return JSONResponse(status_code=503, content={
+            "error": "will not load", "detail": str(e)[:200],
+            "hint": "Run: python download_models.py swinir-realsr-x4"})
+    except Exception as e:
+        logger.warning(f"restore-upscale failed: {str(e)[:200]}")
+        return JSONResponse(status_code=500, content={"error": str(e)[:200]})
+    out["request_id"] = rid
+    meta = _store_b64("image", ".png", out.get("image", ""), rid)
+    out["outputs"] = [meta] if meta else []
+    return out
+
+
 # ---------- vision (V2) ----------
 
 @app.post("/v1/images/caption")
@@ -993,9 +1119,34 @@ def chat_completions(body: dict):
     except ModelLoadingError as e:
         return _raise_loading(e)
     text, image = _chat_vision_parts(messages)
+    # Text-only path: route to an external LLM provider (Ollama, LM Studio,
+    # llama.cpp, OpenAI, Mistral, Gemini, ...). Vision path uses SmolVLM.
     if not image:
-        return JSONResponse(status_code=400, content={
-            "error": "missing image: V1 supports only vision messages (content with image_url data:base64)"})
+        try:
+            from unified.llm_providers import process_with_external_llm, _get_config
+            cfg = _get_config()
+            if not cfg.get("base_url"):
+                return JSONResponse(status_code=503, content={
+                    "error": "no LLM provider configured",
+                    "detail": "Set PRISM_LLM_PROVIDER + PRISM_LLM_BASE_URL (ollama/lmstudio/openai/mistral/gemini/llamacpp/custom)."})
+            instruction = (body.get("instruction") if isinstance(body, dict) else None) or "cleanup"
+            target_lang = (body.get("target_lang") if isinstance(body, dict) else None) or "en"
+            out_text = process_with_external_llm(
+                text=text or "", instruction=instruction,
+                target_lang=target_lang, operation=instruction)
+            return {
+                "id": f"chatcmpl-{uuid.uuid4().hex[:12]}",
+                "object": "chat.completion",
+                "created": int(time.time()),
+                "model": model or cfg.get("model", "external-llm"),
+                "choices": [{
+                    "index": 0,
+                    "message": {"role": "assistant", "content": out_text},
+                    "finish_reason": "stop",
+                }],
+            }
+        except Exception as e:
+            return JSONResponse(status_code=500, content={"error": str(e)[:300]})
     _release_sd_best_effort()
     try:
         out = caption_image_b64(image, text or "Describe the image in detail.",
@@ -2147,6 +2298,51 @@ async def text_process(
         return JSONResponse(status_code=500, content={"error": str(e)[:200]})
 
 
+# ---------- text-to-speech ----------
+class SpeechRequest(BaseModel):
+    model: Optional[str] = "supertonic-3"
+    input: str = ""
+    voice: Optional[str] = "0"
+    response_format: Optional[str] = "mp3"
+    speed: Optional[float] = 1.0
+
+
+@app.post("/v1/audio/speech")
+async def audio_speech(req: SpeechRequest):
+    if not (req.input or "").strip():
+        return JSONResponse(status_code=400, content={"error": "missing input"})
+    try:
+        from unified import tts_engine as _tts
+        data, ctype = _tts.synthesize_bytes(
+            req.input, voice=req.voice or "0",
+            speed=req.speed or 1.0,
+            fmt=req.response_format or "mp3",
+        )
+        return Response(content=data, media_type=ctype,
+                       headers={"Content-Disposition": 'attachment; filename="speech.' +
+                               (req.response_format or "mp3").lower().lstrip(".") + '"'})
+    except Exception as e:
+        err = str(e)[:300]
+        try:
+            from unified import tts_engine as _tts2
+            err = (_tts2.last_error() or err)[:300]
+        except Exception:
+            pass
+        status = 503 if "not installed" in err.lower() or "model" in err.lower() else 500
+        return JSONResponse(status_code=status, content={"error": err})
+
+
+@app.get("/v1/audio/voices")
+def audio_voices():
+    try:
+        from unified import tts_engine as _tts
+        return {"voices": _tts.voices(), "engine": "supertonic-3",
+                "installed": _tts.is_installed()}
+    except Exception as e:
+        return {"voices": [], "engine": "supertonic-3", "installed": False,
+                "error": str(e)[:200]}
+
+
 # ---------- webui ----------
 
 @app.get("/webui", response_class=HTMLResponse)
@@ -2555,6 +2751,108 @@ async def media_info_endpoint(
             pass
 
 
+
+
+@app.post("/v1/ffmpeg/run")
+async def ffmpeg_run_endpoint(
+    file: UploadFile = File(...),
+    flags: str = Form(default=""),
+    output_name: str = Form(default="output.mp4"),
+    request_id: str = Form(default=""),
+):
+    rid = request_id or "req-" + uuid.uuid4().hex[:8]
+    content = await file.read()
+    if not content:
+        return JSONResponse(status_code=400, content={"error": "Empty file"})
+
+    import re as _re
+    if _re.search(r"[;&|`$<>]", flags):
+        return JSONResponse(status_code=400, content={"error": "invalid characters in flags"})
+    toks = flags.split()
+    if any(t == "-i" or t.startswith("-i") for t in toks):
+        return JSONResponse(status_code=400, content={"error": "'-i' is not allowed in flags"})
+
+    suffix = Path(file.filename or "media.mp4").suffix or ".mp4"
+    tmp = None
+    out_path = None
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as t:
+            tmp = t.name
+            t.write(content)
+
+        oname = Path(output_name).name or "output.mp4"
+        if not Path(oname).suffix:
+            oname += suffix
+        out_path = tempfile.NamedTemporaryFile(delete=False, suffix=Path(oname).suffix).name
+
+        import shutil as _sh2
+        ff = _sh2.which("ffmpeg") or "ffmpeg"
+        cmd = [ff, "-y", "-i", tmp] + toks + [out_path]
+        proc = subprocess.run(cmd, capture_output=True, timeout=600)
+        if proc.returncode != 0 or not Path(out_path).exists():
+            err = (proc.stderr or b"").decode(errors="replace")[-500:]
+            return JSONResponse(status_code=500, content={"error": "ffmpeg failed", "detail": err})
+
+        out_data = Path(out_path).read_bytes()
+        out_b64 = base64.b64encode(out_data).decode()
+        _ext = Path(out_path).suffix.lower() or ".bin"
+        _kind = ("image" if _ext in (".jpg", ".jpeg", ".png", ".webp", ".avif") else
+                 "audio" if _ext in (".mp3", ".m4a", ".aac", ".wav", ".opus", ".flac") else
+                 "video")
+        out_meta = _store_output(_kind, _ext, out_data, rid)
+
+        return {
+            "file": out_b64,
+            "outputs": [out_meta],
+            "filename": oname,
+            "elapsed": 0,
+            "request_id": rid,
+            "engine": "ffmpeg",
+        }
+    finally:
+        for pth in (tmp, out_path):
+            try:
+                if pth:
+                    Path(pth).unlink(missing_ok=True)
+            except Exception:
+                pass
+
+
+@app.post("/v1/cleanup")
+async def cleanup_endpoint(
+    include_cache: bool = Form(default=True),
+    request_id: str = Form(default=""),
+):
+    rid = request_id or "req-" + uuid.uuid4().hex[:8]
+    deleted = 0
+    # Remove all produced outputs.
+    try:
+        if OUTPUT_DIR.exists():
+            for p in OUTPUT_DIR.rglob("*"):
+                if p.is_file():
+                    try:
+                        p.unlink()
+                        deleted += 1
+                    except Exception:
+                        pass
+            # Remove empty dirs.
+            for d in sorted(OUTPUT_DIR.rglob("*"), reverse=True):
+                if d.is_dir():
+                    try:
+                        d.rmdir()
+                    except Exception:
+                        pass
+    except Exception as e:
+        logger.warning("cleanup outputs failed: %s", e)
+    # Whisper / model caches (best-effort).
+    if include_cache:
+        try:
+            import gc
+            _WHISPER_CACHE.clear()
+            gc.collect()
+        except Exception:
+            pass
+    return {"deleted": deleted, "request_id": rid, "engine": "cleanup"}
 
 
 # ---------- jobs (progress / cancel) ----------

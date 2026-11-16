@@ -2,7 +2,10 @@ package eu.odysseus.diffusion
 
 /**
  * Runtime configuration for the app.
- * Everything runs locally on the phone; there is no remote/PC mode.
+ *
+ * The app runs locally by default (offline, lightweight models only).
+ * Optionally it can connect to a PC server (local or Tailscale) for
+ * heavy features (FLUX restoration, large models, etc.).
  */
 object AppConfig {
     @Volatile var serverPort: Int = 8101
@@ -13,4 +16,10 @@ object AppConfig {
 
     /** Optional bearer token for LAN access. Empty disables auth (default). */
     @Volatile var authToken: String = ""
+
+    /** Connection mode: "local" (offline), "remote" (forward to PC), "auto" (try local, fall back to PC). */
+    @Volatile var connectionMode: String = "local"
+
+    /** PC server URL when in remote/auto mode (e.g. "http://192.168.1.100:8101" or "http://100.x.y.z:8101" for Tailscale). */
+    @Volatile var remoteHost: String = ""
 }

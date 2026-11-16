@@ -509,6 +509,14 @@ private val batchState = ConcurrentHashMap<String, BatchState>()
                 if (track) manager.endRequest()
             }
         }
+        // Remote mode: forward all requests to the configured PC server.
+        if (RemoteProxy.isRemoteMode() || RemoteProxy.isAutoMode()) {
+            intercept(io.ktor.server.application.ApplicationCallPipeline.Call) {
+                if (RemoteProxy.forward(call)) {
+                    finish()
+                }
+            }
+        }
         routing {
             get("/health") {
                 val st = manager.status()
@@ -873,8 +881,10 @@ private val batchState = ConcurrentHashMap<String, BatchState>()
                     ),
                 )
             }
-// FFmpeg Tools: not available on device yet (MediaCodec covers audio
-// decoding for whisper).
+// Media Tools: implemented on-device via MediaCodec / MediaMuxer / LAME
+// (see MediaTools.kt). No external ffmpeg binary is shipped; the
+// /v1/ffmpeg/{op} endpoints cover info, convert-image, convert-audio,
+// convert-video (remux), extract-audio, trim and compress.
             get("/v1/outputs") {
                 val ctx = appContext ?: run {
                     call.respond(HttpStatusCode.InternalServerError,
@@ -1893,7 +1903,78 @@ private val batchState = ConcurrentHashMap<String, BatchState>()
             post("/v1/audio/translations") {
                 handleAudio(call, translation = true)
             }
+            post("/v1/audio/speech") {
+                handleSpeech(call)
+            }
         }
+    }
+
+    private suspend fun handleSpeech(call: io.ktor.server.application.ApplicationCall) {
+        val raw = call.receiveText()
+        val json = try { com.google.gson.JsonParser.parseString(raw).asJsonObject } catch (_: Exception) { com.google.gson.JsonObject() }
+        val input = (json.get("input")?.asString ?: json.get("text")?.asString ?: "").trim()
+        if (input.isEmpty()) {
+            call.respond(io.ktor.http.HttpStatusCode.BadRequest, jsonOf("error" to "missing input"))
+            return
+        }
+        val voice = json.get("voice")?.asString ?: "sk"
+        val lang = json.get("language")?.asString
+        val speed = json.get("speed")?.asFloat ?: 1.0f
+        val ctx = appContext
+        if (ctx == null) {
+            call.respond(io.ktor.http.HttpStatusCode.ServiceUnavailable, jsonOf("error" to "no application context"))
+            return
+        }
+        val localeCode = if (voice.matches(Regex("[a-zA-Z]{2}(-[A-Za-z]{2})?"))) voice else (lang ?: "sk")
+        val locale = if (localeCode.contains("-")) {
+            val p = localeCode.split("-")
+            java.util.Locale(p[0], p[1])
+        } else java.util.Locale(localeCode)
+
+        val bytes = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            val initLatch = java.util.concurrent.CountDownLatch(1)
+            var initStatus = -1
+            val tts = android.speech.tts.TextToSpeech(ctx) { status -> initStatus = status; initLatch.countDown() }
+            initLatch.await(10, java.util.concurrent.TimeUnit.SECONDS)
+            if (initStatus != android.speech.tts.TextToSpeech.SUCCESS) {
+                tts.shutdown()
+                return@withContext null
+            }
+            val avail = tts.isLanguageAvailable(locale)
+            if (avail < android.speech.tts.TextToSpeech.LANG_AVAILABLE) {
+                tts.shutdown()
+                return@withContext null
+            }
+            tts.language = locale
+            tts.setSpeechRate(speed.coerceIn(0.5f, 2.0f))
+            val outFile = java.io.File(ctx.cacheDir, "prism_tts_${System.nanoTime()}.wav")
+            val synthLatch = java.util.concurrent.CountDownLatch(1)
+            var synthOk = false
+            tts.setOnUtteranceProgressListener(object : android.speech.tts.UtteranceProgressListener() {
+                override fun onStart(utteranceId: String?) {}
+                override fun onDone(utteranceId: String?) { synthOk = true; synthLatch.countDown() }
+                @Deprecated("deprecated")
+                override fun onError(utteranceId: String?) { synthLatch.countDown() }
+                override fun onError(utteranceId: String?, errorCode: Int) { synthLatch.countDown() }
+            })
+            val params = android.os.Bundle()
+            val res = tts.synthesizeToFile(input, params, outFile, "prism-tts")
+            if (res != android.speech.tts.TextToSpeech.SUCCESS) {
+                tts.shutdown()
+                return@withContext null
+            }
+            synthLatch.await(120, java.util.concurrent.TimeUnit.SECONDS)
+            tts.shutdown()
+            if (!synthOk || !outFile.isFile || outFile.length() <= 0) null
+            else outFile.readBytes().also { outFile.delete() }
+        }
+
+        if (bytes == null) {
+            call.respond(io.ktor.http.HttpStatusCode.ServiceUnavailable,
+                jsonOf("error" to "TTS not available for language $localeCode on this device"))
+            return
+        }
+        call.respond(io.ktor.http.content.ByteArrayContent(bytes, io.ktor.http.ContentType.parse("audio/wav")))
     }
 
     private suspend fun handleAudio(call: io.ktor.server.application.ApplicationCall, translation: Boolean) {

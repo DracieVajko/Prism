@@ -32,12 +32,12 @@ input[type=text], input[type=number], textarea, select { width: 100%; box-sizing
 select option { background: var(--panel); color: var(--text); }
 textarea { min-height: 70px; resize: vertical; }
 .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-start; } .row > div { flex: 1; min-width: 120px; }
-.modelrow { display: flex; gap: 8px; align-items: center; }
+.modelrow { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; max-width: 100%; }
 .modelrow select { flex: 1; min-width: 0; }
-button.dl { padding: 8px 10px; font-size: 12px; border-radius: 6px; border: 1px solid var(--border2); background: #1f6feb; color: #fff; cursor: pointer; white-space: nowrap; }
+button.dl { padding: 8px 10px; font-size: 12px; border-radius: 6px; border: 1px solid var(--border2); background: #1f6feb; color: #fff; cursor: pointer; white-space: nowrap; transition: background .15s, transform .1s; }
 button.dl:disabled { opacity: .55; cursor: wait; }
 .hint { font-size: 11px; color: var(--muted); margin-top: 4px; }
-button.go { width: 100%; margin-top: 12px; padding: 10px; font-size: 15px; border: 0; border-radius: 6px; background: #238636; color: #fff; cursor: pointer; }
+button.go { width: 100%; margin-top: 12px; padding: 10px; font-size: 15px; border: 0; border-radius: 6px; background: #238636; color: #fff; cursor: pointer; transition: background .15s, transform .1s; }
 button.go:disabled { opacity: .5; cursor: wait; }
 #warn { background: #5a2d0c; border: 1px solid #a35c00; border-radius: 6px; padding: 8px 10px; font-size: 13px; margin-bottom: 10px; display: none; }
 #gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
@@ -76,7 +76,7 @@ canvas#maskpad { width: 100%; border-radius: 6px; border: 1px solid var(--border
 <button id="tabImg" role="tab" aria-selected="false" onclick="showTab('img')">Edit</button>
 <button id="tabTools" role="tab" aria-selected="false" onclick="showTab('tools')">Tools</button>
 <button id="tabOutputs" role="tab" aria-selected="false" onclick="showTab('outputs')">Outputs</button>
-<button id="tabBatch" role="tab" aria-selected="false" onclick="showTab('batch')">Batch</button>
+
 <button id="tabModels" role="tab" aria-selected="false" onclick="showTab('models')">Models</button>
 <button id="tabSettings" role="tab" aria-selected="false" onclick="showTab('settings')">Settings</button>
 </div>
@@ -124,6 +124,8 @@ canvas#maskpad { width: 100%; border-radius: 6px; border: 1px solid var(--border
 <label>Change strength: <span id="strval">0.75</span></label>
 <input type="range" id="strength" min="0.1" max="1" step="0.05" value="0.75" style="width:100%" oninput="document.getElementById('strval').textContent=this.value">
 <button class="go" id="btnImg" onclick="generateImg()">Generate from reference</button>
+<button class="go" id="btnColorize" onclick="colorizeImg()" style="background:#1f6feb;margin-top:8px">Colorize (DDColor, B&W → color)</button>
+<button class="go" id="btnRestore" onclick="restoreImg()" style="background:#8b5cf6;margin-top:8px">Restore (InstructPix2Pix, full repair)</button>
 </div>
 
 <div id="formPaint" style="display:none">
@@ -219,21 +221,18 @@ canvas#maskpad { width: 100%; border-radius: 6px; border: 1px solid var(--border
 </div>
 <div id="toolPresetWrap" class="row" style="margin-top:8px"><div><label>Preset</label><select id="toolpreset"></select></div></div>
 <div id="toolOpts"></div>
-<button class="go" id="btnTool" onclick="runTool()">Run</button>
+<label>Custom flags (optional — overrides preset)</label>
+<textarea id="toolflags" rows="2" placeholder="-c:v libx264 -crf 23 -preset medium"></textarea>
+<div class="row" style="margin-top:6px">
+  <div><label>Output name</label><input type="text" id="tooloutname" value="output.mp4"></div>
+</div>
+<div class="row" style="margin-top:8px;gap:8px">
+  <button class="go" id="btnTool" onclick="runTool()" style="flex:1">Run preset</button>
+  <button class="go" id="btnToolCustom" onclick="runToolCustom()" style="flex:1;background:#1f6feb">Run custom flags</button>
+</div>
 <div id="toolout">result appears here…</div>
 </div>
 
-<div id="formBatch" style="display:none">
-<label>Prompts (one per line)</label>
-<textarea id="batchPrompts" rows="8" placeholder="a cozy cabin at sunset&#10;a robot in a field of flowers&#10;..."></textarea>
-<div class="row">
-<div><label>Size</label><select id="batchSize"><option>256x256</option><option selected>512x512</option><option>768x768</option></select></div>
-<div><label>Quality</label><select id="batchQuality"><option value="low">low (fast)</option><option value="medium" selected>medium</option><option value="high">high</option></select></div>
-<div><label>Steps</label><input type="number" id="batchSteps" value="6" min="1" max="8"></div>
-</div>
-<button class="go" id="btnBatch" onclick="runBatch()">Run batch</button>
-<div class="hint" id="batchStatus"></div>
-<div id="batchList"></div>
 </div>
 
 <div id="formOutputs" style="display:none">
@@ -242,6 +241,7 @@ canvas#maskpad { width: 100%; border-radius: 6px; border: 1px solid var(--border
 <input id="outputsDir" type="text" readonly style="flex:1" value="…">
 <button class="dl" onclick="openOutputsFolder()">Open folder</button>
 <button class="dl" style="background:#30363d" onclick="loadOutputs()">Refresh</button>
+<button class="dl" style="background:#da3633" onclick="cleanupOutputs()">Cleanup all</button>
 </div>
 <div class="hint" id="outputsHint"></div>
 <div id="outputsList"></div>
@@ -306,7 +306,7 @@ function copyLog(){ const t=document.getElementById('log').textContent||''; navi
 function clearLog(){ document.getElementById('log').textContent=''; }
 async function cancelModel(id){ try { await fetch('/v1/models/cancel',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})}); log('stop requested: '+id); setTimeout(loadCatalog, 800); } catch(e){ log('cancel error: '+e); } }
 function saveTranscript(){ const t=document.getElementById('txtout').textContent||''; const blob=new Blob([t],{type:'text/plain'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='transcript_'+Date.now()+'.txt'; a.click(); }
-const TABS = ['txt','img','paint','up','tr','cap','tools','outputs','batch','models','settings'];
+const TABS = ['txt','img','paint','up','tr','cap','tools','outputs','models','settings'];
 function showTab(t){ if(t==='models'){ loadCatalog(); loadCustom(); } if(t==='settings') loadSettings(); if(t==='tools') refreshToolPresets(); if(t==='outputs') loadOutputs(); if(t==='batch') loadBatch();
   // The image model selector only applies to the image tabs; showing it on
   // Transcribe/Upscale/Caption made those tabs look like they used image models.
@@ -589,6 +589,38 @@ async function generateImg(){
     log('done in '+secs+'s');
   } catch(e){ log('ERROR: '+e); } finally { btn.disabled=false; btn.textContent='Generate from reference'; refresh(); }
 }
+async function colorizeImg(){
+  const btn = document.getElementById('btnColorize');
+  const f = document.getElementById('refimg').files[0];
+  if(!f){ alert('Pick a reference image'); return; }
+  btn.disabled = true; btn.textContent = 'Colorizing…';
+  const t0 = Date.now();
+  try {
+    const b64 = await fileToB64(f);
+    const r = await fetch('/v1/images/colorize',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({image:b64,request_id:rid()})});
+    const j = await r.json();
+    if(!r.ok){ log('ERROR '+r.status+': '+JSON.stringify(j).slice(0,500)); alert('Error '+r.status); return; }
+    const secs = ((Date.now()-t0)/1000).toFixed(1);
+    addCard('data:image/png;base64,'+j.image, 'colorize (DDColor) · '+secs+'s', 'colorize_'+Date.now()+'.png');
+    log('colorized in '+secs+'s engine='+(j.engine||'?'));
+  } catch(e){ log('ERROR: '+e); } finally { btn.disabled=false; btn.textContent='Colorize (DDColor, B&W → color)'; refresh(); }
+}
+async function restoreImg(){
+  const btn = document.getElementById('btnRestore');
+  const f = document.getElementById('refimg').files[0];
+  if(!f){ alert('Pick a reference image'); return; }
+  btn.disabled = true; btn.textContent = 'Restoring…';
+  const t0 = Date.now();
+  try {
+    const b64 = await fileToB64(f);
+    const r = await fetch('/v1/images/restore',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({image:b64,prompt:'restore and colorize this old photo, remove damage, enhance clarity, natural daylight colors, preserve original faces and clothing',request_id:rid()})});
+    const j = await r.json();
+    if(!r.ok){ log('ERROR '+r.status+': '+JSON.stringify(j).slice(0,500)); alert('Error '+r.status); return; }
+    const secs = ((Date.now()-t0)/1000).toFixed(1);
+    addCard('data:image/png;base64,'+j.image, 'restore (InstructPix2Pix) · '+secs+'s', 'restore_'+Date.now()+'.png');
+    log('restored in '+secs+'s engine='+(j.engine||'?'));
+  } catch(e){ log('ERROR: '+e); } finally { btn.disabled=false; btn.textContent='Restore (InstructPix2Pix, full repair)'; refresh(); }
+}
 // --- Inpaint mask editor ---
 let paintImg = null;
 const pad = document.getElementById('maskpad');
@@ -833,6 +865,33 @@ async function runTool(){
   } catch(e){ log('ERROR: '+e); } finally { btn.disabled=false; btn.textContent='Run'; refresh(); }
 }
 
+async function runToolCustom(){
+  const btn = document.getElementById('btnToolCustom');
+  const f = document.getElementById('toolfile').files[0];
+  if(!f){ alert('Pick a file'); return; }
+  const flags = document.getElementById('toolflags').value.trim();
+  const outName = document.getElementById('tooloutname').value.trim() || 'output.mp4';
+  const fd = new FormData();
+  fd.append('file', f);
+  fd.append('flags', flags);
+  fd.append('output_name', outName);
+  btn.disabled = true; btn.textContent = 'Processing...';
+  const t0 = Date.now();
+  try {
+    const r = await fetch('/v1/ffmpeg/run',{method:'POST',body:fd});
+    const j = await r.json();
+    if(!r.ok){ log('ERROR '+r.status+': '+JSON.stringify(j).slice(0,500)); alert('Error '+r.status+': '+(j.detail||j.error||'')); return; }
+    const secs = ((Date.now()-t0)/1000).toFixed(1);
+    if(j.file){
+      const a = document.createElement('a');
+      a.href = 'data:application/octet-stream;base64,'+j.file;
+      a.download = j.filename||outName;
+      a.click();
+      log('custom done in '+secs+'s -> '+(j.filename||outName));
+    }
+  } catch(e){ log('ERROR: '+e); } finally { btn.disabled=false; btn.textContent='Run custom flags'; refresh(); }
+}
+
 // ---------- outputs ----------
 function fmtSize(n){
   if(!n) return '0 B';
@@ -842,6 +901,15 @@ function fmtSize(n){
 }
 function fmtDate(ts){
   try { return new Date(ts*1000).toLocaleString(); } catch(e){ return ''; }
+}
+async function cleanupOutputs(){
+  if(!confirm('Delete all output files and clear caches?')) return;
+  try {
+    const r = await fetch('/v1/cleanup',{method:'POST'});
+    const j = await r.json();
+    log('cleanup: deleted '+(j.deleted||0)+' files');
+    await loadOutputs();
+  } catch(e){ log('ERROR: '+e); }
 }
 async function loadOutputs(){
   const box = document.getElementById('outputsList');

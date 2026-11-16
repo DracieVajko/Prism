@@ -11,10 +11,12 @@ Exception: Android UI translations live in `res/values-sk`, `values-cs`,
 
 Prism is **two independent products**:
 
-1. **Android app** — native UI only, **no WebUI**, **no PC/remote mode**.
-   Every feature runs **on the phone, locally and offline**: generate, edits,
-   inpaint, harmonize, upscale, caption, chat, transcribe, translate, ffmpeg.
-   There is no Local/Auto/Remote switch and no remote host field.
+1. **Android app** — native UI only, **no WebUI**. By default every feature runs
+   **on the phone, locally and offline**: generate, edits, inpaint, harmonize,
+   upscale, caption, chat, transcribe, translate, ffmpeg. Optional remote mode
+   (Local / Remote / Auto) can forward requests to a PC server for heavy
+   features (FLUX restoration, large models) via LAN or Tailscale. Offline
+   (Local) mode works without any network connection.
 2. **PC server** — `pc/unified_server.py` + `pc/webui_unified.html`, fully
    separate.
 
@@ -40,7 +42,7 @@ endpoint honest (503 with a clear reason), and document the plan in
 ## Endpoints (contract)
 
 `GET /health`, `GET /v1/models`, `GET|POST /v1/models/*`,
-`POST /v1/images/generations|edits|inpaint|harmonize|upscale|caption`,
+`POST /v1/images/generations|edits|inpaint|harmonize|upscale|caption|colorize|restore|face-restore|restore-upscale`,
 `POST /v1/chat/completions`, `POST /v1/audio/transcriptions|translations`,
 `GET /v1/ffmpeg/presets`, `POST /v1/ffmpeg/{op}`, `GET /v1/settings`.
 

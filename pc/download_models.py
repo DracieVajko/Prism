@@ -106,13 +106,44 @@ AUDIO_TASKS = [
                "llm_backbone/*"],
      "note": "Nemotron 3.5 Transcribe 30B-A4B NVFP4 - 21.6 GB; needs a Blackwell GPU or ~24 GB VRAM",
      "license": "OpenMDW-1.1 (see repo card)"},
-    {"id": "nemotron-transcribe-30b-a4b-fp8", "kind": "snapshot",
-     "repo": "nvidia/NVIDIA-Nemotron-3.5-Transcribe-30B-A4B-FP8",
-     "target": "nemotron-transcribe-30b-a4b-fp8", "min_gb": 33.0,
-     "allow": ["*.json", "*.safetensors", "*.jinja", "*.txt", "tokenizer/*",
-               "llm_backbone/*"],
-     "note": "Nemotron 3.5 Transcribe 30B-A4B FP8 - 34.7 GB; needs ~40 GB VRAM or 64 GB+ RAM",
-     "license": "OpenMDW-1.1 (see repo card)"},
+  ]
+
+# Restoration / colorization (ONNX, CPU or GPU via onnxruntime).
+# DDColor: state-of-the-art B&W photo colorization (ICCV 2023, Apache-2.0).
+# GFPGAN: face restoration (CVPR 2021, Apache-2.0).
+# SwinIR: super-resolution / restoration (ICCV 2021, Apache-2.0).
+RESTORATION_TASKS = [
+    {"id": "ddcolor-tiny", "kind": "file",
+     "repo": "edgetools/ddcolor",
+     "file": "ddcolor-tiny-fp16.onnx",
+     "target": "ddcolor-tiny", "min_gb": 0.12,
+     "license": "Apache-2.0 (see piddnad/DDColor)",
+     "note": "DDColor-tiny colorization (ICCV 2023, ~130 MB fp16, 512x512). "
+             "ONNX, runs on CPU/CUDA via onnxruntime. Apache-2.0."},
+    {"id": "gfpgan-v1.4", "kind": "file",
+     "repo": "sidkonduru/gfpgan-v1.4-onnx",
+     "file": "gfpgan14-fp16.onnx",
+     "target": "gfpgan-v1.4", "min_gb": 0.15,
+     "license": "Apache-2.0 (see TencentARC/GFPGAN)",
+     "note": "GFPGAN v1.4 face restoration (CVPR 2021, ~170 MB fp16, 512x512). "
+             "ONNX, runs on CPU/CUDA via onnxruntime. Apache-2.0."},
+    {"id": "swinir-realsr-x4", "kind": "file",
+     "repo": "Heliosoph/swinir-onnx",
+     "file": "swinir_realsr_x4.onnx",
+     "target": "swinir-realsr-x4", "min_gb": 0.1,
+     "license": "Apache-2.0 (see JingyunLiang/SwinIR)",
+     "note": "SwinIR real-world super-resolution x4 (ICCV 2021, ~122 MB, "
+             "64x64->256x256). ONNX, runs on CPU/CUDA via onnxruntime. "
+             "Apache-2.0."},
+    {"id": "instruct-pix2pix", "kind": "snapshot",
+     "repo": "timbrooks/instruct-pix2pix",
+     "target": "instruct-pix2pix", "min_gb": 3.0,
+     "allow": ["*.safetensors", "*.json", "tokenizer/*", "scheduler/*",
+               "feature_extractor/*", "model_index.json", "*.txt"],
+     "license": "MIT (see timbrooks/instruct-pix2pix)",
+     "note": "InstructPix2Pix (SD 1.5 based, ~5.8 GB, MIT). Instruction-based "
+             "image restoration: restore, repair, colorize, reconstruct. "
+             "Requires torch + diffusers on PC."},
 ]
 
 # Upscale weights (small, also downloaded to the mobile package via ModelDownloader).
@@ -259,7 +290,8 @@ def main():
 
     if args.list:
         print("Models:", flush=True)
-        for t in TASKS + UPSCALE_TASKS + VLM_TASKS:
+        for t in (TASKS + UPSCALE_TASKS + VLM_TASKS + OCR_TASKS +
+                  AUDIO_TASKS + RESTORATION_TASKS):
             print(f"  {t['id']}: {t.get('repo', 'civitai')} [{t.get('license', '')}]", flush=True)
         print("Presets:", flush=True)
         for name, ids in PRESETS.items():
@@ -278,7 +310,8 @@ def main():
         return
 
     ids = args.models or PRESETS[args.preset]
-    all_tasks = TASKS + UPSCALE_TASKS + VLM_TASKS
+    all_tasks = (TASKS + UPSCALE_TASKS + VLM_TASKS + OCR_TASKS +
+                 AUDIO_TASKS + RESTORATION_TASKS)
     unknown = [i for i in ids if i not in {t["id"] for t in all_tasks}]
     if unknown:
         print(f"Unknown model IDs: {', '.join(unknown)}", flush=True)

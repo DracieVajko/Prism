@@ -36,7 +36,7 @@ Running local AI should not require cloud accounts, subscriptions, or sending pr
 
 ### PC server (`pc/`)
 
-- **Image:** text-to-image, image-to-image (edits), inpaint with mask, harmonize, outpaint (edge-replicated padding), upscale (Real-ESRGAN / Pillow fallback)
+- **Image:** text-to-image, image-to-image (edits), inpaint with mask, harmonize, outpaint (edge-replicated padding), upscale (Real-ESRGAN / Pillow fallback), colorize (DDColor — B&W photo colorization)
 - **Vision:** caption and chat via SmolVLM-500M
 - **Audio:** transcription and translation via faster-whisper (tiny/base/small/medium/turbo/large) or NVIDIA Nemotron 3.5 ASR 0.6B
 - **OCR:** Xiaomi-OCR-0 via LiteRT-LM

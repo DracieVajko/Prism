@@ -68,6 +68,7 @@ pip install onnxruntime-directml
 - Upscale: `download_models.py --preset upscale`, then
   `python tools/convert_esrgan_onnx.py` for torch-free ONNX inference.
 - VLM: `download_models.py --preset vlm`.
+- Colorize: `python download_models.py ddcolor-tiny` (DDColor, ~130 MB, Apache-2.0).
 
 ## Tests
 

@@ -6,7 +6,7 @@ public API, etc.). This module only provides a thin client to call an external
 endpoint that the user configures.
 
 Configuration (environment variables):
-  PRISM_LLM_PROVIDER   : ollama | lmstudio | openai | anthropic | custom | none
+  PRISM_LLM_PROVIDER   : ollama | lmstudio | openai | anthropic | mistral | gemini | llamacpp | custom | none
   PRISM_LLM_BASE_URL   : http://localhost:11434 (ollama), http://localhost:1234 (lmstudio), etc.
   PRISM_LLM_API_KEY    : API key for public providers (optional)
   PRISM_LLM_MODEL      : model name (e.g. "gemma4:12b", "qwen3.5-9b", "gpt-4o-mini")
@@ -132,7 +132,8 @@ def _build_payload(provider: str, model: str, instruction: str, text: str,
         }
         return payload, url
 
-    if provider in ("openai", "anthropic", "custom"):
+    if provider in ("openai", "anthropic", "custom", "mistral", "gemini",
+                    "llamacpp", "ollama-openai", "lmstudio"):
         url = f"{endpoint or '/v1/chat/completions'}"
         payload = {
             "model": model,
@@ -240,7 +241,16 @@ def _extract_response_text(provider: str, data: dict) -> str:
     if provider == "ollama":
         return data.get("response", "")
 
-    # OpenAI-compatible (LM Studio, OpenAI, Anthropic-compatible, custom)
+    # Anthropic native (content[0].text)
+    if provider == "anthropic":
+        content = data.get("content")
+        if isinstance(content, list) and content:
+            first = content[0]
+            if isinstance(first, dict):
+                t = first.get("text")
+                if isinstance(t, str) and t.strip():
+                    return t
+    # OpenAI-compatible (LM Studio, OpenAI, Mistral, Gemini, llama.cpp, custom)
     choices = data.get("choices")
     if isinstance(choices, list) and len(choices) > 0:
         msg = choices[0].get("message", {})

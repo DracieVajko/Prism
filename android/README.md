@@ -79,10 +79,22 @@ install **NDK r27 + CMake 3.22.1** (SDK Manager) and rebuild.
 
 ## Operating mode
 
-The Android app is a **standalone local server**. Every request is served on
-the phone; there is no remote/PC mode and no remote host field. If a feature
-cannot run on the device (e.g. VLM runtime not bundled, FFmpeg binary missing),
-the endpoint returns `503 will-not-load` with a clear reason.
+The Android app is a **standalone local server** by default. Every request is
+served on the phone; no network connection is needed. If a feature cannot run on
+the device, the endpoint returns `503 will-not-load` with a clear reason.
+
+### Remote PC connection (optional)
+
+The app can optionally connect to a PC server for heavy features (FLUX
+restoration, large models) that don't fit on the phone. Configure in
+**Settings**:
+
+- **Connection mode**: Local (offline, default) / Remote (forward to PC) / Auto (try local, then PC)
+- **PC server URL**: e.g. `http://192.168.1.100:8101` or `http://100.x.y.z:8101` (Tailscale)
+
+In Remote mode, all requests are forwarded to the PC server. In Auto mode,
+the app tries local first and falls back to the PC on `503 will-not-load`.
+Offline mode (Local) works without any network connection.
 
 ## Ktor routes (full match with the server)
 
