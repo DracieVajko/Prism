@@ -120,3 +120,6 @@ scorecard.png
 
 # Schemathesis cache
 .schemathesis/
+
+# desloppify local state
+.desloppify/

@@ -1931,7 +1931,7 @@ async def transcriptions(
                 ai_client = get_ai_client()
                 extractor = ActionExtractor(ai_client)
                 actions = await extractor.extract(text, provider=ai_provider, model=ai_model)
-                action_results = await process_actions(actions)
+                action_results = await asyncio.to_thread(process_actions, actions)
                 logger.info("Action extraction: %d action(s) extracted from transcription", len(actions))
             except Exception as e:
                 logger.warning("Action extraction failed: %s", str(e)[:200])

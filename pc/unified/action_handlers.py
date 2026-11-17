@@ -453,7 +453,7 @@ def reset_action_router() -> None:
     _action_router = ActionRouter()
 
 
-async def process_action(
+def process_action(
     action: Action,
 ) -> dict:
     """Process a single action through the router."""
@@ -461,7 +461,7 @@ async def process_action(
     return router.route(action)
 
 
-async def process_actions(
+def process_actions(
     actions: list[Action],
 ) -> list[dict]:
     """Process multiple actions through the router."""
