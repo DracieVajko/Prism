@@ -61,10 +61,11 @@ class MainActivity : AppCompatActivity() {
 
     // action UI
     private lateinit var genPrompt: EditText
+    private lateinit var genModel: android.widget.Spinner
     private lateinit var genResolution: android.widget.Spinner
     private lateinit var genCustomSize: EditText
     private lateinit var genQuality: android.widget.Spinner
-    private lateinit var genSteps: EditText
+    private lateinit var genRepeats: EditText
     private lateinit var genNegative: EditText
     private lateinit var genGuidance: EditText
     private lateinit var genStatus: TextView
@@ -192,10 +193,11 @@ class MainActivity : AppCompatActivity() {
         textRemoteStatus = findViewById(R.id.textRemoteStatus)
 
         genPrompt = findViewById(R.id.genPrompt)
+        genModel = findViewById(R.id.genModel)
         genResolution = findViewById(R.id.genResolution)
         genCustomSize = findViewById(R.id.genCustomSize)
         genQuality = findViewById(R.id.genQuality)
-        genSteps = findViewById(R.id.genSteps)
+        genRepeats = findViewById(R.id.genRepeats)
         genNegative = findViewById(R.id.genNegative)
         genGuidance = findViewById(R.id.genGuidance)
         genStatus = findViewById(R.id.genStatus)
@@ -999,6 +1001,11 @@ class MainActivity : AppCompatActivity() {
             this, android.R.layout.simple_spinner_dropdown_item,
             listOf("cleanup", "translate", "summarize", "rewrite"))
 
+        val imageModels = downloader.allAssets().filter { it.kind == "image" }.map { it.id }
+        genModel.adapter = android.widget.ArrayAdapter(
+            this, android.R.layout.simple_spinner_dropdown_item,
+            if (imageModels.isEmpty()) listOf("(no image model)") else imageModels)
+
         genResolution.adapter = android.widget.ArrayAdapter(
             this, android.R.layout.simple_spinner_dropdown_item,
             listOf("256x256", "512x512", "768x768", "custom"))
@@ -1154,17 +1161,19 @@ class MainActivity : AppCompatActivity() {
         val size = if (genResolution.selectedItem.toString() == "custom")
             genCustomSize.text.toString().trim().ifEmpty { "512x512" }
         else genResolution.selectedItem.toString()
-        val steps = genSteps.text.toString().trim().toIntOrNull() ?: 6
+        val model = genModel.selectedItem?.toString() ?: ""
         val negative = genNegative.text.toString().trim()
         val guidance = genGuidance.text.toString().trim().toFloatOrNull() ?: 1.0f
         val quality = genQuality.selectedItem?.toString() ?: "medium"
+        val repeats = genRepeats.text.toString().trim().toIntOrNull()?.coerceIn(1, 4) ?: 1
         genStatus.text = "generating…"
         btnGenerate.isEnabled = false
         Thread {
             val body = org.json.JSONObject()
                 .put("prompt", prompt).put("negative_prompt", negative)
                 .put("guidance", guidance).put("quality", quality)
-                .put("size", size).put("n", 1).put("steps", steps)
+                .put("size", size).put("n", repeats)
+                .put("model", model)
                 .toString()
             val resp = httpPostJson("http://127.0.0.1:8101/v1/images/generations", body)
             handler.post {
@@ -1183,7 +1192,7 @@ class MainActivity : AppCompatActivity() {
                     genImage.setImageBitmap(bmp)
                     genImage.visibility = View.VISIBLE
                     btnSaveImage.visibility = View.VISIBLE
-                    genStatus.text = "done (${size}, ${steps} steps)"
+                    genStatus.text = "done (${size}, ${quality}, x${repeats})"
                 } catch (e: Exception) {
                     genStatus.text = "error: ${e.message}"
                 }

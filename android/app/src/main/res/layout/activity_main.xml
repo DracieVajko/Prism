@@ -392,6 +392,20 @@
                         android:orientation="vertical"
                         android:padding="16dp">
 
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginBottom="4dp"
+                            android:text="Model (image generation)"
+                            android:textColor="@color/prism_muted"
+                            android:textSize="11sp" />
+
+                        <Spinner
+                            android:id="@+id/genModel"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginBottom="8dp" />
+
                         <EditText
                             android:id="@+id/genPrompt"
                             android:layout_width="match_parent"
@@ -429,10 +443,18 @@
                                 android:visibility="gone" />
                         </LinearLayout>
 
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="8dp"
+                            android:text="Quality (effort: low=4 steps, medium=6, high=8) and Repeats"
+                            android:textColor="@color/prism_muted"
+                            android:textSize="11sp" />
+
                         <LinearLayout
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:layout_marginTop="8dp"
+                            android:layout_marginTop="4dp"
                             android:orientation="horizontal">
 
                             <Spinner
@@ -442,14 +464,14 @@
                                 android:layout_weight="1" />
 
                             <EditText
-                                android:id="@+id/genSteps"
+                                android:id="@+id/genRepeats"
                                 android:layout_width="0dp"
                                 android:layout_height="wrap_content"
                                 android:layout_marginStart="8dp"
                                 android:layout_weight="1"
-                                android:hint="Steps (6)"
+                                android:hint="Repeats (1-4 images)"
                                 android:inputType="number"
-                                android:text="6"
+                                android:text="1"
                                 android:textColor="@color/prism_text"
                                 android:textSize="13sp" />
                         </LinearLayout>
@@ -470,7 +492,7 @@
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="8dp"
-                            android:hint="Guidance (1.0 = LCM; &gt;1 uses negative prompt)"
+                            android:hint="Guidance (1.0 = LCM fast; >1 uses negative prompt, slower)"
                             android:inputType="numberDecimal"
                             android:text="1.0"
                             android:textColor="@color/prism_text"

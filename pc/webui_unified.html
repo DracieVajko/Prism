@@ -98,10 +98,12 @@ canvas#maskpad { width: 100%; border-radius: 6px; border: 1px solid var(--border
 <div><label>Resolution</label><select id="size" onchange="toggleCustom('size','sizecustom')">
 <option>256x256</option><option selected>512x512</option><option>768x768</option><option>1024x1024</option><option value="custom">custom…</option></select>
 <input id="sizecustom" type="text" placeholder="WxH (e.g. 640x384)" style="display:none"></div>
-<div><label>Quality</label><select id="quality"><option value="low">low (fast)</option><option value="medium" selected>medium</option><option value="high">high (slow)</option></select></div>
+<div><label>Quality (effort: low=4, medium=6, high=8 steps)</label><select id="quality"><option value="low">low (fast)</option><option value="medium" selected>medium</option><option value="high">high (slow)</option></select></div>
 </div>
-<label>Guidance (1.0 = LCM; &gt;1 uses the negative prompt, slower)</label>
+<label>Guidance (1.0 = LCM fast; >1 uses negative prompt, slower)</label>
 <input type="number" id="guidance" value="1.0" min="1" max="3" step="0.1" style="width:100%">
+<label>Repeats (number of images, 1-4)</label>
+<input type="number" id="repeats" value="1" min="1" max="4" step="1" style="width:100%">
 <button class="go" id="btnTxt" onclick="generateTxt()">Generate</button>
 </div>
 
@@ -117,10 +119,12 @@ canvas#maskpad { width: 100%; border-radius: 6px; border: 1px solid var(--border
 <div><label>Resolution</label><select id="size2" onchange="toggleCustom('size2','sizecustom2')">
 <option>256x256</option><option selected>512x512</option><option>768x768</option><option>1024x1024</option><option value="custom">custom…</option></select>
 <input id="sizecustom2" type="text" placeholder="WxH" style="display:none"></div>
-<div><label>Quality</label><select id="quality2"><option value="low">low</option><option value="medium" selected>medium</option><option value="high">high</option></select></div>
+<div><label>Quality (effort)</label><select id="quality2"><option value="low">low</option><option value="medium" selected>medium</option><option value="high">high</option></select></div>
 </div>
-<label>Guidance</label>
+<label>Guidance (1.0 = LCM)</label>
 <input type="number" id="guidance2" value="1.0" min="1" max="3" step="0.1" style="width:100%">
+<label>Repeats (1-4)</label>
+<input type="number" id="repeats2" value="1" min="1" max="4" step="1" style="width:100%">
 <label>Change strength: <span id="strval">0.75</span></label>
 <input type="range" id="strength" min="0.1" max="1" step="0.05" value="0.75" style="width:100%" oninput="document.getElementById('strval').textContent=this.value">
 <button class="go" id="btnImg" onclick="generateImg()">Generate from reference</button>
@@ -546,7 +550,8 @@ async function generateTxt(){
     negative_prompt: document.getElementById('negprompt').value.trim(),
     guidance: +(document.getElementById('guidance').value || 1),
     size: resolveSize('size', 'sizecustom'),
-    quality: document.getElementById('quality').value, n: 1, request_id: rid() };
+    quality: document.getElementById('quality').value,
+    n: +(document.getElementById('repeats').value || 1), request_id: rid() };
   if(!body.prompt){ alert('Enter a prompt'); return; }
   btn.disabled = true; btn.textContent = 'Generating…';
   log('POST /v1/images/generations model='+body.model);
@@ -574,6 +579,7 @@ async function generateImg(){
   fd.append('model', document.getElementById('model').value);
   fd.append('size', resolveSize('size2', 'sizecustom2'));
   fd.append('quality', document.getElementById('quality2').value);
+  fd.append('n', document.getElementById('repeats2').value || '1');
   fd.append('strength', document.getElementById('strength').value);
   const id = rid(); fd.append('request_id', id);
   btn.disabled = true; btn.textContent = 'Generating…';
