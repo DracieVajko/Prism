@@ -37,7 +37,11 @@ def test_caption_contract_no_model(monkeypatch):
     assert r.json()["error"] == "will not load"
 
 
-def test_chat_completions_no_image_400():
+def test_chat_completions_text_without_provider_503(monkeypatch):
+    # Text-only chat is routed to an external LLM provider. Without one the
+    # server must answer 503 with a clear reason, never 500.
+    monkeypatch.delenv("PRISM_LLM_BASE_URL", raising=False)
+    monkeypatch.delenv("PRISM_LLM_PROVIDER", raising=False)
     from fastapi.testclient import TestClient
     import unified_server as us
     c = TestClient(us.app)
@@ -45,7 +49,8 @@ def test_chat_completions_no_image_400():
         "model": "SmolVLM_500M",
         "messages": [{"role": "user", "content": "hello"}],
     })
-    assert r.status_code == 400, r.text[:200]
+    assert r.status_code == 503, r.text[:200]
+    assert r.json()["error"] == "no LLM provider configured"
 
 
 def test_chat_completions_vision_no_model_503(monkeypatch):

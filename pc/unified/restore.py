@@ -14,7 +14,6 @@ import time
 from pathlib import Path
 from typing import Optional
 
-import torch
 from PIL import Image
 
 logger = logging.getLogger(__name__)
@@ -26,6 +25,12 @@ _PIPELINE = None
 
 
 def _ensure_pipeline() -> Optional[object]:
+    """Load InstructPix2Pix on first use.
+
+    torch and diffusers are imported only after the weights are confirmed to
+    exist, so importing this module works on machines without the ML stack and
+    a missing model yields a clean unavailable state instead of an ImportError.
+    """
     global _PIPELINE
     if _PIPELINE is not None:
         return _PIPELINE
@@ -33,12 +38,24 @@ def _ensure_pipeline() -> Optional[object]:
         logger.warning("InstructPix2Pix model not found: %s", MODEL_DIR)
         return None
     try:
+        import torch
         from diffusers import StableDiffusionInstructPix2PixPipeline
+    except ImportError as e:
+        logger.warning("InstructPix2Pix dependencies unavailable: %s", e)
+        return None
+    try:
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        kwargs = {
+            "torch_dtype": torch.float16 if device == "cuda" else torch.float32,
+            "safety_checker": None,
+            "use_safetensors": True,
+        }
+        if device == "cuda":
+            kwargs["variant"] = "fp16"
         _PIPELINE = StableDiffusionInstructPix2PixPipeline.from_pretrained(
-            str(MODEL_DIR), torch_dtype=torch.float16, safety_checker=None,
-            variant="fp16", use_safetensors=True,
-        ).to("cuda")
-        logger.info("InstructPix2Pix loaded on CUDA")
+            str(MODEL_DIR), **kwargs,
+        ).to(device)
+        logger.info("InstructPix2Pix loaded on %s", device.upper())
         return _PIPELINE
     except Exception as e:
         logger.error("InstructPix2Pix load failed: %s", e)

@@ -1,38 +1,56 @@
-"""Tests for unified/colorize.py — DDColor colorization."""
+"""Tests for unified/colorize.py — DDColor colorization.
+
+Unit tests never load the ONNX weights; the real-model test is opt-in via
+PRISM_RUN_MODEL_TESTS=1.
+"""
 import base64
-from pathlib import Path
+import io
+import os
 
 import pytest
+from PIL import Image
 
 from unified import colorize as cz
+
+RUN_MODEL_TESTS = os.environ.get("PRISM_RUN_MODEL_TESTS") == "1"
+
+
+@pytest.fixture(autouse=True)
+def _reset_session():
+    saved = (cz._SESSION, cz._PROVIDER)
+    cz._SESSION, cz._PROVIDER = None, None
+    try:
+        yield
+    finally:
+        cz._SESSION, cz._PROVIDER = saved
+
+
+def _image_b64(size=(48, 32)) -> str:
+    buf = io.BytesIO()
+    Image.new("RGB", size, (90, 90, 90)).save(buf, format="PNG")
+    return base64.b64encode(buf.getvalue()).decode()
 
 
 def test_model_constants():
     assert cz.MODEL_ID == "ddcolor-tiny"
     assert cz.INPUT_SIZE == 512
-    assert cz.MODEL_FILE.exists(), "DDColor model not downloaded"
+    assert cz.MODEL_FILE == cz.MODEL_DIR / "ddcolor-tiny-fp16.onnx"
 
 
-def test_colorize_b64_returns_image():
-    img_path = Path(r"C:\Users\DracieVajko\Pictures\Camera\IMG_20260927_140020.jpg")
-    if not img_path.exists():
-        pytest.skip("test image not available")
-    raw = img_path.read_bytes()
-    b64 = base64.b64encode(raw).decode()
-    result = cz.colorize_b64(b64)
-    assert "image" in result
-    assert result["engine"] == "ddcolor-tiny"
-    assert "elapsed" in result
-    assert result["elapsed"] > 0
-    # Output should be valid base64 PNG
-    out = base64.b64decode(result["image"])
-    assert out[:4] == b"\x89PNG", "output should be PNG"
-    # Output size should match input size (DDColor preserves resolution)
-    from PIL import Image
-    import io
-    im = Image.open(io.BytesIO(out))
-    orig = Image.open(img_path)
-    assert im.size == orig.size, f"size mismatch: {im.size} vs {orig.size}"
+def test_missing_model_is_unavailable(tmp_path, monkeypatch):
+    monkeypatch.setattr(cz, "MODEL_FILE", tmp_path / "missing.onnx")
+    cz.release()
+    assert cz._get_session() is None
+    assert cz.is_ready() is False
+
+
+def test_release_and_is_ready_with_fake_session():
+    cz._SESSION = object()
+    assert cz.is_ready() is True
+
+    cz.release()
+    assert cz._SESSION is None
+    assert cz.is_ready() is False
 
 
 def test_colorize_b64_empty_raises():
@@ -40,11 +58,23 @@ def test_colorize_b64_empty_raises():
         cz.colorize_b64("")
 
 
-def test_release_and_is_ready():
-    cz.release()
-    assert cz.is_ready() is False
-    # Re-loading should work
-    session = cz._get_session()
-    assert session is not None
-    assert cz.is_ready() is True
-    cz.release()
+@pytest.mark.integration
+@pytest.mark.skipif(not RUN_MODEL_TESTS,
+                    reason="set PRISM_RUN_MODEL_TESTS=1 to run model integration tests")
+def test_colorize_real_model():
+    if not cz.MODEL_FILE.exists():
+        pytest.skip(f"DDColor weights not found: {cz.MODEL_FILE}")
+    if cz.cv2 is None:
+        pytest.skip("opencv not installed")
+
+    try:
+        result = cz.colorize_b64(_image_b64())
+    finally:
+        cz.release()
+
+    assert result["engine"] == "ddcolor-tiny"
+    out = base64.b64decode(result["image"])
+    assert out[:8] == b"\x89PNG\r\n\x1a\n"
+    with Image.open(io.BytesIO(out)) as im:
+        im.load()
+        assert im.size == (48, 32)
