@@ -117,3 +117,6 @@ scorecard.png
 
 # Claude skills (downloaded by desloppify skill)
 .claude/
+
+# Schemathesis cache
+.schemathesis/

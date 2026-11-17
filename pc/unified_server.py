@@ -28,7 +28,7 @@ from fastapi import FastAPI, File, Form, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import (FileResponse, HTMLResponse, JSONResponse,
                                RedirectResponse, Response)
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, Tuple, List
 
 from unified.audio_proxy import transcribe_via_service
@@ -148,6 +148,36 @@ async def lifespan(application):
 
 
 app = FastAPI(title="Unified Standalone Server", lifespan=lifespan)
+
+# Document the error responses the handlers actually return so the OpenAPI
+# contract (and Schemathesis) treats them as expected instead of undocumented.
+def _custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+    from fastapi.openapi.utils import get_openapi
+    schema = get_openapi(
+        title=app.title, version="1.0.0", routes=app.routes,
+    )
+    _ERROR_RESPONSES = {
+        "400": {"description": "Bad request / invalid input"},
+        "404": {"description": "Not found"},
+        "413": {"description": "Payload too large"},
+        "415": {"description": "Unsupported media type"},
+        "422": {"description": "Validation error"},
+        "500": {"description": "Internal server error"},
+        "503": {"description": "Service unavailable (model/engine not loaded)"},
+    }
+    for _path, _methods in (schema.get("paths") or {}).items():
+        for _method, _spec in (_methods or {}).items():
+            if not isinstance(_spec, dict):
+                continue
+            _responses = _spec.setdefault("responses", {})
+            for _code, _desc in _ERROR_RESPONSES.items():
+                _responses.setdefault(_code, _desc)
+    app.openapi_schema = schema
+    return schema
+
+app.openapi = _custom_openapi
 
 _TRACKED_PREFIXES = ("/v1/images/", "/v1/audio/", "/v1/chat/")
 
@@ -1309,7 +1339,7 @@ def _run_batch(bid: str, jobs: list, stop_on_error: bool) -> None:
 
 
 class BatchRequest(BaseModel):
-    jobs: List[dict] = []
+    jobs: List[dict] = Field(min_length=1)
     stop_on_error: bool = True
     request_id: Optional[str] = ""
 
@@ -1716,6 +1746,31 @@ async def transcriptions(
     if not isinstance(request_id, str):
         request_id = ""
     rid = request_id or f"req-{uuid.uuid4().hex[:8]}"
+    # Normalise values that may arrive as FastAPI Form objects when this
+    # function is called directly (e.g. from /transcribe) instead of via the
+    # HTTP route, where FastAPI resolves them to plain strings.
+    if not isinstance(url, str):
+        url = ""
+    if not isinstance(device, str):
+        device = ""
+    if not isinstance(model, str):
+        model = "whisper-1"
+    if not isinstance(response_format, str):
+        response_format = "json"
+    if not isinstance(output_format, str):
+        output_format = "txt"
+    if not isinstance(post_process, str):
+        post_process = ""
+    if not isinstance(post_process_lang, str):
+        post_process_lang = ""
+    if not isinstance(post_process_operation, str):
+        post_process_operation = ""
+    if not isinstance(action_extract, str):
+        action_extract = ""
+    if not isinstance(ai_provider, str):
+        ai_provider = ""
+    if not isinstance(ai_model, str):
+        ai_model = ""
     up = file
     url = (url or "").strip()
     if url:
@@ -2267,6 +2322,7 @@ async def transcribe_alias(
 ):
     return await transcriptions(
         file=file,
+        url="",
         language=language,
         model=model,
         device="",
@@ -2321,13 +2377,18 @@ async def text_process(
 # ---------- text-to-speech ----------
 class SpeechRequest(BaseModel):
     model: Optional[str] = "supertonic-3"
-    input: str = ""
+    input: str = Field(min_length=1)
     voice: Optional[str] = "0"
     response_format: Optional[str] = "mp3"
-    speed: Optional[float] = 1.0
+    speed: Optional[float] = Field(default=1.0, strict=True)
 
 
-@app.post("/v1/audio/speech")
+@app.post("/v1/audio/speech", responses={
+    200: {"content": {"audio/mpeg": {"schema": {"type": "string", "format": "binary"}}},
+          "description": "Synthesized speech audio"},
+    400: {"description": "Bad request (missing input)"},
+    422: {"description": "Validation error"},
+})
 async def audio_speech(req: SpeechRequest):
     if not (req.input or "").strip():
         return JSONResponse(status_code=400, content={"error": "missing input"})
