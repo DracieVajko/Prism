@@ -1001,10 +1001,7 @@ class MainActivity : AppCompatActivity() {
             this, android.R.layout.simple_spinner_dropdown_item,
             listOf("cleanup", "translate", "summarize", "rewrite"))
 
-        val imageModels = downloader.allAssets().filter { it.kind == "image" }.map { it.id }
-        genModel.adapter = android.widget.ArrayAdapter(
-            this, android.R.layout.simple_spinner_dropdown_item,
-            if (imageModels.isEmpty()) listOf("(no image model)") else imageModels)
+        refreshGenerateModels()
 
         genResolution.adapter = android.widget.ArrayAdapter(
             this, android.R.layout.simple_spinner_dropdown_item,
@@ -1122,6 +1119,7 @@ class MainActivity : AppCompatActivity() {
                 prefs.edit().putString("connection_mode", mode).apply()
                 AppConfig.connectionMode = mode
                 updateRemoteStatusText()
+                refreshGenerateModels()
                 log("connection mode -> $mode")
             }
             override fun onNothingSelected(parent: android.widget.AdapterView<*>?) {}
@@ -1133,6 +1131,7 @@ class MainActivity : AppCompatActivity() {
                 prefs.edit().putString("remote_host", host).apply()
                 AppConfig.remoteHost = host
                 updateRemoteStatusText()
+                refreshGenerateModels()
             }
         }
 
@@ -1155,6 +1154,39 @@ class MainActivity : AppCompatActivity() {
         btnOcr.setOnClickListener { runOcr() }
     }
 
+    private fun activeBaseUrl(): String {
+        val mode = AppConfig.connectionMode
+        val host = AppConfig.remoteHost.trim().trimEnd('/')
+        return if ((mode == "remote" || mode == "auto") && host.isNotBlank()) host else "http://127.0.0.1:8101"
+    }
+
+    private fun refreshGenerateModels() {
+        Thread {
+            val base = activeBaseUrl()
+            val ids = mutableListOf<String>()
+            val json = httpGet("$base/v1/models")
+            if (json != null) {
+                try {
+                    val arr = org.json.JSONObject(json).optJSONArray("data")
+                    if (arr != null) {
+                        for (i in 0 until arr.length()) {
+                            val o = arr.optJSONObject(i) ?: continue
+                            if (o.optString("kind") == "image") ids.add(o.optString("id"))
+                        }
+                    }
+                } catch (_: Exception) {}
+            }
+            if (ids.isEmpty()) {
+                ids.addAll(downloader.allAssets().filter { it.kind == "image" }.map { it.id })
+            }
+            val finalIds = if (ids.isEmpty()) listOf("(no image model)") else ids
+            handler.post {
+                genModel.adapter = android.widget.ArrayAdapter(
+                    this, android.R.layout.simple_spinner_dropdown_item, finalIds)
+            }
+        }.start()
+    }
+
     private fun runGenerate() {
         val prompt = genPrompt.text.toString().trim()
         if (prompt.isEmpty()) { toast("Enter a prompt"); return }
@@ -1175,7 +1207,7 @@ class MainActivity : AppCompatActivity() {
                 .put("size", size).put("n", repeats)
                 .put("model", model)
                 .toString()
-            val resp = httpPostJson("http://127.0.0.1:8101/v1/images/generations", body)
+            val resp = httpPostJson("${activeBaseUrl()}/v1/images/generations", body)
             handler.post {
                 btnGenerate.isEnabled = true
                 if (resp == null) { genStatus.text = "error: no response"; return@post }
