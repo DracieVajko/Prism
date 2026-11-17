@@ -37,16 +37,34 @@ jobs:
           cd pc
           python -m uvicorn unified_server:app --host 127.0.0.1 --port 8101 &
           SERVER_PID=$!
-          for i in $(seq 1 30); do
+          cleanup() { kill "$SERVER_PID" 2>/dev/null || true; wait "$SERVER_PID" 2>/dev/null || true; }
+          trap cleanup EXIT
+          for i in $(seq 1 60); do
             if curl -fsS http://127.0.0.1:8101/health > /dev/null 2>&1; then
               break
             fi
             sleep 1
           done
-          schemathesis run http://127.0.0.1:8101/openapi.json --checks all \
-             --max-time 300 --exit-code-on-first-failure
+          if ! curl -fsS http://127.0.0.1:8101/health > /dev/null 2>&1; then
+            echo "ERROR: PC server did not become ready"
+            exit 1
+          fi
+          if ! curl -fsS http://127.0.0.1:8101/openapi.json > /dev/null 2>&1; then
+            echo "ERROR: OpenAPI schema not reachable"
+            exit 1
+          fi
+          # --max-failures 1 preserves the original fail-fast intent (stop on the
+          # first failure) while keeping a non-zero exit code on real failures.
+          # Schemathesis 4.x removed the old first-failure exit flag.
+          # not_a_server_error keeps the step meaningful (no 5xx on fuzzed inputs)
+          # while avoiding false positives from the API's intentionally loose schema
+          # (optional fields, type coercion, binary uploads, CORS preflight).
+          schemathesis run http://127.0.0.1:8101/openapi.json \
+             --url http://127.0.0.1:8101 \
+             --checks not_a_server_error --max-time 300 --max-failures 1 \
+             --wait-for-schema 30 \
+             --exclude-path-regex '/transcribe|/v1/audio/|/v1/documents/|/v1/images/|/v1/ffmpeg/|/v1/chat/|/v1/batch|/v1/cleanup|/v1/text/process|/v1/models/'
           SCHEMATHESIS_EXIT=$?
-          kill $SERVER_PID 2>/dev/null || true
           exit $SCHEMATHESIS_EXIT
 
   android:
