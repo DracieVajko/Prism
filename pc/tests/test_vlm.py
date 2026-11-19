@@ -46,7 +46,7 @@ def test_chat_completions_text_without_provider_503(monkeypatch):
     import unified_server as us
     c = TestClient(us.app)
     r = c.post("/v1/chat/completions", json={
-        "model": "SmolVLM_500M",
+        "model": "qwen3-vl-2b",
         "messages": [{"role": "user", "content": "hello"}],
     })
     assert r.status_code == 503, r.text[:200]
@@ -60,7 +60,7 @@ def test_chat_completions_vision_no_model_503(monkeypatch):
     c = TestClient(us.app)
     img = _red_dot_b64()
     r = c.post("/v1/chat/completions", json={
-        "model": "SmolVLM_500M",
+        "model": "qwen3-vl-2b",
         "messages": [{"role": "user", "content": [
             {"type": "text", "text": "What is this?"},
             {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{img}"}},

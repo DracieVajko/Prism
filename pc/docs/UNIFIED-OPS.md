@@ -55,14 +55,14 @@ Env: `UNIFIED_WHISPER_URL` (default `http://127.0.0.1:4444`),
   via `pc/download_models.py --preset upscale`. Without weights = Pillow fallback.
 - Audio: WhisperApi service on :4444 (its own faster-whisper env) or
   `pip install faster-whisper` into `.venv` for the local engine.
-- VLM: `pc/download_models.py --preset vlm` (SmolVLM-500M, ~1 GB).
+- VLM: `pc/download_models.py --preset vlm` (Qwen3-VL-2B, ~4.3 GB).
 
 ### GPU (NVIDIA CUDA / AMD DirectML)
 
 ```powershell
 pip install onnxruntime-gpu nvidia-cudnn-cu13   # NVIDIA (CUDA 13 + cuDNN 9)
 pip install torch --index-url https://download.pytorch.org/whl/cu130  # VLM + ESRGAN (CUDA)
-pip install transformers                        # SmolVLM caption/chat
+pip install transformers                        # Qwen3-VL caption/chat
 # or, in a separate env, for AMD:
 pip install onnxruntime-directml
 ```
@@ -193,7 +193,9 @@ card. Models appear in `/v1/models/catalog` (kind `audio`) for download.
 
 ### VLM
 
-- `pc/download_models.py --preset vlm` fetches the SmolVLM-500M snapshot (~1 GB).
+- `pc/download_models.py --preset vlm` fetches Qwen3-VL-2B (~4.3 GB); one copy
+  serves OCR, `task=describe`, caption and vision chat. SmolVLM was removed
+  from the PC catalog after Qwen won the comparison; Android keeps SmolVLM2.
 - Requires `torch` + `transformers`; without them the endpoint returns
   503 will-not-load (never fake output).
 

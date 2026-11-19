@@ -277,34 +277,45 @@ class OCREngine:
             logger.error("OCR image open failed (%s): %s", self.model_id, e)
             return ""
 
-    def transcribe_pil(self, image, language: str = "auto",
-                       task: str = "ocr") -> str:
+    def generate_pil(self, image, prompt: str,
+                     max_new_tokens: int | None = None) -> str:
+        """Run one prompt against a PIL image and return the decoded text.
+
+        Used by OCR (`transcribe_pil`) and by the VLM caption/chat path, so a
+        single Qwen3-VL copy serves both endpoints.
+        """
         if self.model is None or self.processor is None:
             if not self.init():
-                return ""
-        try:
-            import torch
+                raise RuntimeError(f"{self.model_id} failed to load")
+        import torch
 
-            if image.mode != "RGB":
-                image = image.convert("RGB")
+        if image.mode != "RGB":
+            image = image.convert("RGB")
+        inputs = self._inputs(image, prompt)
+        device = self.model.device
+        moved = {}
+        for key, value in inputs.items():
+            if torch.is_tensor(value):
+                moved[key] = value.to(device)
+            else:
+                moved[key] = value
+        inputs = moved
+        with torch.no_grad():
+            output = self.model.generate(
+                **inputs,
+                max_new_tokens=max_new_tokens or self.max_new_tokens,
+                do_sample=False,
+            )
+        input_len = inputs["input_ids"].shape[1]
+        text = self.processor.decode(output[0][input_len:],
+                                     skip_special_tokens=True)
+        return text.strip()
+
+    def transcribe_pil(self, image, language: str = "auto",
+                       task: str = "ocr") -> str:
+        try:
             prompt = self._prompt(task, language)
-            inputs = self._inputs(image, prompt)
-            device = self.model.device
-            moved = {}
-            for key, value in inputs.items():
-                if torch.is_tensor(value):
-                    moved[key] = value.to(device)
-                else:
-                    moved[key] = value
-            inputs = moved
-            with torch.no_grad():
-                output = self.model.generate(
-                    **inputs, max_new_tokens=self.max_new_tokens,
-                    do_sample=False)
-            input_len = inputs["input_ids"].shape[1]
-            text = self.processor.decode(output[0][input_len:],
-                                         skip_special_tokens=True)
-            return text.strip()
+            return self.generate_pil(image, prompt)
         except Exception as e:
             logger.error("OCR transcription failed (%s): %s", self.model_id, e)
             return ""

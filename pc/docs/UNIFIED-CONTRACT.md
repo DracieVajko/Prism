@@ -22,9 +22,9 @@ Legacy: the old `WhisperApi :4444/v1/audio/*` remains as a shim to `:8101/v1/aud
 | POST | `/v1/images/harmonize` | JSON `{image b64, prompt, strength, model, request_id}` | `{image b64, elapsed, request_id}` |
 | POST | `/v1/images/upscale` | JSON `{image b64, scale 2/3/4, model, prompt?, strength?, request_id}` | `{image b64, elapsed, model, scale, engine, request_id}` |
 | POST | `/v1/videos/upscale` | multipart `file + scale, model, fps, prompt, strength` | `{request_id, frames, fps, scale, model, engine, elapsed, url, outputs}` |
-| POST | `/v1/images/colorize` | JSON `{image b64, model, request_id}` | `{image b64, elapsed, engine, request_id}` | DDColor-tiny, 512x512, preserves resolution |
+| POST | `/v1/images/colorize` | JSON `{image b64, model, request_id}` | `{image b64, elapsed, engine, request_id}` | DDColor full (tiny fallback), 512x512, preserves resolution |
 | POST | `/v1/images/restore` | JSON `{image b64, prompt?, strength?, steps?, guidance?, image_guidance?, request_id?}` | `{image b64, elapsed, engine, request_id}` | InstructPix2Pix, full image restoration |
-| POST | `/v1/images/caption` | JSON `{image b64, prompt, max_tokens, request_id}` | `{text, elapsed, engine, request_id}` (V2, SmolVLM-500M) |
+| POST | `/v1/images/caption` | JSON `{image b64, prompt, max_tokens, request_id}` | `{text, elapsed, engine, request_id}` (V2, Qwen3-VL-2B) |
 | POST | `/v1/images/ocr` | multipart `file + model, language, task` | `{text, model, language, task}` |
 | POST | `/v1/chat/completions` | OpenAI vision subset `{model, messages:[{role, content:str\|[{type:text\|image_url}]}]}` | `{choices:[{message:{content}}]}` (V2, 503 without weights) |
 | GET | `/v1/models/catalog` | — | `{models:[{id, kind, label, size_gb, installed, installed_gb, install_state, install_progress, install_error}]}` |

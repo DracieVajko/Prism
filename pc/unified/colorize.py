@@ -3,7 +3,8 @@
 DDColor predicts chroma (ab channels in Lab space) from a grayscale image.
 Luminance comes from the source, so the original structure is preserved.
 
-Model: ddcolor-tiny (edgetools/ddcolor, ~130 MB, fp16, 512x512, Apache-2.0)
+Model: ddcolor-full (convnext-l, ~435 MB fp16, 512x512, Apache-2.0 upstream)
+       with ddcolor-tiny (~130 MB) kept as a fallback.
 Input:  (1, 3, 512, 512) float32 RGB grayscale (Lab L rebuilt as RGB)
 Output: (1, 2, 512, 512) float32 ab channels
 """
@@ -24,13 +25,17 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
-MODEL_ID = "ddcolor-tiny"
-MODEL_DIR = Path(__file__).resolve().parent.parent / "models" / "ddcolor-tiny"
-MODEL_FILE = MODEL_DIR / "ddcolor-tiny-fp16.onnx"
+MODEL_ID = "ddcolor-full"
+MODEL_DIR = Path(__file__).resolve().parent.parent / "models" / "ddcolor-full"
+MODEL_FILE = MODEL_DIR / "ddcolor-512-fp16.onnx"
+FALLBACK_ID = "ddcolor-tiny"
+FALLBACK_FILE = (Path(__file__).resolve().parent.parent / "models"
+                 / "ddcolor-tiny" / "ddcolor-tiny-fp16.onnx")
 INPUT_SIZE = 512
 
 _SESSION = None
 _PROVIDER = None
+_ACTIVE_ID = MODEL_ID
 
 
 def _ensure_nvidia_dlls():
@@ -43,10 +48,15 @@ def _ensure_nvidia_dlls():
 
 
 def _get_session() -> Optional[object]:
-    global _SESSION, _PROVIDER
+    global _SESSION, _PROVIDER, _ACTIVE_ID
     if _SESSION is not None:
         return _SESSION
-    if not MODEL_FILE.exists():
+    if MODEL_FILE.exists():
+        path, model_id = MODEL_FILE, MODEL_ID
+    elif FALLBACK_FILE.exists():
+        path, model_id = FALLBACK_FILE, FALLBACK_ID
+        logger.info("DDColor full weights missing; using tiny fallback")
+    else:
         logger.warning("DDColor model not found: %s", MODEL_FILE)
         return None
     try:
@@ -59,8 +69,9 @@ def _get_session() -> Optional[object]:
             _PROVIDER = "directml"
         else:
             _PROVIDER = "cpu"
-        _SESSION = ort.InferenceSession(str(MODEL_FILE), providers=providers)
-        logger.info("DDColor loaded: provider=%s", _PROVIDER)
+        _SESSION = ort.InferenceSession(str(path), providers=providers)
+        _ACTIVE_ID = model_id
+        logger.info("DDColor loaded: %s provider=%s", model_id, _PROVIDER)
         return _SESSION
     except Exception as e:
         logger.error("DDColor load failed: %s", e)
@@ -68,9 +79,10 @@ def _get_session() -> Optional[object]:
 
 
 def release():
-    global _SESSION, _PROVIDER
+    global _SESSION, _PROVIDER, _ACTIVE_ID
     _SESSION = None
     _PROVIDER = None
+    _ACTIVE_ID = MODEL_ID
 
 
 def is_ready() -> bool:
@@ -182,7 +194,7 @@ def _lab_to_rgb(lab: np.ndarray) -> np.ndarray:
 def colorize_b64(image_b64: str) -> dict:
     """Colorize a base64-encoded grayscale/B&W image using DDColor.
 
-    Returns {"image": base64_png, "engine": "ddcolor", "elapsed": seconds}.
+    Returns {"image": base64_png, "engine": "ddcolor-full", "elapsed": seconds}.
     """
     import base64
     from PIL import Image
@@ -246,4 +258,4 @@ def colorize_b64(image_b64: str) -> dict:
 
     elapsed = round(time.time() - t0, 2)
     logger.info("DDColor colorized %dx%d in %.2fs", orig_w, orig_h, elapsed)
-    return {"image": b64_out, "elapsed": elapsed, "engine": "ddcolor-tiny"}
+    return {"image": b64_out, "elapsed": elapsed, "engine": _ACTIVE_ID}

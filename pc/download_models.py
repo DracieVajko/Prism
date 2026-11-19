@@ -68,18 +68,13 @@ PRESETS = {
     "swinir": ["swinir-realsr-x4-upscale"],
     "zimage": ["z-image-turbo"],
     "ocr": ["nemotron-ocr-0", "granite-docling-258m", "qwen3-vl-2b"],
-    "vlm": ["SmolVLM_500M"],
+    "vlm": ["qwen3-vl-2b"],
 }
 
-# VLM (V2): HuggingFaceTB SmolVLM-500M-Instruct (~1 GB, Apache-2.0).
-# Snapshot like SD models; the server uses transformers AutoModelForImageTextToText.
-VLM_TASKS = [
-    {"id": "SmolVLM_500M", "kind": "snapshot", "repo": "HuggingFaceTB/SmolVLM-500M-Instruct",
-     "target": "SmolVLM_500M", "min_gb": 0.8,
-     "allow": ["*.safetensors", "*.json", "tokenizer/*", "preprocessor_config.json",
-               "*.model", "*.txt", "chat_template.jinja"],
-     "license": "Apache-2.0 (see repo card)"},
-]
+# PC caption/chat use Qwen3-VL-2B (listed under OCR_TASKS so one copy serves
+# OCR, description, caption and vision chat). SmolVLM was removed from the PC
+# catalog after Qwen won the comparison; Android keeps its own SmolVLM2 runtime.
+VLM_TASKS = []
 
 # OCR: Xiaomi Nemotron-3.5-OCR-0 (Qwen3.5-0.8B based, ~1.67 GB)
 OCR_TASKS = [
@@ -220,13 +215,21 @@ AUDIO_TASKS = [
 # GFPGAN: face restoration (CVPR 2021, Apache-2.0).
 # SwinIR: super-resolution / restoration (ICCV 2021, Apache-2.0).
 RESTORATION_TASKS = [
+    {"id": "ddcolor-full", "kind": "file",
+     "repo": "Diogo122333/ddcolor-512-fp16",
+     "file": "ddcolor-512-fp16.onnx",
+     "target": "ddcolor-full", "min_gb": 0.40,
+     "license": "Apache-2.0 (DDColor upstream; community ONNX export)",
+     "note": "DDColor full (convnext-l) colorization, ~435 MB fp16, 512x512. "
+             "Uses the same ab contract as tiny; better chroma, no green cast "
+             "on the test slide."},
     {"id": "ddcolor-tiny", "kind": "file",
      "repo": "edgetools/ddcolor",
      "file": "ddcolor-tiny-fp16.onnx",
      "target": "ddcolor-tiny", "min_gb": 0.12,
      "license": "Apache-2.0 (see piddnad/DDColor)",
      "note": "DDColor-tiny colorization (ICCV 2023, ~130 MB fp16, 512x512). "
-             "ONNX, runs on CPU/CUDA via onnxruntime. Apache-2.0."},
+             "Fast fallback; weak on modern colour photos. Apache-2.0."},
     {"id": "gfpgan-v1.4", "kind": "file",
      "repo": "sidkonduru/gfpgan-v1.4-onnx",
      "file": "gfpgan14-fp16.onnx",

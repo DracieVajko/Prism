@@ -26,8 +26,9 @@ photo (upscale/restoration/caption), a 256 px thumbnail (Z-Image).
 | `lightonocr-2-1b` | ocr | PASS | 79.4 s | 2,974 chars Markdown; 262.6 s through the API |
 | `qianfan-ocr` | ocr | PENDING | 272.8 s load | 9.5 GB downloaded; 4-bit CPU load verified, full bf16 inference blocked by an active 12B LM Studio model |
 | default (`auto`) | ocr | PASS | 468.5 s | resolved to `glm-ocr`, 2,602 chars; slow because Gemma 12B held the GPU/RAM |
-| `SmolVLM_500M` | vlm | PASS | 61.8 s | "In this image we can see a pen..." |
-| `ddcolor-tiny` | restoration | PASS | 16.4 s | 384x512 colorized |
+| `qwen3-vl-2b` caption | vlm | PASS | 377.8 s | 80-token caption of the pen photo; `engine=qwen3-vl-2b`; replaced SmolVLM on PC |
+| `ddcolor-full` | restoration | PASS | 26.8 s | 384x512 colorized; conservative on the pen photo, natural on the Lincoln portrait |
+| `ddcolor-tiny` | restoration | PASS (fallback) | 10.5 s | kept only if `ddcolor-full` is absent; can cast green |
 | `gfpgan-v1.4` | restoration | PASS | 10.7 s | 384x512 face restore |
 | `swinir-realsr-x4` restore | restoration | PASS | 62.1 s | 384x512 -> 768x1024 |
 | `instruct-pix2pix` | restoration | PASS | 16.0 s | after releasing the OCR model before loading |
@@ -35,6 +36,10 @@ photo (upscale/restoration/caption), a 256 px thumbnail (Z-Image).
 | `AbsoluteReality_1.8` | image | PASS | 281.1 s | 512x512 |
 | `AnimagineXL_3.1` | image | PASS | 156.8 s | 512x512 (requested 768; endpoint clamped) |
 | `JuggernautXL_v9` | image | PASS | 157.8 s | 512x512 (requested 768; endpoint clamped) |
+
+The Qwen3-VL caption (377.8 s) and DDColor-full (26.8 s) runs happened while a
+12B LM Studio model was active; the times include the resulting GPU/RAM
+contention, not a clean-machine benchmark.
 
 ## Removed after testing
 

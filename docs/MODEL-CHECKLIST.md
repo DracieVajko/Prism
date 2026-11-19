@@ -19,13 +19,13 @@ downloaded automatically.
 | `faster-whisper-small` | — | `model=small` | Optional download | keep optional |
 | `faster-whisper-medium` | — | `model=medium` | Optional download | keep optional |
 | `nemotron-asr-0.6b` | 3.07 GB | `model=nemotron-asr-0.6b` | Engine works (CUDA) | **TODO: keep or delete** |
-| `SmolVLM_500M` | 0.95 GB | `/v1/images/caption`, vision chat | Working | keep |
+| `qwen3-vl-2b` | 3.97 GB | `/v1/images/caption`, vision chat, `/v1/images/ocr?task=describe` | Working | keep (replaces SmolVLM on PC) |
 | `LCM_Dreamshaper_ONNX` | 3.99 GB | `/v1/images/generations` | Working | keep |
 | `DreamShaper_8` | 2.55 GB | image generations | Working | keep |
 | `JuggernautXL_v9` | 6.62 GB | image generations | Working | keep |
 | `AnimagineXL_3.1` | 6.46 GB | image generations | Working | keep |
 | `AbsoluteReality_1.8` | 1.99 GB | image generations | Working | keep |
-| `ddcolor-tiny` | 0.13 GB | `/v1/images/colorize` | Working (verified 2026-11-12) | keep |
+| `ddcolor-full` | 0.44 GB | `/v1/images/colorize` | Working (26.8 s on the pen photo; no green cast) | keep |
 | `gfpgan-v1.4` | 0.16 GB | `/v1/images/face-restore` | Working (verified 2026-11-12) | keep |
 | `swinir-realsr-x4` | 0.12 GB | `/v1/images/restore-upscale` | Working (verified 2026-11-12) | keep |
 | `RealESRGAN_x4v3` | 0.12 GB | `/v1/images/upscale` | Working | keep |

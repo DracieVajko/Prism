@@ -36,8 +36,8 @@ Running local AI should not require cloud accounts, subscriptions, or sending pr
 
 ### PC server (`pc/`)
 
-- **Image:** text-to-image, image-to-image (edits), inpaint with mask, harmonize, outpaint (edge-replicated padding), colorize (DDColor), upscale (Real-ESRGAN, SwinIR, Z-Image Turbo refine)
-- **Vision:** caption and chat via SmolVLM; OCR and image description via Xiaomi-OCR-0, Granite-Docling, Qwen3-VL-2B, OvisOCR2, GLM-OCR, PaddleOCR-VL, LightOnOCR 2, FireRed-OCR and Qianfan-OCR
+- **Image:** text-to-image, image-to-image (edits), inpaint with mask, harmonize, outpaint (edge-replicated padding), colorize (DDColor full), upscale (Real-ESRGAN, SwinIR, Z-Image Turbo refine)
+- **Vision:** caption and chat via Qwen3-VL-2B; OCR and image description via Xiaomi-OCR-0, Granite-Docling, Qwen3-VL-2B, OvisOCR2, GLM-OCR, PaddleOCR-VL, LightOnOCR 2, FireRed-OCR and Qianfan-OCR
 - **Audio:** transcription/translation via faster-whisper (tiny…large/turbo) and optional Cohere Transcribe, Granite Speech, Parakeet, NB-Whisper and ivrit.ai Hebrew
 - **Batch/video:** `/v1/batch` for multiple images; `/v1/videos/upscale` extracts frames, upscales, and remuxes audio
 - **Realtime:** OpenAI transcription WebSocket at `/v1/realtime` (Cindy and other realtime ASR clients)
@@ -153,7 +153,7 @@ Open the app, go to the **Server** tab, press **START**, then download the model
 ```powershell
 pip install onnxruntime-gpu nvidia-cudnn-cu13       # NVIDIA CUDA
 pip install torch --index-url https://download.pytorch.org/whl/cu130
-pip install transformers                              # SmolVLM caption/chat
+pip install transformers                              # Qwen3-VL caption/chat
 
 # AMD: separate environment with a non-QDQ model
 pip install onnxruntime-directml

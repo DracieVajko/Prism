@@ -40,7 +40,7 @@ pc/unified/
   models_manager.py            PC install/uninstall/state (pc/download_models.py)
   model_finder.py              HF search + custom URL add/delete
   upscale.py                   Real-ESRGAN (torch) or Pillow fallback
-  vlm.py                       SmolVLM caption/chat (transformers)
+  vlm.py                       Qwen3-VL-2B caption/chat (shared OCR engine)
   audio_proxy.py               forward to WhisperApi :4444
   audio_splitter.py            30 s chunking for long audio
   ffmpeg_tools.py              presets + operations
@@ -172,8 +172,9 @@ places supported nodes on the GPU and the rest on the CPU. CPU sessions use
 - **upscale** (`pc/unified/upscale.py`): Real-ESRGAN x4 (RRDBNet) when weights +
   torch exist, tiled (256 px tiles, 16 px overlap); otherwise Pillow LANCZOS.
   scale 2/3 downsample the x4 result.
-- **caption/chat** (`pc/unified/vlm.py`): SmolVLM-500M via transformers; without
-  weights/torch returns `503 will-not-load`.
+- **caption/chat** (`pc/unified/vlm.py`): Qwen3-VL-2B through the shared OCR
+  engine; without weights/torch returns `503 will-not-load`. Android keeps
+  SmolVLM2.
 
 ### 4.6 Audio
 
@@ -408,7 +409,7 @@ Android storage: `/storage/emulated/0/Android/data/eu.odysseus.diffusion/files/m
 | Inpaint | ONNX or diffusers | ONNX |
 | Harmonize | CPU | CPU |
 | Upscale | Real-ESRGAN (torch) / Pillow | stub (1×1 PNG; 503 if the model is not installed) |
-| Caption/chat | SmolVLM (transformers) | 503 (VLM runtime not bundled) |
+| Caption/chat | Qwen3-VL-2B (shared OCR engine) | 503 (VLM runtime not bundled) |
 | Audio | faster-whisper / WhisperApi | whisper.cpp JNI |
 | FFmpeg | full presets | 503 (no binary) |
 | Models | HF snapshots + files + URLs | verified file lists + URLs |

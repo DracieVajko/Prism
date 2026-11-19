@@ -347,7 +347,7 @@ class UpscaleRequest(BaseModel):
 
 class ColorizeRequest(BaseModel):
     image: str = ""
-    model: Optional[str] = "ddcolor-tiny"
+    model: Optional[str] = "ddcolor-full"
     request_id: Optional[str] = ""
 
 class RestoreRequest(BaseModel):
@@ -1166,7 +1166,7 @@ def colorize(req: ColorizeRequest):
     except FileNotFoundError:
         return JSONResponse(status_code=503, content={
             "error": "will not load", "detail": "DDColor model not installed",
-            "hint": "Run: python download_models.py ddcolor-tiny"})
+            "hint": "Run: python download_models.py ddcolor-full"})
     except Exception as e:
         logger.warning(f"colorize failed: {str(e)[:200]}")
         return JSONResponse(status_code=500, content={"error": str(e)[:200]})

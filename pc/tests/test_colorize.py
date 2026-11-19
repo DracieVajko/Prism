@@ -17,12 +17,12 @@ RUN_MODEL_TESTS = os.environ.get("PRISM_RUN_MODEL_TESTS") == "1"
 
 @pytest.fixture(autouse=True)
 def _reset_session():
-    saved = (cz._SESSION, cz._PROVIDER)
+    saved = (cz._SESSION, cz._PROVIDER, cz._ACTIVE_ID)
     cz._SESSION, cz._PROVIDER = None, None
     try:
         yield
     finally:
-        cz._SESSION, cz._PROVIDER = saved
+        cz._SESSION, cz._PROVIDER, cz._ACTIVE_ID = saved
 
 
 def _image_b64(size=(48, 32)) -> str:
@@ -32,13 +32,14 @@ def _image_b64(size=(48, 32)) -> str:
 
 
 def test_model_constants():
-    assert cz.MODEL_ID == "ddcolor-tiny"
+    assert cz.MODEL_ID == "ddcolor-full"
     assert cz.INPUT_SIZE == 512
-    assert cz.MODEL_FILE == cz.MODEL_DIR / "ddcolor-tiny-fp16.onnx"
+    assert cz.MODEL_FILE == cz.MODEL_DIR / "ddcolor-512-fp16.onnx"
 
 
 def test_missing_model_is_unavailable(tmp_path, monkeypatch):
-    monkeypatch.setattr(cz, "MODEL_FILE", tmp_path / "missing.onnx")
+    monkeypatch.setattr(cz, "MODEL_FILE", tmp_path / "missing-full.onnx")
+    monkeypatch.setattr(cz, "FALLBACK_FILE", tmp_path / "missing-tiny.onnx")
     cz.release()
     assert cz._get_session() is None
     assert cz.is_ready() is False
@@ -72,7 +73,7 @@ def test_colorize_real_model():
     finally:
         cz.release()
 
-    assert result["engine"] == "ddcolor-tiny"
+    assert result["engine"] in ("ddcolor-full", "ddcolor-tiny")
     out = base64.b64decode(result["image"])
     assert out[:8] == b"\x89PNG\r\n\x1a\n"
     with Image.open(io.BytesIO(out)) as im:

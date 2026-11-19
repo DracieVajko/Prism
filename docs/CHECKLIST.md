@@ -1013,3 +1013,25 @@ Android (`Android/data/<pkg>/files/output/<kind>/`):
       `nemotron-ocr-0`; explicit `model=nemotron-ocr-0` still gives the fast
       plain-text path. Verified: default request resolved to `glm-ocr` and
       returned 2,602 chars on the slide.
+
+## VLM decision after the visual report (2026-11-19)
+
+- [x] Qwen3-VL-2B won the caption/description comparison. PC caption and vision
+      chat now load it through the shared OCR engine (`vlm.py`), so one Qwen
+      copy serves `/v1/images/caption`, `/v1/chat/completions` and
+      `/v1/images/ocr?task=describe`.
+- [x] Removed `SmolVLM_500M` from the PC catalog. Android keeps its own
+      SmolVLM2 runtime; the PC and Android products remain independent.
+- [x] Verified caption on the pen photo: HTTP 200, `engine=qwen3-vl-2b`,
+      80-token description in 377.8 s while a 12B LM Studio model held the GPU.
+      Tests: `pc/tests/test_vlm.py`, `test_models_manager.py` updated.
+
+- [x] DDColor after the report: the tiny ONNX cast the grayscale pen photo
+      green. The endpoint now prefers `ddcolor-full` (convnext-l, 435 MB,
+      `engine=ddcolor-full`) and keeps `ddcolor-tiny` only as a fallback if the
+      full file is absent. Pen photo: 26.8 s, conservative/neutral instead of
+      green; Lincoln B&W portrait: natural skin tones and brown suit.
+      Catalog entry + docs updated.
+
+- [x] Deleted the unused PC `models/SmolVLM_500M` folder (0.95 GB) after the
+      catalog removal. Android's `smolvlm-500m-gguf` is separate and stays.

@@ -710,7 +710,7 @@ def _discover_models() -> dict:
     """
     found = {}
 # Directories that are not diffusion weights (VLM, upscale) — auto-discovery ignores them.
-    NON_DIFFUSION_DIRS = {"SmolVLM_500M", "RealESRGAN_x4v3", "Vision", "Upscale",
+    NON_DIFFUSION_DIRS = {"qwen3-vl-2b", "RealESRGAN_x4v3", "Vision", "Upscale",
                           "VLM", "z-image-turbo"}
     try:
         models_dir = Path(__file__).resolve().parent / "models"

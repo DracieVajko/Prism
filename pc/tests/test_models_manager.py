@@ -10,7 +10,7 @@ def test_catalog_has_known_models():
     ids = {r["id"] for r in rows}
     assert "DreamShaper_8" in ids
     assert "RealESRGAN_x4v3" in ids
-    assert "SmolVLM_500M" in ids
+    assert "qwen3-vl-2b" in ids
     for r in rows:
         assert "installed" in r and "install_state" in r and "size_gb" in r
 
