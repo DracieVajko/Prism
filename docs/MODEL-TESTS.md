@@ -13,7 +13,6 @@ photo (upscale/restoration/caption), a 256 px thumbnail (Z-Image).
 | `turbo` (Whisper) | audio | PASS | 1.1 s | 208 chars, correct JFK line |
 | `large` (Whisper) | audio | PASS | 21.9 s | 207 chars, correct |
 | `granite-speech-470m` | audio | PASS | 199.0 s | 208 chars, correct |
-| `nemotron-asr-0.6b` | audio | FAIL | 54.0 s | HTTP 200 but **0 chars**; RNNT generate returns empty |
 | `RealESRGAN_x4v3` | upscale | PASS | 22.9 s | 384x512 -> 768x1024 |
 | `swinir-realsr-x4` | upscale | PASS | 20.7 s | 384x512 -> 768x1024 |
 | `z-image-turbo` | upscale | PASS | 615.9 s | 256 -> 384x512, `zimage-turbo+realesrgan` |
@@ -32,14 +31,19 @@ photo (upscale/restoration/caption), a 256 px thumbnail (Z-Image).
 | `AnimagineXL_3.1` | image | PASS | 156.8 s | 512x512 (requested 768; endpoint clamped) |
 | `JuggernautXL_v9` | image | PASS | 157.8 s | 512x512 (requested 768; endpoint clamped) |
 
-## Remaining failure
+## Removed after testing
 
-`nemotron-asr-0.6b` loads and the endpoint returns 200, but the RNNT
-`generate()` produces an empty transcript. Earlier it raised
-`'Nemotron3_5AsrForRNNT' object has no attribute 'get_audio_features'`; after
-the model reloaded it now returns empty instead. The transformers 5.21 RNNT
-generation path needs a fix (or a version pin) before this model is usable.
-Whisper and Granite Speech cover the same audio tests successfully.
+- `nemotron-asr-0.6b` (and the 30B variants): loaded but returned an empty
+  transcript via the transformers 5.21 RNNT path; the 30B models do not fit.
+- `qwen3-asr-0.6b`, `qwen3-asr-1.7b`, `qwencleo-asr-1.7b`: the `qwen-asr`
+  wrapper requires huggingface-hub < 1.0, which breaks transformers 5.21 and
+  diffusers 0.42; raw `generate()` also mismatched the checkpoint.
+- `paddleocr-vl-1.6`: remote code expects `rope_parameters` on the vision
+  config, which transformers 5.21 does not provide.
+
+Their model directories may remain on disk, but they are no longer offered in
+the catalog. Whisper, Granite Speech and the remaining OCR models cover those
+languages/features.
 
 ## Fixes that made this run pass
 

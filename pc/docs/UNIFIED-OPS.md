@@ -133,9 +133,9 @@ is a diffusion pass; expect ~30 s/frame warm plus the cold load.
 | `granite-docling-258m` | 0.5 GB | tiny page/PDF -> DocTags/Markdown, tables, formulas, layout |
 | `qwen3-vl-2b` | 4.3 GB | OCR in 32 languages plus object recognition and description |
 | `ovis-ocr2` | 1.7 GB | 853M, 96.58 OmniDocBench v1.6, layouts/tables/formulas |
-| `paddleocr-vl-1.6` | 1.9 GB | 0.96B, 109 languages, document/layout specialist |
 | `glm-ocr` | 2.7 GB | 1.33B, tables/formulas, 8 languages, MIT |
 | `firered-ocr` | 4.3 GB | Qwen3-VL-2B fine-tune for document parsing |
+| `qianfan-ocr` | 9.5 GB | 4.7B, 192 languages, needs offload |
 
 Full comparison and status, including models that are not wired:
 `pc/docs/OCR-MODELS.md`.
@@ -149,10 +149,10 @@ python pc\download_models.py --preset ocr          # all three, ~6.5 GB
 python pc\download_models.py granite-docling-258m
 ```
 
-Researched but not wired: PaddleOCR-VL-1.6 (1.9 GB), dots.ocr (6.1 GB),
-DeepSeek-OCR-2 (6.8 GB), olmOCR-2-7B (16.6 GB). They need custom architectures
-and, above ~6 GB, CPU offload; the three above cover fast text, document
-layout, and general image understanding within 6 GB VRAM.
+PaddleOCR-VL was removed after testing: its remote code expects a
+`rope_parameters` config that transformers 5.21 does not provide. Not wired:
+dots.ocr (6.1 GB), DeepSeek-OCR-2 (6.8 GB), olmOCR-2-7B (16.6 GB); they need
+custom architectures and, above ~6 GB, CPU offload.
 
 ### ASR model options
 
@@ -161,11 +161,11 @@ Full language/speed/size/status table: `pc/docs/ASR-MODELS.md`.
 - Whisper (faster-whisper): `tiny|base|small|medium|turbo|large`, default
   `turbo`, 42 languages.
 - `ivrit-whisper-turbo` — Hebrew CT2 Whisper.
-- `nemotron-asr-0.6b` — 40 languages, streaming.
-- Transformers engines: `qwen3-asr-0.6b`, `qwen3-asr-1.7b`,
-  `qwencleo-asr-1.7b`, `cohere-transcribe`, `granite-speech-470m`,
+- Transformers engines: `cohere-transcribe`, `granite-speech-470m`,
   `granite-speech-2b`, `parakeet-v3`, `parakeet-v2`,
   `parakeet-unified-en`, `nb-whisper-medium`.
+- Qwen3-ASR/QwenCleo were removed: the `qwen-asr` wrapper requires
+  huggingface-hub < 1.0, which conflicts with transformers 5.21.
 
 Select with `model=` on `/v1/audio/transcriptions`. The transformers models
 are PC-only and load on first use; those above ~5 GB spill to CPU on a 6 GB

@@ -103,13 +103,6 @@ OCR_TASKS = [
                "tokenizer/*", "chat_template*", "preprocessor_config.json"],
      "license": "Apache-2.0",
      "note": "OvisOCR2 853M: 96.58 OmniDocBench v1.6, layout/tables/formulas."},
-    {"id": "paddleocr-vl-1.6", "kind": "snapshot",
-     "repo": "PaddlePaddle/PaddleOCR-VL-1.6", "target": "paddleocr-vl-1.6",
-     "min_gb": 1.8,
-     "allow": ["*.json", "*.safetensors", "*.txt", "*.model",
-               "tokenizer/*", "chat_template*", "preprocessor_config.json"],
-     "license": "Apache-2.0",
-     "note": "PaddleOCR-VL 1.6 (0.96B): document parsing, 109 languages."},
     {"id": "glm-ocr", "kind": "snapshot",
      "repo": "zai-org/GLM-OCR", "target": "glm-ocr", "min_gb": 2.5,
      "allow": ["*.json", "*.safetensors", "*.txt", "*.model",
@@ -139,46 +132,11 @@ OCR_TASKS = [
              "image description. Fits a 6 GB GPU."},
 ]
 
-# Audio: NVIDIA Nemotron 3.5 ASR. All three are optional downloads; the 0.6B
-# runs comfortably on CPU, the 30B-A4B variants need far more memory than a
-# 6-8 GB GPU (see the note on each entry) and are offered for completeness.
+# Optional ASR engines (transformers 5.x classes, generic hf_asr.py).
+# Nemotron ASR was removed: the 0.6B RNNT generation path is broken in
+# transformers 5.21 (empty transcripts) and the 30B variants do not fit this
+# class of machine. Nemotron OCR is a separate, working model.
 AUDIO_TASKS = [
-    {"id": "nemotron-asr-0.6b", "kind": "snapshot",
-     "repo": "nvidia/nemotron-3.5-asr-streaming-0.6b",
-     "target": "nemotron-asr-0.6b", "min_gb": 2.4,
-     "allow": ["config.json", "generation_config.json", "processor_config.json",
-               "tokenizer.json", "tokenizer_config.json", "model.safetensors"],
-     "note": "Nemotron 3.5 ASR 0.6B (40 languages, punctuated) - 2.55 GB, runs on CPU",
-     "license": "OpenMDW-1.1 (see repo card)"},
-    {"id": "nemotron-transcribe-30b-a4b-nvfp4", "kind": "snapshot",
-     "repo": "nvidia/NVIDIA-Nemotron-3.5-Transcribe-30B-A4B-NVFP4",
-     "target": "nemotron-transcribe-30b-a4b-nvfp4", "min_gb": 20.0,
-     "allow": ["*.json", "*.safetensors", "*.jinja", "*.txt", "tokenizer/*",
-               "llm_backbone/*"],
-     "note": "Nemotron 3.5 Transcribe 30B-A4B NVFP4 - 21.6 GB; needs a Blackwell GPU or ~24 GB VRAM",
-     "license": "OpenMDW-1.1 (see repo card)"},
-    # Optional ASR engines (transformers 5.x classes, generic hf_asr.py).
-    {"id": "qwen3-asr-0.6b", "kind": "snapshot",
-     "repo": "Qwen/Qwen3-ASR-0.6B", "target": "qwen3-asr-0.6b",
-     "min_gb": 1.7,
-     "allow": ["*.json", "*.safetensors", "*.txt", "*.model",
-               "tokenizer/*", "chat_template*", "preprocessor_config.json"],
-     "license": "Apache-2.0",
-     "note": "Qwen3-ASR 0.6B (30 languages, Chinese + European). ~2 s"},
-    {"id": "qwen3-asr-1.7b", "kind": "snapshot",
-     "repo": "Qwen/Qwen3-ASR-1.7B-hf", "target": "qwen3-asr-1.7b",
-     "min_gb": 3.9,
-     "allow": ["*.json", "*.safetensors", "*.txt", "*.model",
-               "tokenizer/*", "chat_template*", "preprocessor_config.json"],
-     "license": "Apache-2.0",
-     "note": "Qwen3-ASR 1.7B (30 languages, higher accuracy). ~2 s"},
-    {"id": "qwencleo-asr-1.7b", "kind": "snapshot",
-     "repo": "mohammedaly22/QwenCleo-ASR", "target": "qwencleo-asr-1.7b",
-     "min_gb": 3.9,
-     "allow": ["*.json", "*.safetensors", "*.txt", "*.model",
-               "tokenizer/*", "chat_template*", "preprocessor_config.json"],
-     "license": "Apache-2.0",
-     "note": "QwenCleo ASR 1.7B (Egyptian Arabic + English)."},
     {"id": "cohere-transcribe", "kind": "snapshot",
      "repo": "CohereLabs/cohere-transcribe-03-2026",
      "target": "cohere-transcribe", "min_gb": 3.9,

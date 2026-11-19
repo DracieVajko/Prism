@@ -70,6 +70,36 @@ SPECS = {
 }
 
 _pipes: dict = {}
+_models: dict = {}
+
+LANG_NAMES = {
+    "en": "English", "sk": "Slovak", "cs": "Czech", "de": "German",
+    "fr": "French", "es": "Spanish", "it": "Italian", "pl": "Polish",
+    "ru": "Russian", "uk": "Ukrainian", "zh": "Chinese", "ja": "Japanese",
+    "ko": "Korean", "ar": "Arabic", "pt": "Portuguese", "nl": "Dutch",
+    "tr": "Turkish", "hi": "Hindi", "th": "Thai", "vi": "Vietnamese",
+}
+
+QWEN_ASR_IDS = {"qwen3-asr-0.6b", "qwen3-asr-1.7b", "qwencleo-asr-1.7b"}
+
+
+def _qwen_model(model_id: str):
+    model = _models.get(model_id)
+    if model is not None:
+        return model
+    import torch
+    from qwen_asr import Qwen3ASRModel
+
+    cuda = torch.cuda.is_available()
+    model = Qwen3ASRModel.from_pretrained(
+        str(_dir(model_id)),
+        dtype=torch.bfloat16 if cuda else torch.float32,
+        device_map="cuda:0" if cuda else "cpu",
+        max_inference_batch_size=1,
+        max_new_tokens=512,
+    )
+    _models[model_id] = model
+    return model
 
 
 def _dir(model_id: str) -> Path:
@@ -90,8 +120,9 @@ def enabled() -> bool:
 
 
 def release() -> bool:
-    had = bool(_pipes)
+    had = bool(_pipes or _models)
     _pipes.clear()
+    _models.clear()
     try:
         import gc
         import torch
@@ -125,6 +156,18 @@ def _pipeline(model_id: str):
 def transcribe(audio_path: str, language: Optional[str] = None,
                model_id: Optional[str] = None) -> Tuple[str, str]:
     mid = model_id or MODEL_ID
+    if mid in QWEN_ASR_IDS:
+        # Qwen3-ASR ships its own transcribe() API; the generic ASR pipeline
+        # passes the wrong tensor shapes to generate().
+        model = _qwen_model(mid)
+        lang_name = LANG_NAMES.get((language or "").lower()) if language else None
+        results = model.transcribe(audio=str(audio_path), language=lang_name)
+        if not results:
+            return "", language or ""
+        first = results[0]
+        text = getattr(first, "text", "") or ""
+        lang = getattr(first, "language", "") or (language or "")
+        return text.strip(), str(lang)
     pipe = _pipeline(mid)
     kwargs = {"chunk_length_s": 30}
     if language and language not in ("auto", ""):

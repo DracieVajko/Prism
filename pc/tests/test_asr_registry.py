@@ -2,13 +2,13 @@
 import types
 import wave
 
-from unified import asr, nemotron_asr, sherpa_asr
+from unified import asr, hf_asr, sherpa_asr
 
 
 def test_explicit_model_selects_engine():
-    engine, model_id = asr.resolve_engine("nemotron-asr-0.6b")
-    assert engine is not None and engine.module is nemotron_asr
-    assert model_id == "nemotron-asr-0.6b"
+    engine, model_id = asr.resolve_engine("granite-speech-470m")
+    assert engine is not None and engine.module is hf_asr
+    assert model_id == "granite-speech-470m"
 
     engine, model_id = asr.resolve_engine("sherpa-zipformer-small")
     assert engine is not None and engine.module is sherpa_asr
@@ -36,10 +36,10 @@ def test_unknown_model_passes_through():
 
 
 def test_engine_delegates_install_and_transcribe(monkeypatch):
-    engine = asr.AsrEngine("fake", "fake", "hint", nemotron_asr)
-    monkeypatch.setattr(nemotron_asr, "is_installed", lambda mid=None: mid == "fake-1")
+    engine = asr.AsrEngine("fake", "fake", "hint", hf_asr)
+    monkeypatch.setattr(hf_asr, "is_installed", lambda mid=None: mid == "fake-1")
     monkeypatch.setattr(
-        nemotron_asr, "transcribe",
+        hf_asr, "transcribe",
         lambda path, lang, mid: (f"{path}|{lang}|{mid}", "en"))
     assert engine.installed("fake-1") is True
     assert engine.transcribe("a", "sk", "fake-1") == ("a|sk|fake-1", "en")

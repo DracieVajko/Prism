@@ -10,7 +10,6 @@ Select with `model=` on `POST /v1/images/ocr` (multipart: `file`, `model`,
 | `granite-docling-258m` | 0.5 GB | page/PDF -> DocTags/Markdown, tables, formulas | Apache-2.0 | tested (4,987 chars on a PDF page) |
 | `qwen3-vl-2b` | 4.3 GB | 32-language OCR + objects/description | Apache-2.0 | tested (2,767 chars OCR, 1,166-char description) |
 | `ovis-ocr2` | 1.7 GB | 853M, 96.58 OmniDocBench v1.6, layout/tables/formulas | Apache-2.0 | tested (7,995 chars with bbox Markdown; 666 s - slow) |
-| `paddleocr-vl-1.6` | 1.9 GB | 0.96B, 109 languages, layouts/tables/formulas/seals | Apache-2.0 | wired |
 | `glm-ocr` | 2.7 GB | 1.33B, tables/formulas, 8 languages | MIT | wired |
 | `firered-ocr` | 4.3 GB | Qwen3-VL-2B fine-tune for document parsing | Apache-2.0 | wired |
 | `qianfan-ocr` | 9.5 GB | 4.7B, 192 languages, KIE/layout, Markdown | Apache-2.0 | wired, needs offload |
@@ -39,7 +38,7 @@ Select with `model=` on `POST /v1/images/ocr` (multipart: `file`, `model`,
 
 ```powershell
 python pc\download_models.py ovis-ocr2
-python pc\download_models.py paddleocr-vl-1.6
+python pc\download_models.py ovis-ocr2
 python pc\download_models.py glm-ocr
 ```
 
@@ -58,8 +57,9 @@ LiteRT engine.
 ## Practical notes
 
 - On a 6 GB card, `qwen3-vl-2b` and `firered-ocr` overflow and fall back to CPU
-  layers; `ovis-ocr2`, `paddleocr-vl-1.6`, `glm-ocr` and `granite-docling`
-  fit comfortably.
+  layers; `ovis-ocr2`, `glm-ocr` and `granite-docling` fit comfortably.
+  PaddleOCR-VL was removed after testing: its remote code expects a
+  `rope_parameters` config that transformers 5.21 does not provide.
 - `PRISM_OCR_DEVICE=auto|cpu|cuda` controls placement. Use `cpu` when the GPU
   is busy with an LLM; `qianfan-ocr` (9.5 GB) and other large models only load
   with offload.

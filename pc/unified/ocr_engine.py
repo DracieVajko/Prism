@@ -62,14 +62,6 @@ OCR_SPECS = {
         "license": "Apache-2.0",
         "size_gb": 1.7,
     },
-    "paddleocr-vl-1.6": {
-        "repo": "PaddlePaddle/PaddleOCR-VL-1.6",
-        "family": "qwen-vl",
-        "prompt": "OCR:",
-        "label": "PaddleOCR-VL 1.6 (0.96B, layouts/tables/formulas)",
-        "license": "Apache-2.0",
-        "size_gb": 1.9,
-    },
     "glm-ocr": {
         "repo": "zai-org/GLM-OCR",
         "family": "qwen-vl",

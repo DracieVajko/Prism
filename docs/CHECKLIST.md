@@ -964,3 +964,25 @@ Android (`Android/data/<pkg>/files/output/<kind>/`):
 - [ ] Nemotron ASR still returns an empty transcript (transformers 5.21 RNNT
       generation path); Whisper and Granite cover ASR meanwhile.
 - [ ] Optional non-installed models remain untested until downloaded.
+
+## Model curation: Nemotron ASR out (2026-11-19)
+
+- [x] Removed `nemotron-asr-0.6b` and `nemotron-transcribe-30b-a4b-nvfp4`
+      from the ASR catalog, registry and docs. The 0.6B RNNT path returns
+      empty transcripts with transformers 5.21; the 30B variants do not fit.
+      The model directory stays on disk but is no longer offered.
+- [x] Kept `nemotron-ocr-0`: the OCR model passes (2,343 chars on the slide);
+      only the ASR family was removed.
+- [x] PaddleOCR-VL download allow-list now includes its custom `.py` and
+      `.jinja` files (the model needs trust_remote_code).
+- [ ] Testing Qwen3-ASR 0.6B and PaddleOCR-VL 1.6 after their downloads.
+
+- [x] After testing, removed the incompatible ASR/OCR families: Qwen3-ASR,
+      QwenCleo (the qwen-asr wrapper needs huggingface-hub < 1.0 and breaks
+      transformers 5.21/diffusers 0.42) and PaddleOCR-VL 1.6 (remote code needs
+      a `rope_parameters` vision config absent in transformers 5.21).
+      Environment restored to transformers 5.21.1 / hub 2.4.0 / diffusers 0.42.
+- [x] Working lineup: ASR Whisper + Granite Speech (Cohere/Parakeet/NB/ivrit
+      still optional, untested); OCR Nemotron, Granite-Docling, Qwen3-VL,
+      OvisOCR2 (GLM/FireRed/Qianfan optional, untested); VLM SmolVLM +
+      Qwen3-VL describe.
