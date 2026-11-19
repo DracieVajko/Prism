@@ -936,3 +936,16 @@ Android (`Android/data/<pkg>/files/output/<kind>/`):
       earlier cycle; fixed its top finding (OCR transcribe/transcribe_pil
       duplication -> one implementation). The full queue is not cleared, so
       the score will not move until `desloppify scan` runs on an empty queue.
+
+## Installed model test pass (2026-11-19)
+
+- [x] Tested every installed model through the HTTP API; matrix and timings in
+      `docs/MODEL-TESTS.md`. Passed: Whisper turbo/large, Granite Speech,
+      Real-ESRGAN, SwinIR, SmolVLM, DDColor, GFPGAN, all four image models.
+- [x] Fixed OCR loading: missing `os` import from the PRISM_OCR_DEVICE change;
+      OCR engines now keep only one model resident (release on switch).
+- [x] Fixed install detection: `.incomplete/.part/.lock` files no longer count
+      as installed (instruct-pix2pix was a 4.5 GB partial shown as installed).
+- [ ] Known failures: Nemotron ASR (transformers 5.21 get_audio_features
+      incompatibility), instruct-pix2pix (incomplete download), Z-Image under
+      LLM memory pressure (works when free), OCR re-test blocked by low RAM.

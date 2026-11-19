@@ -13,6 +13,7 @@ or the WebUI catalog.
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
 
 logger = logging.getLogger("ocr_engine")
@@ -235,8 +236,16 @@ _engines: dict[str, OCREngine] = {}
 
 
 def get_ocr_engine(model_id: str = "nemotron-ocr-0") -> OCREngine:
-    """Return a cached engine per model. Unknown ids fall back to nemotron."""
+    """Return the engine for this model, keeping only one OCR model resident.
+
+    Large OCR models plus a running LLM can exhaust 32 GB, so switching
+    releases the previous engine instead of caching several.
+    """
     mid = model_id if model_id in OCR_SPECS else "nemotron-ocr-0"
+    for other, eng in list(_engines.items()):
+        if other != mid:
+            eng.release()
+            _engines.pop(other, None)
     if mid not in _engines:
         _engines[mid] = OCREngine(mid)
     return _engines[mid]

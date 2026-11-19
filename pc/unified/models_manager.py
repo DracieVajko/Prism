@@ -320,10 +320,15 @@ def _target_path(task: dict) -> Path:
     return MODELS_DIR / task["target"]
 
 
+PARTIAL_SUFFIXES = (".incomplete", ".part", ".lock")
+
+
 def _dir_gb(path: Path) -> float:
+    """Finished files only; a half-downloaded shard is not an installed model."""
     if not path.exists():
         return 0.0
-    return sum(f.stat().st_size for f in path.rglob("*") if f.is_file()) / 1e9
+    return sum(f.stat().st_size for f in path.rglob("*")
+               if f.is_file() and not f.name.endswith(PARTIAL_SUFFIXES)) / 1e9
 
 
 def is_installed(task: dict) -> bool:

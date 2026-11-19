@@ -319,8 +319,13 @@ def run_with_retries(fn, label, tries=5):
             time.sleep(10 * attempt)
 
 
+PARTIAL_SUFFIXES = (".incomplete", ".part", ".lock")
+
+
 def dir_size_gb(path: Path) -> float:
-    return sum(f.stat().st_size for f in path.rglob("*") if f.is_file()) / 1e9
+    """Bytes of finished files only; partial downloads must not count as installed."""
+    return sum(f.stat().st_size for f in path.rglob("*")
+               if f.is_file() and not f.name.endswith(PARTIAL_SUFFIXES)) / 1e9
 
 
 def download_url(task):
