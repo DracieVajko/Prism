@@ -61,7 +61,7 @@ def engines() -> Tuple[AsrEngine, ...]:
     """Build the registry once; engine modules are only imported on first use."""
     global _ENGINES
     if _ENGINES is None:
-        from unified import nemotron_asr, sherpa_asr
+        from unified import hf_asr, nemotron_asr, sherpa_asr
 
         _ENGINES = (
             AsrEngine(
@@ -75,6 +75,42 @@ def engines() -> Tuple[AsrEngine, ...]:
                 prefix="sherpa",
                 install_hint="python pc/tools/download_sherpa_asr.py",
                 module=sherpa_asr,
+            ),
+            AsrEngine(
+                name="hf-qwen3-asr",
+                prefix="qwen3-asr",
+                install_hint="python pc/download_models.py qwen3-asr-0.6b",
+                module=hf_asr,
+            ),
+            AsrEngine(
+                name="hf-qwencleo",
+                prefix="qwencleo",
+                install_hint="python pc/download_models.py qwencleo-asr-1.7b",
+                module=hf_asr,
+            ),
+            AsrEngine(
+                name="hf-cohere",
+                prefix="cohere-transcribe",
+                install_hint="python pc/download_models.py cohere-transcribe",
+                module=hf_asr,
+            ),
+            AsrEngine(
+                name="hf-granite-speech",
+                prefix="granite-speech",
+                install_hint="python pc/download_models.py granite-speech-470m",
+                module=hf_asr,
+            ),
+            AsrEngine(
+                name="hf-parakeet",
+                prefix="parakeet",
+                install_hint="python pc/download_models.py parakeet-v3",
+                module=hf_asr,
+            ),
+            AsrEngine(
+                name="hf-nb-whisper",
+                prefix="nb-whisper",
+                install_hint="python pc/download_models.py nb-whisper-medium",
+                module=hf_asr,
             ),
         )
     return _ENGINES

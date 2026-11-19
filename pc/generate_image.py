@@ -14,6 +14,7 @@ import base64
 import io
 import json
 import sys
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -160,12 +161,85 @@ def cmd_upscale(a):
         return base64.b64encode(buf.getvalue()).decode()
 
     st, b = req_json("/v1/images/upscale",
-                     {"image": b64(a.input), "scale": a.scale, "model": a.model})
+                     {"image": b64(a.input), "scale": a.scale, "model": a.model,
+                      "prompt": getattr(a, "prompt", ""),
+                      "strength": getattr(a, "strength", 0.33)})
     if st != 200:
         print(f"Error {st}: {json.dumps(b)[:400]}")
         sys.exit(1)
     save_b64(b["image"], a.output)
     print(f"engine={b.get('engine', '?')} elapsed={b.get('elapsed', '?')}s")
+
+
+def cmd_batch_upscale(a):
+    src = Path(a.input)
+    exts = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
+    if src.is_dir():
+        files = sorted(p for p in src.glob(a.pattern)
+                       if p.suffix.lower() in exts)
+    else:
+        files = [src]
+    if not files:
+        print("no images found")
+        sys.exit(1)
+    outdir = Path(a.output)
+    outdir.mkdir(parents=True, exist_ok=True)
+
+    jobs = [{
+        "type": "upscale",
+        "image": base64.b64encode(f.read_bytes()).decode(),
+        "scale": a.scale,
+        "model": a.model,
+        "prompt": a.prompt,
+        "strength": a.strength,
+    } for f in files]
+
+    st, b = req_json("/v1/batch", {"jobs": jobs}, timeout=120)
+    if st != 200:
+        print(f"Error {st}: {json.dumps(b)[:400]}")
+        sys.exit(1)
+    bid = b["id"]
+    print(f"batch {bid}: {len(jobs)} images")
+    state = b
+    while True:
+        time.sleep(3)
+        with urllib.request.urlopen(SERVER + f"/v1/batch/{bid}", timeout=30) as r:
+            state = json.loads(r.read().decode())
+        print(f"  {state.get('done', 0)}/{state.get('total', len(jobs))}")
+        if state.get("state") != "running":
+            break
+
+    for res in state.get("results", []):
+        if not res.get("ok"):
+            print("FAILED", res)
+            continue
+        url = (res.get("outputs") or [{}])[0].get("url")
+        if not url:
+            continue
+        name = files[res["index"]].stem + "_upscaled.png"
+        with urllib.request.urlopen(SERVER + url, timeout=120) as r:
+            (outdir / name).write_bytes(r.read())
+        print(f"saved -> {outdir / name}")
+    print("batch", state.get("state"))
+
+
+def cmd_video_upscale(a):
+    src = Path(a.input)
+    st, b = req_multipart(
+        "/v1/videos/upscale",
+        {"scale": a.scale, "model": a.model, "fps": a.fps,
+         "prompt": a.prompt, "strength": a.strength},
+        {"file": (src.name, src.read_bytes(), "video/mp4")},
+        timeout=86400)
+    if st != 200:
+        print(f"Error {st}: {json.dumps(b)[:500]}")
+        sys.exit(1)
+    out = Path(a.output)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    with urllib.request.urlopen(SERVER + b["url"], timeout=600) as r:
+        out.write_bytes(r.read())
+    print(f"saved -> {out} ({b.get('frames')} frames @ {b.get('fps')} fps, "
+          f"{b.get('engine')}, {b.get('elapsed')}s)")
 
 
 def cmd_transcribe(a):
@@ -408,8 +482,31 @@ def main():
     p = sub.add_parser("upscale")
     p.add_argument("--input", required=True)
     p.add_argument("--scale", type=int, default=2, choices=[2, 3, 4])
-    p.add_argument("--model", default="RealESRGAN_x4v3")
+    p.add_argument("--model", default="RealESRGAN_x4v3",
+                   help="RealESRGAN_x4v3 | swinir-realsr-x4 | z-image-turbo")
+    p.add_argument("--prompt", default="", help="Z-Image refine prompt (optional)")
+    p.add_argument("--strength", type=float, default=0.33,
+                   help="Z-Image denoise strength (0.05-0.9)")
     p.add_argument("--output", required=True)
+
+    p = sub.add_parser("batch-upscale", help="upscale a folder through /v1/batch")
+    p.add_argument("--input", required=True, help="folder or one image")
+    p.add_argument("--output", required=True, help="output folder")
+    p.add_argument("--pattern", default="*")
+    p.add_argument("--scale", type=int, default=2, choices=[2, 3, 4])
+    p.add_argument("--model", default="RealESRGAN_x4v3")
+    p.add_argument("--prompt", default="")
+    p.add_argument("--strength", type=float, default=0.33)
+
+    p = sub.add_parser("video-upscale", help="upscale a video frame by frame")
+    p.add_argument("--input", required=True)
+    p.add_argument("--output", required=True)
+    p.add_argument("--scale", type=int, default=2, choices=[2, 3, 4])
+    p.add_argument("--model", default="RealESRGAN_x4v3")
+    p.add_argument("--fps", type=float, default=0,
+                   help="0 = source fps (capped at 30)")
+    p.add_argument("--prompt", default="")
+    p.add_argument("--strength", type=float, default=0.33)
 
     p = sub.add_parser("transcribe")
     p.add_argument("--input", required=True)
@@ -483,7 +580,9 @@ def main():
     SERVER = a.server.rstrip("/")
     {"health": cmd_health, "models": cmd_models, "server-models": cmd_catalog_models, "doctor": cmd_doctor,
      "txt2img": cmd_txt2img, "img2img": cmd_img2img, "inpaint": cmd_inpaint,
-     "upscale": cmd_upscale, "transcribe": cmd_transcribe,
+     "upscale": cmd_upscale,
+     "batch-upscale": cmd_batch_upscale, "video-upscale": cmd_video_upscale,
+     "transcribe": cmd_transcribe,
      "caption": cmd_caption, "install": cmd_install, "uninstall": cmd_uninstall,
      "status": cmd_status, "video": cmd_video, "audio": cmd_audio,
      "extract": cmd_extract, "trim": cmd_trim, "compress": cmd_compress,

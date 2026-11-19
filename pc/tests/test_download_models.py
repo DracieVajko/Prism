@@ -10,6 +10,7 @@ ALL_TASK_LISTS = [
     dm.OCR_TASKS,
     dm.AUDIO_TASKS,
     dm.UPSCALE_TASKS,
+    dm.RESTORATION_TASKS,
 ]
 
 

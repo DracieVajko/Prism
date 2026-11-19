@@ -36,10 +36,11 @@ Running local AI should not require cloud accounts, subscriptions, or sending pr
 
 ### PC server (`pc/`)
 
-- **Image:** text-to-image, image-to-image (edits), inpaint with mask, harmonize, outpaint (edge-replicated padding), upscale (Real-ESRGAN / Pillow fallback), colorize (DDColor — B&W photo colorization)
-- **Vision:** caption and chat via SmolVLM-500M
-- **Audio:** transcription and translation via faster-whisper (tiny/base/small/medium/turbo/large) or NVIDIA Nemotron 3.5 ASR 0.6B
-- **OCR:** Xiaomi-OCR-0 via LiteRT-LM
+- **Image:** text-to-image, image-to-image (edits), inpaint with mask, harmonize, outpaint (edge-replicated padding), colorize (DDColor), upscale (Real-ESRGAN, SwinIR, Z-Image Turbo refine)
+- **Vision:** caption and chat via SmolVLM; OCR and image description via Xiaomi-OCR-0, Granite-Docling, Qwen3-VL-2B, OvisOCR2, PaddleOCR-VL, GLM-OCR, FireRed-OCR and Qianfan-OCR
+- **Audio:** transcription/translation via faster-whisper (tiny…large/turbo), Nemotron 3.5 ASR, and optional Qwen3-ASR, Cohere Transcribe, Granite Speech, Parakeet, NB-Whisper and ivrit.ai Hebrew
+- **Batch/video:** `/v1/batch` for multiple images; `/v1/videos/upscale` extracts frames, upscales, and remuxes audio
+- **Realtime:** OpenAI transcription WebSocket at `/v1/realtime` (Cindy and other realtime ASR clients)
 - **Media:** FFmpeg presets (convert video/audio/image, extract audio, trim, compress, info)
 - **Models:** lazy download from Hugging Face / direct URLs, resume, cancellation, `.READY` manifests
 - **WebUI:** single-file HTML/CSS/JS at `/webui`, dark/light theme, model catalog, outputs gallery, job queue
@@ -50,8 +51,9 @@ Running local AI should not require cloud accounts, subscriptions, or sending pr
 - Fully native, **no WebUI, no PC dependency** — everything runs on the phone
 - **Image:** text-to-image, inpaint, harmonize via ONNX Runtime LCM (QDQ, NCNN/Vulkan)
 - **Audio:** transcription and translation via whisper.cpp JNI (30 s chunks, auto-split)
-- **OCR:** Xiaomi-OCR-0 via LiteRT-LM
-- **Caption/chat:** 503 until the VLM runtime is bundled (documented limitation)
+- **OCR:** Xiaomi-OCR-0 via LiteRT-LM; PC-only OCR models return an honest 503 with the model list
+- **Caption/chat:** SmolVLM2 routes (`/v1/images/caption`, `/v1/chat/completions`) when the on-device VLM runtime is available, otherwise 503 with a reason
+- **Realtime:** OpenAI transcription WebSocket at `/v1/realtime` (whisper.cpp on commit)
 - **Models:** downloaded lazily into app storage, never in the APK
 - **Server:** foreground Ktor service, keeps running when backgrounded
 - **Modes:** Local only (Local / Remote / Auto were removed by design)
@@ -63,6 +65,40 @@ Running local AI should not require cloud accounts, subscriptions, or sending pr
 - **Honest errors:** unavailable features return `503 will-not-load` with a reason, never faked
 - **Lazy models:** weights are never bundled; downloaded on demand
 - **LAN-only, no authentication:** do not expose ports to the internet; use Tailscale or your LAN firewall
+
+## Models
+
+Full tables with languages, speed, size, licence and status:
+
+- **OCR / document / image understanding:** [`pc/docs/OCR-MODELS.md`](pc/docs/OCR-MODELS.md)
+- **Speech recognition:** [`pc/docs/ASR-MODELS.md`](pc/docs/ASR-MODELS.md)
+
+PC OCR: Xiaomi-OCR-0 (fast text), Granite-Docling-258M (pages → DocTags/Markdown),
+Qwen3-VL-2B (OCR + description), OvisOCR2, PaddleOCR-VL-1.6, GLM-OCR,
+FireRed-OCR, Qianfan-OCR (192 languages). PC ASR: Whisper, Nemotron,
+Qwen3-ASR, Cohere, Granite Speech, Parakeet, NB-Whisper, ivrit.ai Hebrew.
+Android OCR is Xiaomi-OCR-0 (LiteRT-LM); Android VLM is SmolVLM2.
+
+Every model is listed in `GET /v1/models/catalog` with `description`, `license`,
+`size_gb` and install state, so clients and the WebUI can show the same labels.
+
+## API endpoints
+
+OpenAI-compatible, same shape on PC and Android:
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/health`, `/v1/models`, `/v1/models/catalog` | status, models, descriptions |
+| POST | `/v1/images/generations`, `/edits`, `/inpaint`, `/upscale`, `/caption`, `/ocr` | images, OCR, description |
+| POST | `/v1/audio/transcriptions`, `/translations`, `/speech` | ASR, TTS |
+| POST | `/v1/chat/completions` | VLM chat |
+| POST | `/v1/batch`, `/v1/videos/upscale` | batch images, video upscale (PC) |
+| WS | `/v1/realtime` | OpenAI transcription session |
+| GET | `/webui` | PC WebUI |
+
+Android exposes the same paths; features that cannot run on the phone return
+`503` with a reason (PC-only OCR models, video upscale, most optional ASR
+engines) instead of faking output.
 
 ## Supported platforms
 

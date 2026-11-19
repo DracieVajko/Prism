@@ -289,6 +289,8 @@ KIND_LABELS = {
     "image": "Image generation",
     "audio": "Transcription (Whisper)",
     "upscale": "Upscale",
+    "ocr": "OCR / document",
+    "restoration": "Restoration",
     "vlm": "Vision-language (VLM)",
     "custom": "Custom (own URL)",
 }
@@ -302,6 +304,7 @@ def _catalog_tasks():
     out += [dict(t, group="upscale") for t in dm.UPSCALE_TASKS]
     out += [dict(t, group="vlm") for t in dm.VLM_TASKS]
     out += [dict(t, group="audio") for t in getattr(dm, "AUDIO_TASKS", [])]
+    out += [dict(t, group="ocr") for t in getattr(dm, "OCR_TASKS", [])]
     out += [dict(t, group="restoration") for t in getattr(dm, "RESTORATION_TASKS", [])]
     return out
 
@@ -352,6 +355,7 @@ def catalog() -> list:
                        else "nemotron-asr" if group == "audio"
                        else "torch"),
             "label": t.get("note") or t.get("repo") or t.get("url") or t["id"],
+            "description": t.get("description") or t.get("note") or "",
             "license": t.get("license", ""),
             "size_gb": t.get("min_gb", 0.0),
             "size_mb": int(round(t.get("min_gb", 0.0) * 1024)),

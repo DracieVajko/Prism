@@ -741,3 +741,198 @@ Android (`Android/data/<pkg>/files/output/<kind>/`):
       (system voice packs), returns WAV; honest 503 when a language is unavailable.
 - [ ] Android: Supertonic 3 on-device (Sherpa-ONNX JNI) — not integrated yet;
       system TTS is the current engine.
+
+## Windows autostart (2026-11-18)
+
+- [x] `Startup\Prism.vbs` failed at logon with `800A0401 Expected end of
+      statement` (line 3, char 86). Root cause: `install-prism-service.ps1`
+      interpolated `-File "D:\...\start-prism-autostart.ps1"` into a VBScript
+      string literal without VBS escaping, so the embedded `"` ended the
+      string early. Fixed by doubling quotes (`$psArgs.Replace('"', '""')`)
+      before building `$vbsBody`.
+- [x] `pc/scripts/start-prism-autostart.ps1` still hardcoded
+      `D:\AI\DiffusionServer\pc` for the working directory and the log after
+      the move to `D:\AI\Prism`; both now derive from `$PSScriptRoot`, so no
+      absolute path has to survive a move.
+- [x] Regenerated the Startup file from the fixed generator, byte-identical to
+      its output. Verified from the installed artifact: `wscript` -> VBS ->
+      runner -> uvicorn answers `GET /health` 200 with 5 models registered.
+- [ ] Remaining `D:\AI\DiffusionServer` references (registry.json, tools,
+      ADMIN-SETUP.md) need a separate path-migration pass.
+
+## Upscale engines (2026-11-18)
+
+- [x] `/v1/images/upscale` now accepts `model`: `RealESRGAN_x4v3` (default,
+      unchanged), `swinir-realsr-x4`, `z-image-turbo`; unknown names return 400.
+- [x] SwinIR exposed as a deterministic engine through the existing ONNX
+      model (Apache-2.0): x4 then resize, input cap raised 512 -> 1024 px
+      (`PRISM_SWINIR_MAX_SIDE`), 64 px tiles keep it inside 4 GB. Measured
+      512 -> 2048 px in ~2.5 min on the RTX 3060; minutes, not seconds.
+- [x] `diffusion_server` no longer auto-discovers `z-image-turbo` as a
+      StableDiffusion pipeline (added to `NON_DIFFUSION_DIRS`).
+- [x] Z-Image Turbo generative refine: Real-ESRGAN base pass, then Z-Image
+      img2img (`strength=0.33`, 9 steps, guidance 0). bf16 with sequential CPU
+      offload below 9 GB VRAM; images above 1024 px are tiled with a 96 px
+      feather, and more than 9 tiles is refused with a clear error.
+- [x] Z-Image end-to-end verified: 33 GB snapshot downloaded (all SHA-256
+      hashes match), 256 -> 512 px returns 200 with
+      `engine=zimage-turbo+realesrgan`. Cold call 19.6 min (20 GB load on
+      32 GB RAM), warm call 46 s at strength 0.33. The 900 s idle unload
+      releases it, so the next session pays the load again.
+- [x] Catalog: `swinir-realsr-x4-upscale` and `z-image-turbo` (Apache-2.0,
+      ~33 GB) with presets `swinir` and `zimage`; the WebUI model select picks
+      them up from `/v1/models`.
+- [x] WebUI Upscale tab: optional Z-Image prompt and strength fields.
+- [x] Tests: engine dispatch + tiling maths; full PC suite 178 passed,
+      4 skipped.
+- [ ] MiniMax-H3-Image rejected: licence excludes the EU; the 6.4 GB Q2_K is
+      only the DiT (text encoder adds 12-27 GB, VAE 1.17 GB).
+
+## Realtime transcription + universal endpoints (2026-11-18)
+
+- [x] PC `/v1/realtime` WebSocket implements the OpenAI transcription session
+      Cindy uses: `session.update`, `input_audio_buffer.append` (base64 PCM16),
+      `commit`, `finish` -> `session.updated`,
+      `input_audio_buffer.committed`,
+      `conversation.item.input_audio_transcription.completed`. Tested against
+      Cindy's exact sequence; 6 s of speech returned "And so, my fellow
+      Americans, ask not what your...".
+- [x] 24 kHz PCM is resampled to 16 kHz; `WHISPER_DEVICE=cuda` gives sub-second
+      turns, CPU works but is slower. No partial deltas in v1.
+- [x] Android `ApiServer` exposes the same `/v1/realtime` route on Ktor
+      WebSockets, buffering PCM and calling the existing `WhisperLib`
+      (installed turbo/large model, fallback to the first audio model).
+      Debug APK builds (`:app:assembleDebug`, 104 MB); no device was attached,
+      so the on-device socket run is still pending.
+- [x] Universal surface stays OpenAI-compatible: `/v1/models`,
+      `/v1/audio/transcriptions|translations|speech`,
+      `/v1/images/*`, `/v1/chat/completions`, plus the realtime socket.
+- [x] Client compatibility documented in `pc/docs/UNIFIED-CONTRACT.md`:
+      Cindy (WS), Odysseus (`endpoint:<id>` HTTP STT), OpenAI SDK/any
+      OpenAI-compatible client. Claude Code and Codex CLI built-in voice does
+      not accept a custom ASR endpoint, so they cannot use Prism for that.
+- [x] Tests: `pc/tests/test_realtime_ws.py` (session flow with a stubbed
+      transcriber).
+
+## LAN + Tailscale access (2026-11-19)
+
+- [x] The server now binds `0.0.0.0` (autostart runner and manual start), so
+      `127.0.0.1`, the LAN IP and the Tailscale IP all answer.
+- [x] Verified: `/health` on 127.0.0.1, 10.15.14.87 (LAN) and
+      100.88.219.120 (Tailscale); WebSocket `/v1/realtime` over the Tailscale
+      IP returned the expected transcript.
+- [x] Inbound TCP 8101 already allowed by the existing Prism/Odysseus firewall
+      rules. No auth: trusted LAN/tailnet only, never public.
+
+## OCR + Z-Image batch/video (2026-11-19)
+
+- [x] Fixed the PC OCR engine for transformers 5.x: `AutoModelForVision2Seq`
+      is gone (use `AutoModelForImageTextToText`), the model dir is absolute,
+      and the Qwen chat template inserts the image tokens. Without the chat
+      template the model errors with "tokens: 0, features: 1000".
+- [x] `nemotron-ocr-0` installed (1.77 GB; the catalog's 2.0 GB minimum was
+      corrected to 1.6). OCR on `IMG-20261108-WA0000.jpg` via
+      `POST /v1/images/ocr` returned 2,343 chars in ~100 s (load + inference),
+      saved to `IMG-20261108-WA0000.txt` next to the image.
+- [x] Batch upscale: `/v1/batch` upscale jobs now pass `prompt`, `strength`,
+      `seed` and the requested model to `upscale_image_b64`; smoke test with
+      two images completed 2/2 with Real-ESRGAN.
+- [x] Video upscale: `POST /v1/videos/upscale` extracts frames, upscales each,
+      remuxes audio. Tested 5 s / 10 fps / 50 frames -> 1280x720 H.264 with
+      audio in 272 s using Real-ESRGAN. Z-Image is capped at 24 frames (400
+      with a clear message above that), since diffusion is ~30 s/frame.
+
+## OCR model portfolio (2026-11-19)
+
+- [x] Research (Hugging Face sizes/licenses verified): PaddleOCR-VL-1.6
+      (1.9 GB, Apache-2.0, SOTA document parsing), dots.ocr (6.1 GB, MIT,
+      layout), DeepSeek-OCR-2 (6.8 GB, Apache-2.0), olmOCR-2-7B (16.6 GB),
+      Florence-2-large (3.1 GB, MIT, caption/objects). The last four need
+      custom architectures and/or >6 GB, so they are documented but not wired.
+- [x] OCR engine refactored to a registry with two families: `qwen-vl`
+      (Qwen2.5/3-VL chat template) and `idefics3` (Granite-Docling). Both need
+      the chat template; a bare prompt has zero image tokens.
+- [x] Added and catalogued: `nemotron-ocr-0` (1.7 GB, fast text),
+      `granite-docling-258m` (0.5 GB, PDF/page -> DocTags/Markdown), and
+      `qwen3-vl-2b` (4.3 GB, OCR 32 languages + object/description).
+      `--preset ocr` downloads all three (~6.5 GB).
+- [x] `POST /v1/images/ocr` takes `model` and `task=ocr|describe`; document
+      models reject `describe` with a clear 400. OCR models now appear in
+      `/v1/models/catalog` (OCR_TASKS was missing from the catalog import).
+- [x] Granite-Docling verified on a rendered PDF page: 4,987 chars of DocTags
+      with coordinates in 222 s (258M model, 6 GB GPU).
+- [ ] Qwen3-VL-2B end-to-end OCR/describe run was started; the model loads in
+      ~74 s but inference competes with LM Studio for the 6 GB GPU, so it is
+      slow while the user's LLM is resident.
+
+## ASR model portfolio (2026-11-19)
+
+- [x] Researched and verified on Hugging Face: Parakeet v3/v2/Unified
+      (CC-BY-4.0, 5.73/2.47 GB), Orukeet (CC-BY-SA, 9.85 GB), Nemotron 3.5
+      (already wired), Qwen3-ASR 0.6B/1.7B (Apache-2.0, 1.88/4.08 GB),
+      QwenCleo (Arabic, 4.08 GB), ivrit.ai Whisper turbo (Hebrew CT2,
+      1.62 GB), SenseVoice Small (0.94 GB, FunASR), Cohere Transcribe
+      (4.13 GB), Underdog Bark (CC-BY-NC, not offered), GigaAM v3
+      (Russian, 0.45 GB, custom), NB-Whisper (Norwegian, 3.06 GB),
+      Granite Speech 5.0 470M/2B (0.95/5.05 GB).
+- [x] Added `unified/hf_asr.py` (transformers pipeline) and registered
+      prefixes in `asr.py`: qwen3-asr, qwencleo, cohere-transcribe,
+      granite-speech, parakeet, nb-whisper.
+- [x] Added `ivrit-whisper-turbo` as a custom CTranslate2 Whisper source
+      (Hebrew) and included it in ALLOWED_WHISPER.
+- [x] Catalog: 10 new AUDIO_TASKS entries with sizes/licences; the README
+      `pc/docs/ASR-MODELS.md` documents languages, claimed speed, size,
+      licence and status. Android remains whisper.cpp only.
+- [ ] Runtime verification of the transformers ASR path (Granite 470M) is in
+      progress; the others are catalogued and route through the same engine.
+
+- [x] Runtime verification: Granite Speech 470M via the real endpoint on
+      `testdata/audio/jfk.wav` returned the correct JFK line in 20.5 s
+      (first load included). `torchaudio` was installed for its feature
+      extractor. The catalog now lists 19 audio models; the other transformers
+      engines share the same pipeline and are catalogued but not individually
+      benchmarked.
+
+## More OCR models from the 2026 list (2026-11-19)
+
+- [x] Verified the top candidates on Hugging Face and transformer support:
+      OvisOCR2 (ATH-MaaS/OvisOCR2, 1.71 GB, Apache-2.0, Qwen3.5 class),
+      PaddleOCR-VL-1.6 (1.92 GB, Apache-2.0, native class), GLM-OCR
+      (2.65 GB, MIT, native class), FireRed-OCR (4.26 GB, Apache-2.0,
+      Qwen3-VL class).
+- [x] Added all four to the OCR registry and catalog; `pc/docs/OCR-MODELS.md`
+      documents them plus the ones not wired (Unlimited-OCR needs a custom
+      class and 6.7-13.4 GB; LightOnOCR/Falcon-OCR classes missing;
+      dots/DeepSeek/olmOCR/Chandra/Qianfan too large; Jina/Underdog
+      non-commercial; PP-OCRv6 is a classic pipeline).
+- [ ] OvisOCR2 runtime test is in progress; the download is 1.7 GB.
+
+- [x] OvisOCR2 runtime verified: 7,995 chars of structured Markdown with
+      bounding boxes from the slide, but 666 s on this machine because the
+      Qwen3.5 hybrid kernels (flash-linear-attention, causal_conv1d) are not
+      installed and layers offload to CPU. Documented as an offline/accuracy
+      option, not interactive.
+
+- [x] Qianfan-OCR (4.7B, 192 languages, KIE/layout) added through the same
+      qwen-vl path with prompt "Parse this document to Markdown."; catalogued
+      at 9.5 GB with an offload warning. `PRISM_OCR_DEVICE=auto|cpu|cuda`
+      controls placement so OCR can run while an LLM holds the GPU.
+- [x] Surya OCR 2 and Chandra 2 are package-based (`surya`, `chandra`), not
+      plain transformers; documented in OCR-MODELS.md instead of pretending
+      the generic loader supports them. Unlimited-OCR/LightOnOCR/Falcon-OCR/
+      DeepSeek-OCR-2 use custom inference APIs and remain documented.
+
+## Model metadata, Android parity, release pass (2026-11-19)
+
+- [x] Model catalog exposes `description` on PC (`models_manager.catalog`) and
+      Android (`/v1/models`, `/v1/models/catalog`); README links the full OCR
+      and ASR tables and lists every endpoint.
+- [x] Android OCR accepts `model`/`task`: PC-only models return 503 with the
+      model list, `task=describe` points at `/v1/images/caption`/chat, and
+      `/v1/videos/upscale` is an honest 503. Caption/chat already run SmolVLM2
+      when the runtime/model is present. Debug APK builds.
+- [x] README, ANDROID.md, UNIFIED-CONTRACT/OPS and model docs updated.
+- [x] Desloppify scan: strict 64.4/100 frozen with a 143-item queue from an
+      earlier cycle; fixed its top finding (OCR transcribe/transcribe_pil
+      duplication -> one implementation). The full queue is not cleared, so
+      the score will not move until `desloppify scan` runs on an empty queue.

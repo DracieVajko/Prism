@@ -1,81 +1,161 @@
+"""OCR / document / image-understanding engines for Prism PC.
+
+Each entry in OCR_SPECS is a model that can be downloaded from the Models tab
+and selected on `POST /v1/images/ocr` (`model=`). Two families are supported:
+
+  qwen-vl   Qwen2.5/Qwen3-VL style chat models. The Qwen chat template inserts
+            the image tokens; without it the model sees zero image tokens.
+  idefics3  Granite-Docling: takes a plain prompt and returns DocTags/Markdown.
+
+Weights live in pc/models/<id>; download them with `download_models.py <id>`
+or the WebUI catalog.
 """
-Xiaomi-Nemotron-3.5-OCR-0 OCR engine for Prism PC.
-
-Uses transformers to run the Xiaomi-OCR-0 model (Qwen3.5-0.8B based VLM)
-for optical character recognition on images.
-
-Model: https://huggingface.co/xiaomi-research/Xiaomi-OCR-0
-Size: ~1.67 GB (bfloat16)
-"""
-
 from __future__ import annotations
 
 import logging
-import os
 from pathlib import Path
-from typing import Optional
 
 logger = logging.getLogger("ocr_engine")
+_HERE = Path(__file__).resolve().parent.parent  # pc/
 
 try:
     import torch
-    from transformers import AutoProcessor, AutoModelForVision2Seq
+    from transformers import AutoProcessor
+    try:
+        # transformers 5.x name; 4.x used AutoModelForVision2Seq.
+        from transformers import AutoModelForImageTextToText as _AutoVLM
+    except ImportError:
+        from transformers import AutoModelForVision2Seq as _AutoVLM
     _TORCH_AVAILABLE = True
 except ImportError:
     _TORCH_AVAILABLE = False
 
 
+OCR_SPECS = {
+    "nemotron-ocr-0": {
+        "repo": "xiaomi-research/Xiaomi-OCR-0",
+        "family": "qwen-vl",
+        "label": "Xiaomi Nemotron OCR 0.8B (fast, multilingual)",
+        "license": "Apache-2.0",
+        "size_gb": 1.7,
+    },
+    "granite-docling-258m": {
+        "repo": "ibm-granite/granite-docling-258M",
+        "family": "idefics3",
+        "prompt": "Convert this page to docling.",
+        "label": "Granite-Docling 258M (tiny, PDF -> DocTags/Markdown)",
+        "license": "Apache-2.0",
+        "size_gb": 0.5,
+    },
+    "qwen3-vl-2b": {
+        "repo": "Qwen/Qwen3-VL-2B-Instruct",
+        "family": "qwen-vl",
+        "label": "Qwen3-VL 2B (OCR + objects/description, 32 languages)",
+        "license": "Apache-2.0",
+        "size_gb": 4.3,
+    },
+    "ovis-ocr2": {
+        "repo": "ATH-MaaS/OvisOCR2",
+        "family": "qwen-vl",
+        "label": "OvisOCR2 853M (96.58 OmniDocBench v1.6)",
+        "license": "Apache-2.0",
+        "size_gb": 1.7,
+    },
+    "paddleocr-vl-1.6": {
+        "repo": "PaddlePaddle/PaddleOCR-VL-1.6",
+        "family": "qwen-vl",
+        "prompt": "OCR:",
+        "label": "PaddleOCR-VL 1.6 (0.96B, layouts/tables/formulas)",
+        "license": "Apache-2.0",
+        "size_gb": 1.9,
+    },
+    "glm-ocr": {
+        "repo": "zai-org/GLM-OCR",
+        "family": "qwen-vl",
+        "prompt": "Please extract the text from the image.",
+        "label": "GLM-OCR 1.33B (MIT, tables/formulas, 8 languages)",
+        "license": "MIT",
+        "size_gb": 2.7,
+    },
+    "firered-ocr": {
+        "repo": "FireRedTeam/FireRed-OCR",
+        "family": "qwen-vl",
+        "label": "FireRed-OCR (Qwen3-VL-2B fine-tune)",
+        "license": "Apache-2.0",
+        "size_gb": 4.3,
+    },
+    "qianfan-ocr": {
+        "repo": "baidu/Qianfan-OCR",
+        "family": "qwen-vl",
+        "prompt": "Parse this document to Markdown.",
+        "label": "Qianfan-OCR 4.7B (192 languages, KIE, layout)",
+        "license": "Apache-2.0",
+        "size_gb": 9.5,
+    },
+}
+
+LANG_NAMES = {
+    "sk": "Slovenčina", "cs": "Čeština", "en": "English", "de": "Deutsch",
+    "fr": "Français", "es": "Español", "it": "Italiano", "pl": "Polski",
+    "ru": "Русский", "uk": "Українська", "hu": "Magyar",
+}
+
+
+def _has_weights(d: Path) -> bool:
+    if not (d / "config.json").exists():
+        return False
+    if (d / "model.safetensors").exists():
+        return True
+    if (d / "model.safetensors.index.json").exists():
+        return True
+    return any(d.glob("*.safetensors"))
+
+
 class OCREngine:
-    """Xiaomi Nemotron-3.5-OCR-0 OCR engine.
-
-    Loads the Qwen3.5-0.8B based VLM model for optical character recognition.
-    Supports multiple languages including Slovak, English, Czech, German, etc.
-    """
-
-    def __init__(self, model_dir: str | None = None):
-        self.model_dir = model_dir or "pc/models/nemotron-ocr-0"
+    def __init__(self, model_id: str = "nemotron-ocr-0", model_dir: str | None = None):
+        self.model_id = model_id if model_id in OCR_SPECS else "nemotron-ocr-0"
+        spec = OCR_SPECS[self.model_id]
+        self.family = spec["family"]
+        self.fixed_prompt = spec.get("prompt")
+        self.model_dir = model_dir or str(_HERE / "models" / self.model_id)
         self.processor = None
         self.model = None
         self._loaded = False
 
     def is_installed(self) -> bool:
-        d = Path(self.model_dir)
-        return (d / "model.safetensors").exists() and (d / "config.json").exists()
+        return _has_weights(Path(self.model_dir))
 
     def init(self) -> bool:
-        """Load the OCR model. Returns True on success."""
         if self._loaded:
             return True
-
         if not _TORCH_AVAILABLE:
             logger.error("transformers/torch not installed - cannot load OCR model")
             return False
-
         if not self.is_installed():
-            logger.warning(f"OCR model not installed at {self.model_dir}")
+            logger.warning("OCR model not installed at %s", self.model_dir)
             return False
-
         try:
-            import torch
-            from transformers import AutoProcessor, AutoModelForVision2Seq
-
-            self.processor = AutoProcessor.from_pretrained(self.model_dir)
-            self.model = AutoModelForVision2Seq.from_pretrained(
+            self.processor = AutoProcessor.from_pretrained(
+                self.model_dir, trust_remote_code=True)
+            # auto = accelerate decides; cpu forces full CPU (works while the
+            # GPU is busy with an LLM); cuda keeps everything on the GPU.
+            device = (os.environ.get("PRISM_OCR_DEVICE") or "auto").strip().lower()
+            device_map = device if device in ("cpu", "cuda") else "auto"
+            self.model = _AutoVLM.from_pretrained(
                 self.model_dir,
                 torch_dtype="auto",
-                device_map="auto",
+                device_map=device_map,
                 trust_remote_code=True,
             )
             self._loaded = True
-            logger.info(f"OCR model loaded from {self.model_dir}")
+            logger.info("OCR model %s loaded from %s", self.model_id, self.model_dir)
             return True
         except Exception as e:
-            logger.error(f"OCR model init failed: {e}")
+            logger.error("OCR model %s init failed: %s", self.model_id, e)
             self._loaded = False
             return False
 
     def release(self):
-        """Release the model from memory."""
         self.processor = None
         self.model = None
         self._loaded = False
@@ -83,146 +163,87 @@ class OCREngine:
             import torch
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
-        except Exception as exc:
-            logger.debug("OCR CUDA cache clear failed: %s", exc)
+        except Exception:
+            pass
 
-    def transcribe(self, image_path: str, language: str = "auto") -> str:
-        """Perform OCR on an image file.
+    def _prompt(self, task: str, language: str) -> str:
+        task = (task or "ocr").strip().lower()
+        if self.fixed_prompt:
+            if task == "describe":
+                raise ValueError(f"{self.model_id} only converts documents; "
+                                 "use qwen3-vl-2b for description")
+            return self.fixed_prompt
+        if task == "describe":
+            return ("Describe this image in detail. Cover the main objects, "
+                    "people, layout, colours, and any visible text.")
+        lang = LANG_NAMES.get(language)
+        if lang:
+            return (f"Transcribe the following image in {lang}. "
+                    "Return only the text content.")
+        return "Transcribe the text in this image. Return only the text content."
 
-        Args:
-            image_path: Path to the image file
-            language: Language hint (auto, sk, en, cs, de, etc.) or "auto"
+    def _inputs(self, image, prompt: str):
+        # Both families need the chat template: it inserts the <image> token.
+        # A bare prompt gives "0 <image> tokens and [0, 1] images".
+        messages = [{"role": "user", "content": [
+            {"type": "image"},
+            {"type": "text", "text": prompt},
+        ]}]
+        chat = self.processor.apply_chat_template(
+            messages, tokenize=False, add_generation_prompt=True)
+        return self.processor(text=chat, images=[image], return_tensors="pt")
 
-        Returns:
-            Recognized text string
-        """
-        if self.model is None or self.processor is None:
-            if not self.init():
-                return ""
-
+    def transcribe(self, image_path: str, language: str = "auto",
+                   task: str = "ocr") -> str:
+        """Open the file and delegate to transcribe_pil (one implementation)."""
         try:
-            import torch
             from PIL import Image
 
-            image = Image.open(image_path).convert("RGB")
-
-            # Build prompt based on language
-            lang_map = {
-                "sk": "Slovenčina",
-                "cs": "Čeština",
-                "en": "English",
-                "de": "Deutsch",
-                "fr": "Français",
-                "es": "Español",
-                "it": "Italiano",
-                "pl": "Polski",
-                "ru": "Русский",
-                "uk": "Українська",
-                "hu": "Magyar",
-                "auto": None,
-            }
-            lang_name = lang_map.get(language, None)
-
-            if lang_name:
-                prompt = f"Transcribe the following image in {lang_name}. Return only the text content."
-            else:
-                prompt = "Transcribe the text in this image. Return only the text content."
-
-            inputs = self.processor(text=prompt, images=image, return_tensors="pt")
-
-            # Move to same device as model
-            device = self.model.device
-            inputs = {k: v.to(device) for k, v in inputs.items()}
-
-            with torch.no_grad():
-                output = self.model.generate(
-                    **inputs,
-                    max_new_tokens=4096,
-                    do_sample=False,
-                    temperature=0.1,
-                )
-
-            # Decode only the generated tokens (skip input tokens)
-            input_len = inputs["input_ids"].shape[1]
-            generated_tokens = output[0][input_len:]
-            text = self.processor.decode(generated_tokens, skip_special_tokens=True)
-
-            return text.strip()
-
+            return self.transcribe_pil(
+                Image.open(image_path).convert("RGB"), language, task)
         except Exception as e:
-            logger.error(f"OCR transcription failed: {e}")
+            logger.error("OCR image open failed (%s): %s", self.model_id, e)
             return ""
 
-    def transcribe_pil(self, image, language: str = "auto") -> str:
-        """Perform OCR on a PIL Image object."""
+    def transcribe_pil(self, image, language: str = "auto",
+                       task: str = "ocr") -> str:
         if self.model is None or self.processor is None:
             if not self.init():
                 return ""
-
         try:
             import torch
 
             if image.mode != "RGB":
                 image = image.convert("RGB")
-
-            lang_map = {
-                "sk": "Slovenčina",
-                "cs": "Čeština",
-                "en": "English",
-                "de": "Deutsch",
-                "fr": "Français",
-                "es": "Español",
-                "it": "Italiano",
-                "pl": "Polski",
-                "ru": "Русский",
-                "uk": "Українська",
-                "hu": "Magyar",
-                "auto": None,
-            }
-            lang_name = lang_map.get(language, None)
-
-            if lang_name:
-                prompt = f"Transcribe the following image in {lang_name}. Return only the text content."
-            else:
-                prompt = "Transcribe the text in this image. Return only the text content."
-
-            inputs = self.processor(text=prompt, images=image, return_tensors="pt")
-
+            prompt = self._prompt(task, language)
+            inputs = self._inputs(image, prompt)
             device = self.model.device
             inputs = {k: v.to(device) for k, v in inputs.items()}
-
             with torch.no_grad():
                 output = self.model.generate(
-                    **inputs,
-                    max_new_tokens=4096,
-                    do_sample=False,
-                    temperature=0.1,
-                )
-
+                    **inputs, max_new_tokens=4096, do_sample=False)
             input_len = inputs["input_ids"].shape[1]
-            generated_tokens = output[0][input_len:]
-            text = self.processor.decode(generated_tokens, skip_special_tokens=True)
-
+            text = self.processor.decode(output[0][input_len:],
+                                         skip_special_tokens=True)
             return text.strip()
-
         except Exception as e:
-            logger.error(f"OCR transcription failed: {e}")
+            logger.error("OCR transcription failed (%s): %s", self.model_id, e)
             return ""
 
 
-# Singleton instance
-_ocr_engine = None
+_engines: dict[str, OCREngine] = {}
 
 
-def get_ocr_engine() -> OCREngine:
-    """Get the singleton OCR engine instance."""
-    global _ocr_engine
-    if _ocr_engine is None:
-        _ocr_engine = OCREngine()
-    return _ocr_engine
+def get_ocr_engine(model_id: str = "nemotron-ocr-0") -> OCREngine:
+    """Return a cached engine per model. Unknown ids fall back to nemotron."""
+    mid = model_id if model_id in OCR_SPECS else "nemotron-ocr-0"
+    if mid not in _engines:
+        _engines[mid] = OCREngine(mid)
+    return _engines[mid]
 
 
-def reset_ocr_engine():
-    global _ocr_engine
-    _ocr_engine = None
-    _ocr_engine = OCREngine()
+def reset_ocr_engine(model_id: str | None = None):
+    if model_id is None:
+        _engines.clear()
+    else:
+        _engines.pop(model_id, None)

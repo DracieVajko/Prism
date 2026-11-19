@@ -13,6 +13,8 @@ GET /v1/images/progress/{id}, GET /webui, GET / -> /webui
 import asyncio
 import base64
 import io
+import shutil
+import subprocess
 import tempfile
 import threading
 import json
@@ -24,7 +26,9 @@ import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, File, Form, Request, UploadFile
+import numpy as np
+from fastapi import (FastAPI, File, Form, Request, UploadFile, WebSocket,
+                     WebSocketDisconnect)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import (FileResponse, HTMLResponse, JSONResponse,
                                RedirectResponse, Response)
@@ -86,6 +90,11 @@ def _release_engines(reason: str = ""):
     try:
         from unified.upscale import release_upscale
         release_upscale()
+    except Exception:
+        pass
+    try:
+        from unified.zimage import release as release_zimage
+        release_zimage()
     except Exception:
         pass
     try:
@@ -330,6 +339,10 @@ class UpscaleRequest(BaseModel):
     image: str = ""
     scale: int = 2
     model: Optional[str] = "RealESRGAN_x4v3"
+    # Z-Image Turbo only; ignored by Real-ESRGAN and SwinIR.
+    prompt: Optional[str] = ""
+    strength: float = 0.33
+    seed: int = 0
     request_id: Optional[str] = ""
 
 class ColorizeRequest(BaseModel):
@@ -971,15 +984,25 @@ def harmonize(req: HarmonizeRequest):
 @app.post("/v1/images/upscale")
 def upscale(req: UpscaleRequest):
     rid = req.request_id or f"req-{uuid.uuid4().hex[:8]}"
+    model_id = (req.model or "RealESRGAN_x4v3").strip()
     try:
-        _manager.ensure("upscale", "RealESRGAN_x4v3")
+        _manager.ensure("upscale", model_id)
     except ModelLoadingError as e:
         return _raise_loading(e)
     if not req.image:
         return JSONResponse(status_code=400, content={"error": "missing image b64"})
     _release_sd_best_effort()
     try:
-        out = upscale_image_b64(req.image, req.scale, req.model or "RealESRGAN_x4v3")
+        out = upscale_image_b64(req.image, req.scale, model_id,
+                                prompt=req.prompt or "",
+                                strength=req.strength, seed=req.seed)
+    except RuntimeError as e:
+        # Z-Image not installed or no CUDA device: honest 503, never fake output.
+        hint = ("Run: python download_models.py z-image-turbo"
+                if model_id.lower() in ("zimage", "zimage-turbo", "z-image-turbo")
+                else "Run: python download_models.py swinir-realsr-x4-upscale")
+        return JSONResponse(status_code=503, content={
+            "error": "will not load", "detail": str(e)[:300], "hint": hint})
     except ValueError as e:
         msg = str(e)
         if "exceeds cap" in msg:
@@ -989,6 +1012,147 @@ def upscale(req: UpscaleRequest):
     meta = _store_b64("image", ".png", out.get("image", ""), rid)
     out["outputs"] = [meta] if meta else []
     return out
+
+
+VIDEO_MAX_FRAMES_DEFAULT = 900
+VIDEO_MAX_FRAMES = {"z-image-turbo": 24, "zimage": 24, "z-image": 24,
+                    "zimage-turbo": 24}
+
+
+def _rate_to_float(value: str) -> float:
+    try:
+        if "/" in value:
+            num, den = value.split("/", 1)
+            return float(num) / float(den or 1)
+        return float(value)
+    except (TypeError, ValueError, ZeroDivisionError):
+        return 0.0
+
+
+def _probe_video(path: Path) -> dict:
+    proc = subprocess.run(
+        ["ffprobe", "-v", "error", "-select_streams", "v:0",
+         "-show_entries", "stream=avg_frame_rate,width,height",
+         "-show_entries", "format=duration", "-of", "json", str(path)],
+        capture_output=True, text=True)
+    if proc.returncode != 0:
+        raise RuntimeError((proc.stderr or "ffprobe failed")[:300])
+    data = json.loads(proc.stdout or "{}")
+    streams = data.get("streams") or [{}]
+    fmt = data.get("format") or {}
+    return {
+        "fps": _rate_to_float(streams[0].get("avg_frame_rate", "")),
+        "width": int(streams[0].get("width") or 0),
+        "height": int(streams[0].get("height") or 0),
+        "duration": float(fmt.get("duration") or 0),
+    }
+
+
+@app.post("/v1/videos/upscale")
+async def video_upscale(
+    file: UploadFile = File(default=None),
+    scale: int = Form(default=2),
+    model: str = Form(default="RealESRGAN_x4v3"),
+    fps: float = Form(default=0.0),
+    prompt: str = Form(default=""),
+    strength: float = Form(default=0.33),
+):
+    """Upscale a video by extracting frames, upscaling each, and remuxing audio.
+
+    Model choice matters: Real-ESRGAN/SwinIR take well under a second per
+    frame; Z-Image is a diffusion refine at tens of seconds per frame, so it is
+    capped at 24 frames (about 1 s at 24 fps). Longer clips should use the
+    deterministic engines or be split first.
+    """
+    rid = f"vid-{uuid.uuid4().hex[:8]}"
+    if file is None:
+        return JSONResponse(status_code=400, content={"error": "missing file"})
+    if scale not in (2, 3, 4):
+        return JSONResponse(status_code=400,
+                            content={"error": f"scale must be 2/3/4, got {scale}"})
+    raw = await file.read()
+    if not raw:
+        return JSONResponse(status_code=400, content={"error": "empty file"})
+    if shutil.which("ffmpeg") is None or shutil.which("ffprobe") is None:
+        return JSONResponse(status_code=503, content={
+            "error": "will not load", "detail": "ffmpeg/ffprobe not on PATH"})
+
+    suffix = Path(file.filename or "video.mp4").suffix or ".mp4"
+    tmpdir = Path(tempfile.mkdtemp(prefix="prism_video_"))
+    t0 = time.time()
+    try:
+        src = tmpdir / f"input{suffix}"
+        src.write_bytes(raw)
+        info = _probe_video(src)
+        proc_fps = float(fps) if fps and fps > 0 else min(info["fps"] or 24.0, 30.0)
+        if proc_fps <= 0:
+            return JSONResponse(status_code=400,
+                                content={"error": "could not detect video fps"})
+        frames_dir = tmpdir / "frames"
+        frames_dir.mkdir()
+        extract = subprocess.run(
+            ["ffmpeg", "-y", "-v", "error", "-i", str(src),
+             "-vf", f"fps={proc_fps:.6g}", "-start_number", "0",
+             str(frames_dir / "%06d.png")],
+            capture_output=True, text=True)
+        if extract.returncode != 0:
+            raise RuntimeError((extract.stderr or "frame extraction failed")[:300])
+        frames = sorted(frames_dir.glob("*.png"))
+        if not frames:
+            return JSONResponse(status_code=400, content={"error": "no video frames"})
+
+        cap = VIDEO_MAX_FRAMES.get(model.strip().lower(), VIDEO_MAX_FRAMES_DEFAULT)
+        if len(frames) > cap:
+            return JSONResponse(status_code=400, content={
+                "error": "too many frames for this model",
+                "detail": (f"{len(frames)} frames at {proc_fps:.3g} fps; "
+                           f"{model} is capped at {cap}. Lower fps, trim the "
+                           "clip, or use RealESRGAN/SwinIR."),
+                "frames": len(frames), "max_frames": cap})
+
+        _manager.ensure("upscale", model)
+        _release_sd_best_effort()
+        engine = ""
+        for idx, fp in enumerate(frames, 1):
+            b64 = base64.b64encode(fp.read_bytes()).decode()
+            out = await asyncio.to_thread(
+                upscale_image_b64, b64, scale, model, prompt, strength, 0)
+            fp.write_bytes(base64.b64decode(out["image"]))
+            engine = out.get("engine", engine)
+            if idx % 10 == 0 or idx == len(frames):
+                logger.info("video %s: %d/%d frames", rid, idx, len(frames))
+
+        out_path = tmpdir / "out.mp4"
+        mux = subprocess.run(
+            ["ffmpeg", "-y", "-v", "error",
+             "-framerate", f"{proc_fps:.6g}",
+             "-i", str(frames_dir / "%06d.png"),
+             "-i", str(src),
+             "-map", "0:v:0", "-map", "1:a:0?",
+             "-c:v", "libx264", "-preset", "veryfast", "-crf", "18",
+             "-pix_fmt", "yuv420p", "-c:a", "copy", "-shortest",
+             str(out_path)],
+            capture_output=True, text=True)
+        if mux.returncode != 0:
+            raise RuntimeError((mux.stderr or "remux failed")[:300])
+        meta = _store_output("video", ".mp4", out_path.read_bytes(), rid)
+        return {
+            "request_id": rid,
+            "frames": len(frames),
+            "fps": round(proc_fps, 3),
+            "scale": scale,
+            "model": model,
+            "engine": engine,
+            "elapsed": round(time.time() - t0, 1),
+            "outputs": [meta] if meta else [],
+            "url": meta.get("url", ""),
+        }
+    except Exception as e:
+        logger.warning("video upscale failed: %s", str(e)[:200])
+        return JSONResponse(status_code=500,
+                            content={"error": str(e)[:300], "request_id": rid})
+    finally:
+        shutil.rmtree(tmpdir, ignore_errors=True)
 
 
 @app.post("/v1/images/colorize")
@@ -1278,8 +1442,13 @@ def _run_batch(bid: str, jobs: list, stop_on_error: bool) -> None:
                 elif kind == "upscale":
                     image = job.get("image", "")
                     scale = int(job.get("scale", 2))
-                    _manager.ensure("upscale", "RealESRGAN_x4v3")
-                    out = upscale_image_b64(image, scale, job.get("model") or "RealESRGAN_x4v3")
+                    up_model = job.get("model") or "RealESRGAN_x4v3"
+                    _manager.ensure("upscale", up_model)
+                    out = upscale_image_b64(
+                        image, scale, up_model,
+                        prompt=job.get("prompt") or "",
+                        strength=float(job.get("strength", 0.33)),
+                        seed=int(job.get("seed", 0) or 0))
                     meta = _store_b64("image", ".png", out["image"], bid)
                     out["outputs"] = [meta] if meta else []
                     results.append({"index": i, "type": "upscale", "ok": True, **out})
@@ -1490,7 +1659,10 @@ def _store_b64(kind: str, ext: str, b64: str, rid: str = "") -> dict:
 ALLOWED_AUDIO_EXT = {".mp3", ".mp4", ".mpeg", ".mpga", ".m4a", ".wav",
                      ".webm", ".ogg", ".flac", ".opus"}
 MAX_FILE_SIZE = 500 * 1024 * 1024
-ALLOWED_WHISPER = ("tiny", "base", "small", "medium", "turbo", "large")
+ALLOWED_WHISPER = ("tiny", "base", "small", "medium", "turbo", "large",
+                   "ivrit-whisper-turbo")
+# CTranslate2 checkpoints whose folder name is not faster-whisper-<id>.
+CUSTOM_WHISPER_DIRS = {"ivrit-whisper-turbo": "ivrit-whisper-turbo"}
 
 _WHISPER_CACHE = {}
 
@@ -1552,13 +1724,17 @@ def _transcribe_with_whisper(tmp_path: str, wanted: str, language, rid: str = ""
     #   pc/models/faster-whisper-<name>/model.bin
     # whisper_installed() checks the exact expected size + a valid config.json,
     # so a half-finished download is never loaded as if it were complete.
-    local = Path(__file__).resolve().parent / "models" / f"faster-whisper-{wanted}"
-    try:
-        from unified.models_manager import whisper_installed
-        use_local = whisper_installed(wanted)
-    except Exception:
-        local_bin = local / "model.bin"
+    folder = CUSTOM_WHISPER_DIRS.get(wanted) or f"faster-whisper-{wanted}"
+    local = Path(__file__).resolve().parent / "models" / folder
+    local_bin = local / "model.bin"
+    if wanted in CUSTOM_WHISPER_DIRS:
         use_local = local_bin.is_file() and local_bin.stat().st_size > 50 * 1024 * 1024
+    else:
+        try:
+            from unified.models_manager import whisper_installed
+            use_local = whisper_installed(wanted)
+        except Exception:
+            use_local = local_bin.is_file() and local_bin.stat().st_size > 50 * 1024 * 1024
     if not use_local:
         local_bin = local / "model.bin"
         if local_bin.is_file():
@@ -1630,6 +1806,46 @@ def _segments_to_vtt(segments: list) -> str:
         lines.append(seg["text"])
         lines.append("")
     return "\n".join(lines)
+
+
+_REALTIME_LOCK = threading.Lock()
+
+
+def _resample_pcm16(raw: bytes, rate: int) -> np.ndarray:
+    """PCM16 mono at `rate` -> float32 mono at 16 kHz."""
+    a = np.frombuffer(raw, dtype=np.int16).astype(np.float32) / 32768.0
+    if rate and rate != 16000 and a.size > 1:
+        n = max(1, int(round(a.size * 16000.0 / rate)))
+        a = np.interp(np.linspace(0, a.size - 1, n),
+                      np.arange(a.size), a).astype(np.float32)
+    return a
+
+
+def _transcribe_pcm(raw: bytes, rate: int, wanted: str, language):
+    """Realtime path: in-memory PCM instead of a temp file."""
+    device = (os.environ.get("WHISPER_DEVICE") or "cpu").strip().lower()
+    if device not in ("cpu", "cuda"):
+        device = "cpu"
+    compute = "float16" if device == "cuda" else "int8"
+    folder = CUSTOM_WHISPER_DIRS.get(wanted) or f"faster-whisper-{wanted}"
+    local = Path(__file__).resolve().parent / "models" / folder
+    try:
+        from unified.models_manager import whisper_installed
+        use_local = (wanted in CUSTOM_WHISPER_DIRS
+                     and (local / "model.bin").is_file()) or whisper_installed(wanted)
+    except Exception:
+        use_local = (local / "model.bin").is_file()
+    source = str(local) if use_local else wanted
+    audio = _resample_pcm16(raw, rate)
+    if audio.size == 0:
+        return "", language
+    with _REALTIME_LOCK:
+        model = _get_whisper_model(source, device, compute)
+        segs, info = model.transcribe(audio, language=language or None,
+                                      beam_size=1, vad_filter=True,
+                                      condition_on_previous_text=False)
+        text = " ".join((s.text or "").strip() for s in segs).strip()
+    return text, getattr(info, "language", language)
 
 
 def _transcribe_chunked(audio_path: Path, wanted: str, language, rid: str = ""):
@@ -2225,6 +2441,104 @@ async def transcribe_batch(
     }
 
 
+@app.websocket("/v1/realtime")
+async def realtime_asr(ws: WebSocket):
+    """OpenAI transcription-session WebSocket (Cindy "OpenAI transcription").
+
+    Client: session.update, input_audio_buffer.append (base64 PCM16),
+    input_audio_buffer.commit, session.finish.
+    Server: session.updated, input_audio_buffer.committed,
+    conversation.item.input_audio_transcription.completed, plus failed/error.
+
+    Audio arrives at the rate announced in session.update (Cindy uses 24 kHz);
+    it is resampled to 16 kHz and transcribed on commit. No partial deltas:
+    Cindy accepts a final transcript per commit.
+    """
+    await ws.accept()
+    _manager.begin()
+    buf = bytearray()
+    rate = 24000
+    model_name = "turbo"
+    language = None
+    try:
+        while True:
+            try:
+                msg = await ws.receive_json()
+            except WebSocketDisconnect:
+                raise
+            except Exception:
+                break
+            typ = msg.get("type") if isinstance(msg, dict) else None
+            if typ == "session.update":
+                session = msg.get("session") or {}
+                audio = session.get("audio") or {}
+                inp = audio.get("input") or {}
+                fmt = inp.get("format") or {}
+                try:
+                    rate = int(fmt.get("rate") or session.get("sample_rate") or rate)
+                except (TypeError, ValueError):
+                    rate = 24000
+                tr = (inp.get("transcription")
+                      or session.get("input_audio_transcription") or {})
+                model_name = str(tr.get("model") or model_name or "turbo").strip()
+                language = tr.get("language") or session.get("language") or language
+                await ws.send_json({"type": "session.updated", "session": session})
+            elif typ == "input_audio_buffer.append":
+                try:
+                    buf.extend(base64.b64decode(msg.get("audio") or ""))
+                except Exception:
+                    pass
+            elif typ == "input_audio_buffer.clear":
+                buf.clear()
+            elif typ == "input_audio_buffer.commit":
+                item_id = f"item_{uuid.uuid4().hex[:12]}"
+                await ws.send_json({"type": "input_audio_buffer.committed",
+                                    "item_id": item_id})
+                raw = bytes(buf)
+                buf.clear()
+                wanted = (model_name or "turbo").strip().lower()
+                if wanted in ("gpt-realtime-whisper", "whisper-1",
+                              "gpt-4o-transcribe", "gpt-4o-mini-transcribe"):
+                    wanted = "turbo"
+                if wanted not in ALLOWED_WHISPER:
+                    wanted = "turbo"
+                try:
+                    _manager.ensure("audio", wanted)
+                    text, lang = await asyncio.to_thread(
+                        _transcribe_pcm, raw, rate, wanted, language)
+                    await ws.send_json({
+                        "type": "conversation.item.input_audio_transcription.completed",
+                        "item_id": item_id,
+                        "content_index": 0,
+                        "transcript": text,
+                        "usage": {"type": "duration",
+                                  "seconds": round(len(raw) / 2 / max(rate, 1), 2)},
+                    })
+                except Exception as e:
+                    logger.warning("realtime transcription failed: %s", str(e)[:200])
+                    await ws.send_json({
+                        "type": "conversation.item.input_audio_transcription.failed",
+                        "item_id": item_id,
+                        "error": {"type": "server_error",
+                                  "message": str(e)[:300]},
+                    })
+            elif typ in ("session.finish", "session.close"):
+                await ws.send_json({"type": "session.finished"})
+                break
+            # Unknown control events are ignored on purpose.
+    except WebSocketDisconnect:
+        pass
+    except Exception as e:
+        logger.warning("realtime socket error: %s", str(e)[:200])
+        try:
+            await ws.send_json({"type": "error", "error": {
+                "type": "server_error", "message": str(e)[:300]}})
+        except Exception:
+            pass
+    finally:
+        _manager.end()
+
+
 @app.post("/v1/audio/translations")
 async def translations(
     file: UploadFile = File(default=None),
@@ -2244,22 +2558,30 @@ async def ocr_endpoint(
     file: UploadFile = File(default=None),
     language: str = Form(default="auto"),
     model: str = Form(default="nemotron-ocr-0"),
+    task: str = Form(default="ocr"),
 ):
-    """OCR endpoint using Xiaomi Nemotron-3.5-OCR-0 model.
-    
-    Accepts an image file and returns transcribed text.
+    """OCR or image description with a selectable model.
+
+    `model` is one of `nemotron-ocr-0`, `granite-docling-258m`, `qwen3-vl-2b`.
+    `task=ocr` returns text; `task=describe` returns an image description and
+    requires a general VLM (qwen3-vl-2b).
     """
     if file is None:
         return JSONResponse(status_code=400, content={"error": "missing file"})
 
     from unified.ocr_engine import get_ocr_engine
 
-    engine = get_ocr_engine()
+    engine = get_ocr_engine(model)
+    if task == "describe" and engine.family != "qwen-vl":
+        return JSONResponse(status_code=400, content={
+            "error": "this model does not describe images",
+            "detail": "use model=qwen3-vl-2b for task=describe"})
     if not engine.is_installed():
         return JSONResponse(status_code=503, content={
             "error": "OCR model not installed",
-            "detail": "Download nemotron-ocr-0 model from Models tab, or run "
-                      "python pc/tools/download_ocr_model.py"})
+            "model": engine.model_id,
+            "detail": f"Download {engine.model_id} from the Models tab, or run "
+                      f"python pc/download_models.py {engine.model_id}"})
 
     if not engine.init():
         return JSONResponse(status_code=503, content={
@@ -2275,11 +2597,12 @@ async def ocr_endpoint(
         tmp.close()
 
         try:
-            text = engine.transcribe(tmp.name, language=language)
+            text = engine.transcribe(tmp.name, language=language, task=task)
         finally:
             Path(tmp.name).unlink(missing_ok=True)
 
-        return {"text": text, "model": model, "language": language}
+        return {"text": text, "model": engine.model_id,
+                "language": language, "task": task}
     except Exception as e:
         logger.error(f"OCR endpoint failed: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)[:200]})

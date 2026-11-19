@@ -167,12 +167,16 @@ canvas#maskpad { width: 100%; border-radius: 6px; border: 1px solid var(--border
 </div>
 
 <div id="formUp" style="display:none">
-<label>Image to upscale (Real-ESRGAN-x4v3, photos; Waifu2x-class for anime via scale 2)</label>
+<label>Image to upscale (Real-ESRGAN fast; SwinIR faithful; Z-Image generative refine)</label>
 <input type="file" id="upimg" accept="image/*" onchange="previewRef(this,'upprev')">
 <img id="upprev" class="preview" style="display:none">
 <div class="row">
 <div><label>Scale</label><select id="upscale"><option value="2" selected>2x</option><option value="3">3x</option><option value="4">4x</option></select></div>
 <div><label>Model</label><div class="modelrow"><select id="upmodel" onchange="try{localStorage.setItem('u_upmodel',this.value)}catch(e){}; syncDownloads()"><option value="RealESRGAN_x4v3">RealESRGAN x4</option></select><button class="dl" id="dlUpscale" onclick="downloadSelected('upscale')" style="display:none">Download</button></div><div class="hint" id="dlUpscaleHint"></div></div>
+</div>
+<div class="row">
+<div><label>Z-Image prompt (optional)</label><input type="text" id="upprompt" placeholder="high quality, sharp natural detail"></div>
+<div><label>Z-Image strength</label><input type="number" id="upstrength" value="0.33" min="0.05" max="0.9" step="0.05"></div>
 </div>
 <button class="go" id="btnUp" onclick="generateUp()">Upscale</button>
 </div>
@@ -721,7 +725,9 @@ async function generateUp(){
   const f = document.getElementById('upimg').files[0];
   if(!f){ alert('Pick an image'); return; }
   const body = { image: await fileToB64(f), scale: +document.getElementById('upscale').value,
-    model: document.getElementById('upmodel').value, request_id: rid() };
+    model: document.getElementById('upmodel').value,
+    prompt: document.getElementById('upprompt').value,
+    strength: +document.getElementById('upstrength').value, request_id: rid() };
   btn.disabled = true; btn.textContent = 'Upscaling…';
   const t0 = Date.now();
   try {

@@ -16,7 +16,9 @@ Prism is **two independent products** that share one API contract:
 | **Android app** | Kotlin + Ktor + ONNX Runtime + whisper.cpp | native app (no WebUI) | none at runtime; models downloaded lazily |
 
 Both expose an **OpenAI-compatible HTTP API** on port `8101`, so external clients
-(OpenAI SDK, Odysseus, scripts) can attach over LAN.
+(OpenAI SDK, Odysseus, scripts) can attach over LAN, plus an OpenAI Realtime
+transcription socket at `/v1/realtime` (used by Cindy and other realtime ASR
+clients).
 
 Core principles:
 - **Local and offline**: after model download, no network is needed.

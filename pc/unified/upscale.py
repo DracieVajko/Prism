@@ -21,6 +21,12 @@ logger = logging.getLogger("unified.upscale")
 MAX_SIDE = 8192
 WEIGHT_NAMES = ("RealESRGAN_x4plus.pth", "RealESRGAN_x4plus.pt")
 
+# Real-ESRGAN stays the default. SwinIR is deterministic and gentler on photos
+# and text; Z-Image is an optional generative refine pass on top of ESRGAN.
+ESRGAN_MODELS = {"realesrgan_x4v3", "realesrgan", "realesrgan-x4v3"}
+SWINIR_MODELS = {"swinir", "swinir-realsr-x4", "swinir-realsr-x4-upscale"}
+ZIMAGE_MODELS = {"zimage", "zimage-turbo", "z-image-turbo"}
+
 _HERE = Path(__file__).resolve().parent.parent
 _DEFAULT_DIRS = (
     _HERE / "models" / "RealESRGAN_x4v3",
@@ -233,7 +239,9 @@ def _esrgan_onnx_upscale(img: Image.Image, weight: Path) -> Image.Image:
     return out
 
 
-def upscale_image_b64(image_b64: str, scale: int = 2, model: str = "RealESRGAN_x4v3") -> dict:
+def upscale_image_b64(image_b64: str, scale: int = 2,
+                      model: str = "RealESRGAN_x4v3", prompt: str = "",
+                      strength: float = 0.33, seed: int = 0) -> dict:
     if scale not in (2, 3, 4):
         raise ValueError(f"scale must be 2/3/4, got {scale}")
     try:
@@ -249,10 +257,63 @@ def upscale_image_b64(image_b64: str, scale: int = 2, model: str = "RealESRGAN_x
     if max(nw, nh) > MAX_SIDE:
         raise ValueError(f"upscaled {nw}x{nh} exceeds cap {MAX_SIDE}px")
     t0 = time.time()
+    model = (model or "RealESRGAN_x4v3").strip()
+    low = model.lower()
+
+    if low in ZIMAGE_MODELS:
+        # Deterministic base pass first, then the generative refine. A missing
+        # model is a 503, any other failure keeps the real ESRGAN result.
+        base = upscale_image_b64(image_b64, scale, "RealESRGAN_x4v3")
+        try:
+            from unified.zimage import refine_b64
+            refined = refine_b64(base["image"], prompt=prompt,
+                                 strength=strength, seed=seed)
+        except FileNotFoundError as e:
+            raise RuntimeError(str(e))
+        except ValueError:
+            # e.g. too many tiles for the requested size: tell the caller.
+            raise
+        except Exception as e:
+            logger.warning("zimage refine failed (%s); returning ESRGAN result",
+                           str(e)[:200])
+            base.update({"model": model,
+                         "fallback": f"z-image failed: {str(e)[:200]}"})
+            return base
+        return {
+            "image": refined["image"],
+            "elapsed": round(time.time() - t0, 2),
+            "model": model,
+            "scale": scale,
+            "engine": "zimage-turbo+realesrgan",
+            "base_engine": base.get("engine", ""),
+            "strength": refined.get("strength", strength),
+            "steps": refined.get("steps", 0),
+        }
+
+    if low in SWINIR_MODELS:
+        from unified.swinir import upscale_b64 as swinir_upscale
+        raw = swinir_upscale(image_b64)
+        sr = Image.open(io.BytesIO(base64.b64decode(raw["image"]))).convert("RGB")
+        out = sr if scale == 4 else sr.resize((nw, nh), Image.LANCZOS)
+        buf = io.BytesIO()
+        out.save(buf, format="PNG")
+        return {
+            "image": base64.b64encode(buf.getvalue()).decode(),
+            "elapsed": round(time.time() - t0, 2),
+            "model": model,
+            "scale": scale,
+            "engine": "swinir-realsr-x4",
+        }
+
+    if low not in ESRGAN_MODELS:
+        raise ValueError(
+            f"unknown upscale model '{model}'; expected RealESRGAN_x4v3, "
+            "swinir-realsr-x4 or z-image-turbo")
+
     engine = "pillow"
     pref = (os.environ.get("PRISM_UPSCALE_ENGINE") or "auto").strip().lower()
-    want_torch = model == "RealESRGAN_x4v3" and pref in ("auto", "torch")
-    want_onnx = model == "RealESRGAN_x4v3" and pref in ("auto", "onnx")
+    want_torch = pref in ("auto", "torch")
+    want_onnx = pref in ("auto", "onnx")
     weight_torch = find_weight() if want_torch else None
     weight_onnx = find_onnx_weight() if want_onnx else None
     if weight_torch is not None:

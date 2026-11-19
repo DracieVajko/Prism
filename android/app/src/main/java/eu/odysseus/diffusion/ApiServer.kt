@@ -16,6 +16,10 @@ import io.ktor.server.netty.Netty
 import io.ktor.server.netty.NettyApplicationEngine
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.plugins.statuspages.StatusPages
+import io.ktor.server.websocket.WebSockets
+import io.ktor.server.websocket.webSocket
+import io.ktor.websocket.Frame
+import io.ktor.websocket.readText
 import io.ktor.server.request.receive
 import io.ktor.server.request.contentType
 import io.ktor.server.request.path
@@ -448,6 +452,7 @@ private val batchState = ConcurrentHashMap<String, BatchState>()
                 setLenient()
             }
         }
+        install(WebSockets)
         install(StatusPages) {
             exception<Throwable> { call, e ->
                 android.util.Log.e("ApiServer", "unhandled: " + e.message, e)
@@ -518,6 +523,88 @@ private val batchState = ConcurrentHashMap<String, BatchState>()
             }
         }
         routing {
+            webSocket("/v1/realtime") {
+                var rate = 24000
+                var model = "turbo"
+                var language: String? = null
+                val buffer = java.io.ByteArrayOutputStream()
+                try {
+                    for (frame in incoming) {
+                        if (frame !is Frame.Text) continue
+                        val msg = try {
+                            com.google.gson.JsonParser.parseString(frame.readText()).asJsonObject
+                        } catch (_: Exception) {
+                            continue
+                        }
+                        when (msg.get("type")?.asString) {
+                            "session.update" -> {
+                                val session = msg.getAsJsonObject("session") ?: JsonObject()
+                                val input = session.getAsJsonObject("audio")
+                                    ?.getAsJsonObject("input")
+                                input?.getAsJsonObject("format")?.get("rate")?.asInt
+                                    ?.let { rate = it }
+                                val tr = input?.getAsJsonObject("transcription")
+                                tr?.get("model")?.asString?.let { model = it }
+                                language = tr?.get("language")?.asString ?: language
+                                send(Frame.Text(JsonObject().apply {
+                                    addProperty("type", "session.updated")
+                                    add("session", session)
+                                }.toString()))
+                            }
+                            "input_audio_buffer.append" -> {
+                                val b = android.util.Base64.decode(
+                                    msg.get("audio")?.asString ?: "",
+                                    android.util.Base64.DEFAULT)
+                                buffer.write(b)
+                            }
+                            "input_audio_buffer.clear" -> buffer.reset()
+                            "input_audio_buffer.commit" -> {
+                                val itemId = "item_" +
+                                    java.util.UUID.randomUUID().toString().take(12)
+                                send(Frame.Text(JsonObject().apply {
+                                    addProperty("type", "input_audio_buffer.committed")
+                                    addProperty("item_id", itemId)
+                                }.toString()))
+                                val raw = buffer.toByteArray()
+                                buffer.reset()
+                                try {
+                                    val text = transcribeRealtime(
+                                        resamplePcm16(raw, rate), model, language)
+                                    send(Frame.Text(JsonObject().apply {
+                                        addProperty("type",
+                                            "conversation.item.input_audio_transcription.completed")
+                                        addProperty("item_id", itemId)
+                                        addProperty("content_index", 0)
+                                        addProperty("transcript", text)
+                                        add("usage", JsonObject().apply {
+                                            addProperty("type", "duration")
+                                            addProperty("seconds", raw.size / 2.0 / rate)
+                                        })
+                                    }.toString()))
+                                } catch (e: Exception) {
+                                    send(Frame.Text(JsonObject().apply {
+                                        addProperty("type",
+                                            "conversation.item.input_audio_transcription.failed")
+                                        addProperty("item_id", itemId)
+                                        add("error", JsonObject().apply {
+                                            addProperty("type", "server_error")
+                                            addProperty("message", e.message ?: "transcription failed")
+                                        })
+                                    }.toString()))
+                                }
+                            }
+                            "session.finish", "session.close" -> {
+                                send(Frame.Text(JsonObject().apply {
+                                    addProperty("type", "session.finished")
+                                }.toString()))
+                                break
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.w("ApiServer", "realtime ASR: ${e.message}")
+                }
+            }
             get("/health") {
                 val st = manager.status()
                 val all = downloader.allAssets()
@@ -546,6 +633,7 @@ private val batchState = ConcurrentHashMap<String, BatchState>()
                         "owned_by" to "odysseus-local",
                         "kind" to a.kind,
                         "label" to a.label,
+                        "description" to a.note,
                         "engine" to a.engine,
                         "available" to downloader.isReady(a.id),
                         "has_source" to a.hasSource,
@@ -700,6 +788,7 @@ private val batchState = ConcurrentHashMap<String, BatchState>()
                         "kind" to a.kind,
                         "kind_label" to ModelCatalog.kindLabel(a.kind),
                         "label" to a.label,
+                        "description" to a.note,
                         "engine" to a.engine,
                         "note" to a.note,
                         "custom" to a.custom,
@@ -1466,6 +1555,12 @@ private val batchState = ConcurrentHashMap<String, BatchState>()
                     "outputs" to outputList(storeB64("image", ".png", b64, rid)),
                 ))
             }
+            post("/v1/videos/upscale") {
+                call.respond(HttpStatusCode.ServiceUnavailable, jsonOf(
+                    "error" to "will not load",
+                    "detail" to "video frame upscale is PC-only (ffmpeg + Real-ESRGAN/SwinIR/Z-Image); use the PC server",
+                ))
+            }
             post("/v1/images/caption") {
                 val req = wireJson.decodeFromString<CaptionReq>(call.receiveText())
                 if (req.image.isEmpty()) {
@@ -1537,6 +1632,7 @@ private val batchState = ConcurrentHashMap<String, BatchState>()
                 var bytes = ByteArray(0)
                 var language = "auto"
                 var modelParam = "xiaomi-ocr-0"
+                var task = "ocr"
                 val ct = call.request.contentType()
                 if (ct.match(ContentType.MultiPart.FormData)) {
                     call.receiveMultipart().forEachPart { part ->
@@ -1545,6 +1641,7 @@ private val batchState = ConcurrentHashMap<String, BatchState>()
                             is PartData.FormItem -> when (part.name) {
                                 "language" -> language = part.value.ifBlank { "auto" }
                                 "model" -> if (part.value.isNotBlank()) modelParam = part.value
+                                "task" -> task = part.value.ifBlank { "ocr" }
                                 else -> {}
                             }
                             else -> {}
@@ -1570,12 +1667,31 @@ private val batchState = ConcurrentHashMap<String, BatchState>()
                             }
                         }
                         language = root["language"]?.jsonPrimitive?.contentOrNull ?: "auto"
+                        task = root["task"]?.jsonPrimitive?.contentOrNull ?: task
                         root["model"]?.jsonPrimitive?.contentOrNull
                             ?.takeIf { it.isNotBlank() }?.let { modelParam = it }
                     }
                 }
                 if (bytes.isEmpty()) {
                     call.respond(HttpStatusCode.BadRequest, jsonOf("error" to "missing file"))
+                    return@post
+                }
+                if (modelParam.isNotBlank() && modelParam != XiaomiOcrEngine.MODEL_ID) {
+                    call.respond(HttpStatusCode.ServiceUnavailable, jsonOf(
+                        "error" to "model not available on Android",
+                        "detail" to "$modelParam is PC-only. Android OCR provides " +
+                            "${XiaomiOcrEngine.MODEL_ID}; the PC server has qwen3-vl-2b, " +
+                            "granite-docling-258m, ovis-ocr2, paddleocr-vl-1.6, " +
+                            "glm-ocr, firered-ocr and qianfan-ocr.",
+                    ))
+                    return@post
+                }
+                if (task.lowercase() == "describe") {
+                    call.respond(HttpStatusCode.ServiceUnavailable, jsonOf(
+                        "error" to "task=describe is not an OCR task",
+                        "detail" to "use POST /v1/images/caption or /v1/chat/completions " +
+                            "with smolvlm2-500m-gguf for on-device image description",
+                    ))
                     return@post
                 }
                 val rid = UUID.randomUUID().toString()
@@ -2161,6 +2277,52 @@ private val batchState = ConcurrentHashMap<String, BatchState>()
             }.filter { it.isNotBlank() }.joinToString("\\n")
         } catch (e: Exception) {
             ""
+        }
+    }
+
+    /** PCM16 mono at [rate] -> float32 mono at 16 kHz (linear interpolation). */
+    private fun resamplePcm16(raw: ByteArray, rate: Int): FloatArray {
+        val n = raw.size / 2
+        if (n <= 0) return FloatArray(0)
+        val src = FloatArray(n) { i ->
+            val lo = raw[2 * i].toInt() and 0xFF
+            val hi = raw[2 * i + 1].toInt()
+            (((hi shl 8) or lo).toShort()).toFloat() / 32768f
+        }
+        if (rate == 16000 || n == 1) return src
+        val outN = maxOf(1, Math.round(n * 16000.0 / rate).toInt())
+        return FloatArray(outN) { i ->
+            val pos = i * (n - 1).toDouble() / maxOf(1, outN - 1)
+            val idx = pos.toInt().coerceIn(0, n - 1)
+            if (idx >= n - 1) src[n - 1] else {
+                val frac = (pos - idx).toFloat()
+                src[idx] * (1f - frac) + src[idx + 1] * frac
+            }
+        }
+    }
+
+    private suspend fun transcribeRealtime(
+        samples: FloatArray,
+        requested: String,
+        language: String?,
+    ): String {
+        if (samples.isEmpty()) return ""
+        val installed = downloader.allAssets()
+            .filter { it.kind == "audio" && downloader.isReady(it.id) }
+        val needle = requested.lowercase()
+        val picked = when {
+            downloader.isReady(requested) -> requested
+            needle.contains("turbo") -> installed.firstOrNull { it.id.contains("turbo", true) }?.id
+            needle.contains("large") -> installed.firstOrNull { it.id.contains("large", true) }?.id
+            needle.contains("small") -> installed.firstOrNull { it.id.contains("small", true) }?.id
+            else -> null
+        } ?: installed.firstOrNull()?.id ?: requested
+        switchTo("audio", picked)
+        requireModelReady(picked)
+        val file = downloader.getModelFile(picked)
+            ?: throw ModelWillNotLoadError("$picked model file missing", -1, -1)
+        return withContext(Dispatchers.Default) {
+            WhisperLib.transcribe(file, samples, language ?: "auto")
         }
     }
 

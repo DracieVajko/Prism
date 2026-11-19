@@ -7,6 +7,7 @@ For larger images, tiling is used (64px tiles, 8px overlap).
 import base64
 import io
 import logging
+import os
 import time
 from pathlib import Path
 from typing import Optional
@@ -21,7 +22,9 @@ MODEL_DIR = Path(__file__).resolve().parent.parent / "models" / "swinir-realsr-x
 MODEL_FILE = MODEL_DIR / "swinir_realsr_x4.onnx"
 TILE_SIZE = 64
 OVERLAP = 8
-MAX_SIDE = 512  # input side cap (4x output = 2048px max)
+# Input side cap; 1024 px gives a 4096 px output. The 64 px tile keeps VRAM
+# flat, so only runtime grows. Override with PRISM_SWINIR_MAX_SIDE.
+MAX_SIDE = int(os.environ.get("PRISM_SWINIR_MAX_SIDE", "1024"))
 
 _SESSION = None
 _PROVIDER = None

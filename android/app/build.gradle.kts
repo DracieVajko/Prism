@@ -140,6 +140,7 @@ dependencies {
     implementation("io.ktor:ktor-server-netty:$ktor")
     implementation("io.ktor:ktor-server-content-negotiation:$ktor")
     implementation("io.ktor:ktor-server-status-pages:$ktor")
+implementation("io.ktor:ktor-server-websockets:$ktor")
     // Use Gson for JSON parsing to avoid kotlinx.serialization version conflicts
     implementation("io.ktor:ktor-serialization-gson:$ktor")
     implementation("io.ktor:ktor-client-core:$ktor")

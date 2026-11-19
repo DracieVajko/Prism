@@ -16,6 +16,22 @@ powershell -File pc\scripts\Start-Prism.ps1 -Remote    # binds 0.0.0.0 (Tailscal
 ./pc/scripts/install-prism-service.sh    # systemd user unit / launchd agent, auto-start
 ```
 
+### Network access (LAN / Tailscale)
+
+The Startup runner and `Start-Prism.ps1 -Remote` bind `0.0.0.0`, so the same
+server answers on every interface:
+
+```
+http://127.0.0.1:8101        this PC
+http://<lan-ip>:8101         same Wi-Fi/Ethernet
+http://<tailscale-ip>:8101   tailnet (find it with: tailscale ip -4)
+ws://<any-of-them>:8101/v1/realtime   Cindy / OpenAI Realtime ASR
+```
+
+Windows Firewall must allow inbound TCP 8101 (the existing Prism/Odysseus
+rules do). There is **no authentication**: keep 8101 on a trusted LAN or the
+tailnet, never port-forward it to the internet.
+
 The scripts look for a venv in `pc/.venv` first, then the repo-root `.venv`.
 The old `Start-Diffusion.ps1` / `Stop-Diffusion.ps1` lives in `pc/legacy/`
 (kept for reference). New PID files: `pc/run/unified.pid`,
@@ -68,6 +84,104 @@ pip install onnxruntime-directml
   `python pc/tools/convert_esrgan_onnx.py` → `RealESRGAN_x4plus.onnx` (67 MB, single file).
 - `PRISM_UPSCALE_ENGINE=auto|torch|onnx|pillow` (default `auto`:
   torch → ONNX → Pillow). Measured 512→1024 on CUDA: ~6 s.
+- Deterministic alternative: `--preset swinir` (SwinIR real-SR x4 ONNX,
+  Apache-2.0, fits 4 GB; slower but gentler than ESRGAN on photos and text).
+  API: `model=swinir-realsr-x4`. Measured on the RTX 3060: 512 -> 2048 px in
+  ~2.5 min (64 px tiles); budget minutes, not seconds.
+- Generative refine: `--preset zimage` (Z-Image Turbo 6B, ~33 GB, Apache-2.0).
+  API: `model=z-image-turbo` runs the ESRGAN base pass, then img2img at
+  `strength` (default 0.33, `prompt` optional). Needs CUDA; below 9 GB VRAM it
+  uses sequential CPU offload, so expect minutes per image. Images above
+  1024 px are tiled (1024 px, 96 px overlap, max 9 tiles).
+  Measured on the 6 GB / 32 GB machine: 256 -> 512 px in 46 s warm; the first
+  call after a restart spends ~19 min loading the 20 GB of weights. Raise
+  `UNIFIED_IDLE_UNLOAD_SECONDS` (default 900) to keep it resident.
+  Env: `PRISM_ZIMAGE_TILE` (1024), `PRISM_ZIMAGE_OVERLAP` (96),
+  `PRISM_ZIMAGE_MAX_TILES` (9).
+
+### Batch upscale
+
+`POST /v1/batch` with one job per image; poll `GET /v1/batch/{id}`. Upscale
+jobs accept `model`, `scale`, and — for Z-Image — `prompt`, `strength`, `seed`.
+Results carry `/v1/outputs/...` URLs. Example:
+
+```json
+{"jobs":[{"type":"upscale","image":"<b64>","scale":2,
+          "model":"z-image-turbo","prompt":"","strength":0.33}]}
+```
+
+CLI (same machine):
+
+```powershell
+python pc\generate_image.py batch-upscale --input photos\ --output upscaled\ --model z-image-turbo
+python pc\generate_image.py video-upscale --input clip.mp4 --output clip_2x.mp4 --fps 24 --model RealESRGAN_x4v3
+```
+
+### Video upscale
+
+`POST /v1/videos/upscale` (multipart: `file`, `scale`, `model`, `fps` optional,
+`prompt`/`strength` for Z-Image). It extracts frames, upscales each, and
+remuxes the original audio into H.264. Deterministic engines: up to 900
+frames. Z-Image: capped at 24 frames (about 1 s at 24 fps) because every frame
+is a diffusion pass; expect ~30 s/frame warm plus the cold load.
+
+### OCR and document models
+
+| Model id | Size | Strength |
+|---|---|---|
+| `nemotron-ocr-0` | 1.7 GB | fastest plain-text OCR (0.8B, multilingual) |
+| `granite-docling-258m` | 0.5 GB | tiny page/PDF -> DocTags/Markdown, tables, formulas, layout |
+| `qwen3-vl-2b` | 4.3 GB | OCR in 32 languages plus object recognition and description |
+| `ovis-ocr2` | 1.7 GB | 853M, 96.58 OmniDocBench v1.6, layouts/tables/formulas |
+| `paddleocr-vl-1.6` | 1.9 GB | 0.96B, 109 languages, document/layout specialist |
+| `glm-ocr` | 2.7 GB | 1.33B, tables/formulas, 8 languages, MIT |
+| `firered-ocr` | 4.3 GB | Qwen3-VL-2B fine-tune for document parsing |
+
+Full comparison and status, including models that are not wired:
+`pc/docs/OCR-MODELS.md`.
+
+`POST /v1/images/ocr` (multipart: `file`, `model`, `language`, `task`).
+`task=ocr` returns text; `task=describe` returns an image description and needs
+`qwen3-vl-2b` (the document-only models reject it).
+
+```powershell
+python pc\download_models.py --preset ocr          # all three, ~6.5 GB
+python pc\download_models.py granite-docling-258m
+```
+
+Researched but not wired: PaddleOCR-VL-1.6 (1.9 GB), dots.ocr (6.1 GB),
+DeepSeek-OCR-2 (6.8 GB), olmOCR-2-7B (16.6 GB). They need custom architectures
+and, above ~6 GB, CPU offload; the three above cover fast text, document
+layout, and general image understanding within 6 GB VRAM.
+
+### ASR model options
+
+Full language/speed/size/status table: `pc/docs/ASR-MODELS.md`.
+
+- Whisper (faster-whisper): `tiny|base|small|medium|turbo|large`, default
+  `turbo`, 42 languages.
+- `ivrit-whisper-turbo` — Hebrew CT2 Whisper.
+- `nemotron-asr-0.6b` — 40 languages, streaming.
+- Transformers engines: `qwen3-asr-0.6b`, `qwen3-asr-1.7b`,
+  `qwencleo-asr-1.7b`, `cohere-transcribe`, `granite-speech-470m`,
+  `granite-speech-2b`, `parakeet-v3`, `parakeet-v2`,
+  `parakeet-unified-en`, `nb-whisper-medium`.
+
+Select with `model=` on `/v1/audio/transcriptions`. The transformers models
+are PC-only and load on first use; those above ~5 GB spill to CPU on a 6 GB
+card. Models appear in `/v1/models/catalog` (kind `audio`) for download.
+
+### Realtime ASR (Cindy / OpenAI Realtime clients)
+
+- PC and Android both expose `WS /v1/realtime` using the OpenAI transcription
+  session events. Point Cindy's "Custom realtime ASR" at
+  `ws://<host>:8101/v1/realtime`, protocol "OpenAI transcription", model
+  `turbo`, any API key.
+- 24 kHz PCM16 mono is resampled to 16 kHz and transcribed per commit. Set
+  `WHISPER_DEVICE=cuda` on the PC for sub-second turns; CPU is several times
+  slower.
+- Odysseus can use the same server through its STT `endpoint:<id>` provider
+  (`http://<host>:8101/v1`), which is the ordinary HTTP transcription route.
 
 ### VLM
 

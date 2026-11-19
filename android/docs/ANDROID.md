@@ -61,8 +61,8 @@ Downloads are handled by `ModelDownloader` (own engine, not DownloadManager):
 | Endpoint | Description |
 |---|---|
 | `GET /health` | status + installed models |
-| `GET /v1/models` | list + `kinds` |
-| `GET /v1/models/catalog` | catalog with status, `install_progress`, `engine`, `files` |
+| `GET /v1/models` | list + `kinds` + `description` |
+| `GET /v1/models/catalog` | catalog with status, `install_progress`, `engine`, `files`, `description` |
 | `POST /v1/models/install` | `{"id": "..."}` → download in the background |
 | `GET /v1/models/progress/{id}` | state/percent/bytes/file_index |
 | `POST /v1/models/cancel` | cancels the download |
@@ -72,14 +72,29 @@ Downloads are handled by `ModelDownloader` (own engine, not DownloadManager):
 | `POST /v1/models/delete` | deletes a custom model |
 | `POST /v1/audio/transcriptions` | local whisper.cpp |
 | `POST /v1/audio/translations` | local whisper.cpp |
+| `WS /v1/realtime` | OpenAI transcription session (Cindy/OpenAI Realtime), local whisper.cpp on commit |
 | `POST /v1/images/generations` | local ONNX LCM |
-| `POST /v1/images/edits|inpaint|harmonize|upscale|caption` | 503 until implemented |
-| `POST /v1/images/ocr` | local LiteRT-LM OCR (multipart `file`, `language`, `model`; JSON `image` b64 accepted) |
-| `POST /v1/chat/completions` | 503 until the VLM runtime lands |
+| `POST /v1/images/edits|inpaint|harmonize|upscale` | 503 until implemented |
+| `POST /v1/images/caption` | SmolVLM2 (GGUF/ONNX); 503 when the runtime/model is missing |
+| `POST /v1/images/ocr` | local LiteRT-LM OCR (`file`, `language`, `model`, `task`) |
+| `POST /v1/chat/completions` | SmolVLM2 vision chat; 503 when the runtime/model is missing |
+| `POST /v1/videos/upscale` | 503: PC-only (ffmpeg + upscale engines) |
+| `POST /v1/batch` | batch jobs on device |
 | `GET /v1/ffmpeg/presets`, `POST /v1/ffmpeg/{op}` | 503 until ffmpeg is bundled |
 | `GET /v1/settings` | runtime info |
 
 The server binds `0.0.0.0:8101`, so any external AI client on the LAN can use it.
+
+`/v1/images/ocr` only runs `xiaomi-ocr-0` on the phone. Requesting a PC OCR
+model (`qwen3-vl-2b`, `granite-docling-258m`, `ovis-ocr2`,
+`paddleocr-vl-1.6`, `glm-ocr`, `firered-ocr`, `qianfan-ocr`) returns 503 with
+the model list. `task=describe` is not an OCR task on Android; use
+`/v1/images/caption` or `/v1/chat/completions` with SmolVLM2.
+
+`/v1/realtime` accepts 24 kHz PCM16 mono, resamples to 16 kHz, and transcribes
+on `input_audio_buffer.commit` with the installed whisper model (turbo
+preferred, falling back to the first installed audio model). This is the
+endpoint Cindy's "OpenAI transcription" mode expects.
 
 ## Single-resident models
 

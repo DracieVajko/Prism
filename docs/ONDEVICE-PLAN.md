@@ -77,6 +77,12 @@ Recommendation: **(c) now + (a) next**, keep (b) as a future optimization.
 
 Effort: (c) low (~80 lines); (a) moderate (model + tiling).
 
+PC note (2026-11-18): the PC server now also offers SwinIR (deterministic x4,
+ONNX) and Z-Image Turbo (6B generative refine) beside Real-ESRGAN. Both are
+PC-only: Z-Image needs a CUDA GPU and ~20 GB RAM even with sequential CPU
+offload, so it is **experimental** and not planned for Android. The phone
+keeps the (c)/(a) plan above.
+
 ## 5. Caption / Chat â€” SmolVLM on ONNX
 
 Models (`HuggingFaceTB/SmolVLM-500M-Instruct`, ONNX subfolder):
