@@ -37,7 +37,7 @@ Running local AI should not require cloud accounts, subscriptions, or sending pr
 ### PC server (`pc/`)
 
 - **Image:** text-to-image, image-to-image (edits), inpaint with mask, harmonize, outpaint (edge-replicated padding), colorize (DDColor), upscale (Real-ESRGAN, SwinIR, Z-Image Turbo refine)
-- **Vision:** caption and chat via SmolVLM; OCR and image description via Xiaomi-OCR-0, Granite-Docling, Qwen3-VL-2B, OvisOCR2, GLM-OCR, FireRed-OCR and Qianfan-OCR
+- **Vision:** caption and chat via SmolVLM; OCR and image description via Xiaomi-OCR-0, Granite-Docling, Qwen3-VL-2B, OvisOCR2, GLM-OCR, PaddleOCR-VL, LightOnOCR 2, FireRed-OCR and Qianfan-OCR
 - **Audio:** transcription/translation via faster-whisper (tiny…large/turbo) and optional Cohere Transcribe, Granite Speech, Parakeet, NB-Whisper and ivrit.ai Hebrew
 - **Batch/video:** `/v1/batch` for multiple images; `/v1/videos/upscale` extracts frames, upscales, and remuxes audio
 - **Realtime:** OpenAI transcription WebSocket at `/v1/realtime` (Cindy and other realtime ASR clients)
@@ -74,8 +74,8 @@ Full tables with languages, speed, size, licence and status:
 - **Speech recognition:** [`pc/docs/ASR-MODELS.md`](pc/docs/ASR-MODELS.md)
 
 PC OCR: Xiaomi-OCR-0 (fast text), Granite-Docling-258M (pages → DocTags/Markdown),
-Qwen3-VL-2B (OCR + description), OvisOCR2, GLM-OCR,
-FireRed-OCR, Qianfan-OCR (192 languages). PC ASR: Whisper,
+Qwen3-VL-2B (OCR + description), OvisOCR2, GLM-OCR, PaddleOCR-VL,
+LightOnOCR 2, FireRed-OCR, Qianfan-OCR (192 languages). PC ASR: Whisper,
 Cohere, Granite Speech, Parakeet, NB-Whisper, ivrit.ai Hebrew.
 Android OCR is Xiaomi-OCR-0 (LiteRT-LM); Android VLM is SmolVLM2.
 

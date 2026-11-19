@@ -21,6 +21,10 @@ photo (upscale/restoration/caption), a 256 px thumbnail (Z-Image).
 | `qwen3-vl-2b` | ocr | PASS | 127.7 s | 2,767 chars formatted OCR |
 | `qwen3-vl-2b` describe | ocr | PASS | 19.5 s | 1,166-char image description |
 | `ovis-ocr2` | ocr | PASS | 391.3 s | 7,995 chars Markdown with bounding boxes |
+| `glm-ocr` | ocr | PASS | 50.5 s | 2,602 chars, clean plain text; 205.3 s through the API |
+| `paddleocr-vl-1.6` | ocr | PASS | 89.2 s | 2,526 chars; 157.3 s through the API |
+| `lightonocr-2-1b` | ocr | PASS | 79.4 s | 2,974 chars Markdown; 262.6 s through the API |
+| `qianfan-ocr` | ocr | PENDING | 272.8 s load | 9.5 GB downloaded; 4-bit CPU load verified, full bf16 inference blocked by an active 12B LM Studio model |
 | `SmolVLM_500M` | vlm | PASS | 61.8 s | "In this image we can see a pen..." |
 | `ddcolor-tiny` | restoration | PASS | 16.4 s | 384x512 colorized |
 | `gfpgan-v1.4` | restoration | PASS | 10.7 s | 384x512 face restore |
@@ -38,8 +42,11 @@ photo (upscale/restoration/caption), a 256 px thumbnail (Z-Image).
 - `qwen3-asr-0.6b`, `qwen3-asr-1.7b`, `qwencleo-asr-1.7b`: the `qwen-asr`
   wrapper requires huggingface-hub < 1.0, which breaks transformers 5.21 and
   diffusers 0.42; raw `generate()` also mismatched the checkpoint.
-- `paddleocr-vl-1.6`: remote code expects `rope_parameters` on the vision
-  config, which transformers 5.21 does not provide.
+- `falcon-ocr`: Triton kernel needs a CUDA C compiler (MSVC); the Windows host
+  has none, and the eager fallback hit a CUDA device-side assert.
+- `unlimited-ocr-2`: custom `UnlimitedOCRForCausalLM` tested upstream on
+  transformers 4.52/Python 3.10; its Triton sparse kernels need a CUDA
+  toolchain and the stack here is transformers 5.21 on Windows.
 
 Their model directories may remain on disk, but they are no longer offered in
 the catalog. Whisper, Granite Speech and the remaining OCR models cover those
@@ -50,6 +57,17 @@ languages/features.
 - `ocr_engine.py`: missing `os` import (broke every OCR load after the
   `PRISM_OCR_DEVICE` change); one OCR model resident at a time; release on
   reset; `transcribe()` delegates to `transcribe_pil()`.
+- `ocr_engine.py`: added the `native-vl` family. GLM-OCR, PaddleOCR-VL,
+  LightOnOCR 2 and Qianfan-OCR take the PIL image inside the chat message and
+  tokenise it themselves; the old Qwen `images=[image]` call lost the image
+  token for some processors.
+- `ocr_engine.py`: LightOnOCR 2 is loaded with its own
+  `LightOnOcrForConditionalGeneration` / `LightOnOcrProcessor` classes. Its
+  config says `model_type: mistral3`, so `AutoModelForImageTextToText` built a
+  Mistral3 module and dropped the vision weights (0 chars).
+- PaddleOCR-VL is loaded through the native transformers class with
+  `trust_remote_code=False`; the remote-code path is the one that wanted
+  `rope_parameters`.
 - `/v1/images/restore`: releases SD/VLM/OCR/Z-Image engines first, so the
   2.6 GB InstructPix2Pix load fits next to nothing else.
 - `download_models.py` / `models_manager.py`: `.incomplete/.part/.lock` no
@@ -59,7 +77,8 @@ languages/features.
 
 ## Not tested
 
-The optional catalog entries that are not installed (Qwen3-ASR, QwenCleo,
-Cohere, Parakeet, NB-Whisper, ivrit, PaddleOCR-VL, GLM-OCR, FireRed-OCR,
-Qianfan-OCR) were not downloaded; they route through the same engines but
-need weights before they can be validated.
+The optional catalog entries that are not installed (Cohere, Parakeet,
+NB-Whisper, ivrit, FireRed-OCR, Qianfan-OCR) route through the same engines but
+need weights before they can be validated. Qianfan-OCR is downloaded; its run
+was blocked by the 6 GB GPU plus an active 12B LM Studio model (only 5 GB RAM
+free) and must be retried with the GPU idle.

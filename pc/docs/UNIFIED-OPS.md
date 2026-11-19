@@ -133,7 +133,9 @@ is a diffusion pass; expect ~30 s/frame warm plus the cold load.
 | `granite-docling-258m` | 0.5 GB | tiny page/PDF -> DocTags/Markdown, tables, formulas, layout |
 | `qwen3-vl-2b` | 4.3 GB | OCR in 32 languages plus object recognition and description |
 | `ovis-ocr2` | 1.7 GB | 853M, 96.58 OmniDocBench v1.6, layouts/tables/formulas |
-| `glm-ocr` | 2.7 GB | 1.33B, tables/formulas, 8 languages, MIT |
+| `glm-ocr` | 2.7 GB | 0.9B, 94.62 OmniDocBench, tables/formulas, 8 languages, MIT |
+| `paddleocr-vl-1.6` | 1.9 GB | 0.96B, 109 languages, layouts/tables/formulas |
+| `lightonocr-2-1b` | 2.0 GB | 1B, fast end-to-end page OCR, Markdown |
 | `firered-ocr` | 4.3 GB | Qwen3-VL-2B fine-tune for document parsing |
 | `qianfan-ocr` | 9.5 GB | 4.7B, 192 languages, needs offload |
 
@@ -146,13 +148,17 @@ Full comparison and status, including models that are not wired:
 
 ```powershell
 python pc\download_models.py --preset ocr          # all three, ~6.5 GB
-python pc\download_models.py granite-docling-258m
+python pc\download_models.py glm-ocr
+python pc\download_models.py paddleocr-vl-1.6
+python pc\download_models.py lightonocr-2-1b
 ```
 
-PaddleOCR-VL was removed after testing: its remote code expects a
-`rope_parameters` config that transformers 5.21 does not provide. Not wired:
-dots.ocr (6.1 GB), DeepSeek-OCR-2 (6.8 GB), olmOCR-2-7B (16.6 GB); they need
-custom architectures and, above ~6 GB, CPU offload.
+GLM-OCR, PaddleOCR-VL and LightOnOCR 2 load through native transformers
+classes and fit the 6 GB card. LightOnOCR 2 needs its dedicated
+`LightOnOcrForConditionalGeneration` class because its config says `mistral3`.
+Not wired: Unlimited-OCR-2 (custom code tested on transformers 4.52, Triton
+kernels), Falcon-OCR (Triton needs MSVC on Windows), dots.ocr (6.1 GB),
+DeepSeek-OCR-2 (6.8 GB), olmOCR-2-7B (16.6 GB).
 
 ### ASR model options
 

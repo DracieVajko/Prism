@@ -986,3 +986,22 @@ Android (`Android/data/<pkg>/files/output/<kind>/`):
       still optional, untested); OCR Nemotron, Granite-Docling, Qwen3-VL,
       OvisOCR2 (GLM/FireRed/Qianfan optional, untested); VLM SmolVLM +
       Qwen3-VL describe.
+
+## Best-in-class OCR wiring (2026-11-19)
+
+- [x] Added the strongest usable OCR models from the research list and wired
+      them into `OCR_SPECS` + `OCR_TASKS`:
+      GLM-OCR 0.9B (MIT, 94.62 OmniDocBench), PaddleOCR-VL 1.6 (native
+      transformers class, no remote code), LightOnOCR 2 1B (dedicated
+      `LightOnOcr*` classes because its config says `mistral3`), Qianfan-OCR
+      4.7B (downloaded; 4-bit load verified, full bf16 run pending GPU idle).
+- [x] New `native-vl` family in `ocr_engine.py`: image is passed inside the
+      chat message so GLM/Paddle/LightOn/Qianfan processors tokenise it.
+- [x] Endpoint verification on the AI-income slide:
+      GLM 2,602 chars / 205.3 s, Paddle 2,526 / 157.3 s, LightOn 2,974
+      Markdown / 262.6 s, Nemotron 2,343 / 162.8 s. `task=describe` still
+      works only for `qwen3-vl-2b`; document models return 400.
+- [x] Added `pc/tests/test_ocr_registry.py` (catalog/engine parity, families,
+      dedicated LightOn classes, describe rejection, fallback).
+- [x] Documented why Unlimited-OCR-2 and Falcon-OCR are not wired: custom
+      Triton code needs a CUDA toolchain/MSVC that this Windows host lacks.

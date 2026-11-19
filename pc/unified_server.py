@@ -2576,9 +2576,10 @@ async def ocr_endpoint(
 ):
     """OCR or image description with a selectable model.
 
-    `model` is one of `nemotron-ocr-0`, `granite-docling-258m`, `qwen3-vl-2b`.
-    `task=ocr` returns text; `task=describe` returns an image description and
-    requires a general VLM (qwen3-vl-2b).
+    `model` is any installed id from `GET /v1/models/catalog` with kind `ocr`
+    (`nemotron-ocr-0`, `granite-docling-258m`, `glm-ocr`,
+    `paddleocr-vl-1.6`, `lightonocr-2-1b`, ...). `task=ocr` returns text;
+    `task=describe` returns an image description and requires `qwen3-vl-2b`.
     """
     if file is None:
         return JSONResponse(status_code=400, content={"error": "missing file"})
@@ -2586,7 +2587,7 @@ async def ocr_endpoint(
     from unified.ocr_engine import get_ocr_engine
 
     engine = get_ocr_engine(model)
-    if task == "describe" and engine.family != "qwen-vl":
+    if task == "describe" and not engine.supports_describe:
         return JSONResponse(status_code=400, content={
             "error": "this model does not describe images",
             "detail": "use model=qwen3-vl-2b for task=describe"})
