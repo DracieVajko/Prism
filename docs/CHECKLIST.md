@@ -1005,3 +1005,11 @@ Android (`Android/data/<pkg>/files/output/<kind>/`):
       dedicated LightOn classes, describe rejection, fallback).
 - [x] Documented why Unlimited-OCR-2 and Falcon-OCR are not wired: custom
       Triton code needs a CUDA toolchain/MSVC that this Windows host lacks.
+
+- [x] User review of the OCR comparison: Nemotron is liked for accuracy but is
+      line-by-line and not UI-aware; GLM-OCR is the only model that preserved
+      UI structure/reading order. `/v1/images/ocr` now defaults to `model=auto`,
+      which prefers `glm-ocr` when installed and falls back to
+      `nemotron-ocr-0`; explicit `model=nemotron-ocr-0` still gives the fast
+      plain-text path. Verified: default request resolved to `glm-ocr` and
+      returned 2,602 chars on the slide.

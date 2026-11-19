@@ -25,6 +25,7 @@ photo (upscale/restoration/caption), a 256 px thumbnail (Z-Image).
 | `paddleocr-vl-1.6` | ocr | PASS | 89.2 s | 2,526 chars; 157.3 s through the API |
 | `lightonocr-2-1b` | ocr | PASS | 79.4 s | 2,974 chars Markdown; 262.6 s through the API |
 | `qianfan-ocr` | ocr | PENDING | 272.8 s load | 9.5 GB downloaded; 4-bit CPU load verified, full bf16 inference blocked by an active 12B LM Studio model |
+| default (`auto`) | ocr | PASS | 468.5 s | resolved to `glm-ocr`, 2,602 chars; slow because Gemma 12B held the GPU/RAM |
 | `SmolVLM_500M` | vlm | PASS | 61.8 s | "In this image we can see a pen..." |
 | `ddcolor-tiny` | restoration | PASS | 16.4 s | 384x512 colorized |
 | `gfpgan-v1.4` | restoration | PASS | 10.7 s | 384x512 face restore |

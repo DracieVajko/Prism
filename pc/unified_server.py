@@ -2571,15 +2571,17 @@ async def translations(
 async def ocr_endpoint(
     file: UploadFile = File(default=None),
     language: str = Form(default="auto"),
-    model: str = Form(default="nemotron-ocr-0"),
+    model: str = Form(default="auto"),
     task: str = Form(default="ocr"),
 ):
     """OCR or image description with a selectable model.
 
     `model` is any installed id from `GET /v1/models/catalog` with kind `ocr`
     (`nemotron-ocr-0`, `granite-docling-258m`, `glm-ocr`,
-    `paddleocr-vl-1.6`, `lightonocr-2-1b`, ...). `task=ocr` returns text;
-    `task=describe` returns an image description and requires `qwen3-vl-2b`.
+    `paddleocr-vl-1.6`, `lightonocr-2-1b`, ...), or `auto` (default), which
+    prefers the UI-aware GLM-OCR and falls back to Nemotron. `task=ocr` returns
+    text; `task=describe` returns an image description and requires
+    `qwen3-vl-2b`.
     """
     if file is None:
         return JSONResponse(status_code=400, content={"error": "missing file"})

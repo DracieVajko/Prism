@@ -144,7 +144,9 @@ Full comparison and status, including models that are not wired:
 
 `POST /v1/images/ocr` (multipart: `file`, `model`, `language`, `task`).
 `task=ocr` returns text; `task=describe` returns an image description and needs
-`qwen3-vl-2b` (the document-only models reject it).
+`qwen3-vl-2b` (the document-only models reject it). `model=auto` (default)
+prefers the UI-aware `glm-ocr` and falls back to `nemotron-ocr-0`, which is the
+faster but line-by-line plain-text reader.
 
 ```powershell
 python pc\download_models.py --preset ocr          # all three, ~6.5 GB

@@ -1,7 +1,10 @@
 # OCR / document / image-understanding models
 
 Select with `model=` on `POST /v1/images/ocr` (multipart: `file`, `model`,
-`language`, `task=ocr|describe`). `task=describe` needs a general VLM
+`language`, `task=ocr|describe`). `model=auto` (the default) prefers
+`glm-ocr` when installed because it preserves UI/section reading order, then
+falls back to `nemotron-ocr-0`. Pass `model=nemotron-ocr-0` explicitly for the
+fastest plain line-by-line text. `task=describe` needs a general VLM
 (`qwen3-vl-2b`); document-only parsers reject it with a 400.
 
 | Model id | Size | Strength | Licence | Status |
@@ -73,6 +76,11 @@ LiteRT engine.
   (2,974 chars), GLM-OCR the cleanest plain text (2,602), PaddleOCR-VL lost a
   few lines in the marketing block (2,526), and Nemotron was fastest/plainest
   (2,343). This is one sample, not a benchmark.
+- GLM-OCR is the only model here that preserved the UI structure on that slide:
+  section headings, reading order and grouped cards. Nemotron is a line-level
+  OCR engine, so its output is accurate but unformatted. `auto` therefore picks
+  GLM when it is installed; use `model=nemotron-ocr-0` when speed matters more
+  than structure.
 - OvisOCR2 is the accuracy leader per parameter, but its Qwen3.5 hybrid layers
   want `flash-linear-attention` and `causal_conv1d`; without them it took
   666 s for one image here. Use `nemotron-ocr-0` or `granite-docling-258m`

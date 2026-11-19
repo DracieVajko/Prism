@@ -129,9 +129,27 @@ def _has_weights(d: Path) -> bool:
     return any(d.glob("*.safetensors"))
 
 
+def resolve_ocr_model(model_id: str | None) -> str:
+    """Pick the OCR model, with an installed-aware `auto` default.
+
+    GLM-OCR is the UI-aware reader (reading order, sections, tables); Nemotron
+    is the fast plain-text fallback. Explicit ids are returned unchanged so the
+    endpoint can report an honest "not installed" for the requested model.
+    """
+    requested = (model_id or "auto").strip()
+    if requested and requested.lower() != "auto":
+        if requested in OCR_SPECS:
+            return requested
+        logger.warning("unknown OCR model %r; using auto", requested)
+    for candidate in ("glm-ocr", "nemotron-ocr-0"):
+        if _has_weights(_HERE / "models" / candidate):
+            return candidate
+    return "nemotron-ocr-0"
+
+
 class OCREngine:
-    def __init__(self, model_id: str = "nemotron-ocr-0", model_dir: str | None = None):
-        self.model_id = model_id if model_id in OCR_SPECS else "nemotron-ocr-0"
+    def __init__(self, model_id: str = "auto", model_dir: str | None = None):
+        self.model_id = resolve_ocr_model(model_id)
         spec = OCR_SPECS[self.model_id]
         self.family = spec["family"]
         self.fixed_prompt = spec.get("prompt")
@@ -295,13 +313,13 @@ class OCREngine:
 _engines: dict[str, OCREngine] = {}
 
 
-def get_ocr_engine(model_id: str = "nemotron-ocr-0") -> OCREngine:
+def get_ocr_engine(model_id: str = "auto") -> OCREngine:
     """Return the engine for this model, keeping only one OCR model resident.
 
     Large OCR models plus a running LLM can exhaust 32 GB, so switching
     releases the previous engine instead of caching several.
     """
-    mid = model_id if model_id in OCR_SPECS else "nemotron-ocr-0"
+    mid = resolve_ocr_model(model_id)
     for other, eng in list(_engines.items()):
         if other != mid:
             eng.release()

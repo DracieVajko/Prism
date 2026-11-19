@@ -65,6 +65,25 @@ def test_only_qwen3_vl_offers_description():
         assert bool(spec.get("describe", False)) == (model_id == "qwen3-vl-2b")
 
 
-def test_unknown_model_falls_back_to_nemotron():
+def test_unknown_model_falls_back_to_nemotron(monkeypatch):
+    monkeypatch.setattr(ocr_engine, "_has_weights", lambda path: False)
     engine = ocr_engine.OCREngine("does-not-exist")
     assert engine.model_id == "nemotron-ocr-0"
+
+
+def test_auto_prefers_glm_when_installed(monkeypatch):
+    monkeypatch.setattr(ocr_engine, "_has_weights",
+                        lambda path: path.name == "glm-ocr")
+    assert ocr_engine.resolve_ocr_model("auto") == "glm-ocr"
+
+
+def test_auto_falls_back_to_nemotron(monkeypatch):
+    monkeypatch.setattr(ocr_engine, "_has_weights",
+                        lambda path: path.name == "nemotron-ocr-0")
+    assert ocr_engine.resolve_ocr_model("auto") == "nemotron-ocr-0"
+
+
+def test_explicit_model_is_not_replaced(monkeypatch):
+    monkeypatch.setattr(ocr_engine, "_has_weights", lambda path: True)
+    assert ocr_engine.resolve_ocr_model("lightonocr-2-1b") == \
+        "lightonocr-2-1b"
