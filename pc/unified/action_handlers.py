@@ -16,7 +16,7 @@ from typing import Any
 
 from unified.action_extractor import Action, ActionType
 
-logger = logging.getLogger("action_handlers")
+logger = logging.getLogger(__name__)
 
 
 class ActionHandler(ABC):

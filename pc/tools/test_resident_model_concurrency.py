@@ -1,12 +1,12 @@
-"""Concurrency + regression tests for unified.model_manager."""
+"""Concurrency + regression tests for unified.resident_model."""
 import threading
 import time
 
-from unified.model_manager import ModelManager
+from unified.resident_model import ResidentModelGate
 
 
 def test_basic_switch_and_unload():
-    mm = ModelManager()
+    mm = ResidentModelGate()
     calls = []
     mm.on_unload = lambda reason: calls.append(reason)
 
@@ -24,7 +24,7 @@ def test_basic_switch_and_unload():
 
 def test_switch_releases_before_new_state_visible():
     """A concurrent ensure must block until on_unload finishes."""
-    mm = ModelManager()
+    mm = ResidentModelGate()
     callback_started = threading.Event()
     callback_ended = threading.Event()
 
@@ -60,7 +60,7 @@ def test_switch_releases_before_new_state_visible():
 
 def test_begin_end_updates_busy_and_queue():
     """busy/queue must follow the real in-flight count, not stay frozen."""
-    mm = ModelManager()
+    mm = ResidentModelGate()
     assert mm.status()["busy"] is False
     assert mm.status()["queue"] == 0
 
@@ -92,7 +92,7 @@ def test_begin_end_updates_busy_and_queue():
 
 
 def test_concurrent_ensures_no_deadlock_and_consistent_state():
-    mm = ModelManager()
+    mm = ResidentModelGate()
     calls = []
     lock = threading.Lock()
 
@@ -135,4 +135,4 @@ if __name__ == "__main__":
     test_switch_releases_before_new_state_visible()
     test_begin_end_updates_busy_and_queue()
     test_concurrent_ensures_no_deadlock_and_consistent_state()
-    print("model_manager concurrency tests: PASS")
+    print("resident_model concurrency tests: PASS")

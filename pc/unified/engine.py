@@ -10,7 +10,7 @@ import argparse
 import base64
 import logging
 
-logger = logging.getLogger("unified.engine")
+logger = logging.getLogger(__name__)
 _inited = False
 
 

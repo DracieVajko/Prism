@@ -18,7 +18,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageFilter
 
-logger = logging.getLogger("unified.lcm_onnx_numpy")
+logger = logging.getLogger(__name__)
 
 VAE_SCALE = 0.18215
 NUM_TRAIN = 1000
@@ -432,7 +432,7 @@ def _run_with_cuda_fallback(fn, model_dir: Path):
         return fn()
 
 
-def release_pipeline() -> bool:
+def release() -> bool:
     """Drop the cached pipeline so the GPU/CPU memory is actually freed."""
     global _PIPELINE
     had = _PIPELINE is not None

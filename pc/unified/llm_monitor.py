@@ -26,7 +26,7 @@ from typing import Optional
 
 import httpx
 
-logger = logging.getLogger("llm_monitor")
+logger = logging.getLogger(__name__)
 
 MAX_CONCURRENT = int(os.environ.get("PRISM_LLM_MAX_CONCURRENT", "1") or 1)
 POLL_INTERVAL = int(os.environ.get("PRISM_LLM_POLL_INTERVAL", "120") or 120)
@@ -159,7 +159,7 @@ def acquire(model: Optional[str] = None, timeout: Optional[int] = None,
         time.sleep(poll_interval)
 
 
-def release(model: Optional[str] = None) -> None:
+def release_model(model: Optional[str] = None) -> None:
     """Unload the model we loaded (best-effort)."""
     cfg = _cfg()
     provider = cfg["provider"]
@@ -188,5 +188,5 @@ class LLMSlot:
 
     def __exit__(self, exc_type, exc, tb):
         if self.acquired:
-            release(self.model)
+            release_model(self.model)
         return False

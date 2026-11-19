@@ -9,7 +9,7 @@ import logging
 from pathlib import Path
 from typing import Optional
 
-logger = logging.getLogger("asr_common")
+logger = logging.getLogger(__name__)
 
 MODELS_DIR = Path(__file__).resolve().parent.parent / "models"
 

@@ -154,7 +154,7 @@ completion; after it `busy=false, queue=0`.
 harmonize) → **20/20 OK**, PID unchanged (12393), threads 55–56, RSS 1.9–3.9 GB,
 ending 2.66 GB. No OOM, no restart.
 
-**PC concurrency:** `pc/tools/test_model_manager_concurrency.py` PASS — switch releases
+**PC concurrency:** `pc/tools/test_resident_model_concurrency.py` PASS — switch releases
 the old engine before the new state is visible, concurrent ensures do not
 deadlock, unload callbacks match switches.
 
@@ -312,7 +312,7 @@ Test files: `pc/tools/test_pc_states.py` (PASS) and `android/tests/test_android_
 - [x] `pc/unified/onnx_env.py`: DLL registration + provider selection
       (`auto` → CUDA → CPU; DML skipped for QDQ).
 - [x] `/health` reports `device` and `onnx_provider`.
-- [x] `release_pipeline()` frees ONNX sessions on idle/model switch.
+- [x] `release()` frees ONNX sessions on idle/model switch.
 - [x] Measured (warm): 256/4 6.3 s, 384/6 10.7 s, 512/6 51.8 s (CPU: 23/45/65 s).
 - [x] First run of a new shape pays cuDNN planning (43/65/184 s, one-time).
 - [x] `PRISM_ONNX_PROVIDER=cpu` documented as the fallback for the 6 GB card.
@@ -372,7 +372,7 @@ Test files: `pc/tools/test_pc_states.py` (PASS) and `android/tests/test_android_
 - [x] WebUI renamed to **Prism** (title + header); tab order Generate,
       Transcribe, Upscale, Caption, Inpaint, Edit, Tools, Models, Settings.
 - [x] `GET /v1/models` reports `kind` + `installed` for image/audio/upscale/vlm,
-      using the installable catalog (`models_manager.catalog()`) as the source
+      using the installable catalog (`model_catalog.catalog()`) as the source
       of truth, so upscale/VLM entries and the local whisper model appear.
 - [x] WebUI dropdowns are filled per kind: image models, whisper models
       (`small (local)`, others `download on use`), upscale models. No hardcoded
@@ -399,7 +399,7 @@ Test files: `pc/tools/test_pc_states.py` (PASS) and `android/tests/test_android_
       539 s (CPU int8), written as `.sk.txt`, `.sk.srt`, `.sk.json`.
 - [x] `GET /health` reports the real whisper state: `audio_model` +
       `audio_loaded` now reflect `_WHISPER_CACHE` (it holds the weights,
-      `ModelManager` only keeps bookkeeping) and a new
+      `ResidentModelGate` only keeps bookkeeping) and a new
       `audio_whisper_models_resident` count was added. Verified live:
       `False/0` -> transcribe -> `True/1` -> image generate -> `False/0`,
       so switching to an image model really releases the whisper model.
@@ -924,7 +924,7 @@ Android (`Android/data/<pkg>/files/output/<kind>/`):
 
 ## Model metadata, Android parity, release pass (2026-11-19)
 
-- [x] Model catalog exposes `description` on PC (`models_manager.catalog`) and
+- [x] Model catalog exposes `description` on PC (`model_catalog.catalog`) and
       Android (`/v1/models`, `/v1/models/catalog`); README links the full OCR
       and ASR tables and lists every endpoint.
 - [x] Android OCR accepts `model`/`task`: PC-only models return 503 with the
@@ -1024,7 +1024,7 @@ Android (`Android/data/<pkg>/files/output/<kind>/`):
       SmolVLM2 runtime; the PC and Android products remain independent.
 - [x] Verified caption on the pen photo: HTTP 200, `engine=qwen3-vl-2b`,
       80-token description in 377.8 s while a 12B LM Studio model held the GPU.
-      Tests: `pc/tests/test_vlm.py`, `test_models_manager.py` updated.
+      Tests: `pc/tests/test_vlm.py`, `test_model_catalog.py` updated.
 
 - [x] DDColor after the report: the tiny ONNX cast the grayscale pen photo
       green. The endpoint now prefers `ddcolor-full` (convnext-l, 435 MB,

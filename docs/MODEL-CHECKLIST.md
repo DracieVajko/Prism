@@ -7,7 +7,7 @@ removed, or its keep/delete decision changes.
 
 Installed by default: **Whisper turbo + large only**. Every other Whisper size
 is listed in the Models catalog as an optional download
-(`WHISPER_SOURCES` in `pc/unified/models_manager.py`); nothing else is
+(`WHISPER_SOURCES` in `pc/unified/model_catalog.py`); nothing else is
 downloaded automatically.
 
 | Model | On disk | Used by | Status | Decision |

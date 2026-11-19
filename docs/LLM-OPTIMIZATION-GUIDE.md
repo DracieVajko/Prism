@@ -125,7 +125,7 @@ IDLE_UNLOAD_SECONDS = 600  # 10 minutes
 ### Current State
 
 - ✅ Whisper-turbo set as default (was small)
-- ✅ Lazy loading via ModelManager
+- ✅ Lazy loading via ResidentModelGate
 - ✅ Idle unload after 10 minutes
 - ✅ VAD pre-filter (Silero VAD) to skip silence
 - ✅ Auto-split large files (>30s)

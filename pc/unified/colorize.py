@@ -49,6 +49,7 @@ def _ensure_nvidia_dlls():
 
 def _get_session() -> Optional[object]:
     global _SESSION, _PROVIDER, _ACTIVE_ID
+    had = _SESSION is not None
     if _SESSION is not None:
         return _SESSION
     if MODEL_FILE.exists():
@@ -78,11 +79,13 @@ def _get_session() -> Optional[object]:
         return None
 
 
-def release():
+def release() -> bool:
     global _SESSION, _PROVIDER, _ACTIVE_ID
+    had = _SESSION is not None
     _SESSION = None
     _PROVIDER = None
     _ACTIVE_ID = MODEL_ID
+    return had
 
 
 def is_ready() -> bool:

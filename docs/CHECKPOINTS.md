@@ -129,7 +129,7 @@ AI client (OpenAI-compatible), without the phone depending on the PC.
   - `pc/download_models.py` has `_CANCEL` + `CancelledError`.
   - URL downloads stop in the chunk loop; HF snapshots stop between files
     (per-file `hf_hub_download` instead of `snapshot_download`).
-  - `models_manager.cancel` returns `cancelled: true`.
+  - `model_catalog.cancel` returns `cancelled: true`.
 - Image generation without torch/diffusers: `pc/unified/lcm_onnx_numpy.py`
   (numpy + onnxruntime, same QDQ UNet). Wired as a fallback in
   `_try_real_generation`.
@@ -210,7 +210,7 @@ Fixed from the audit:
   list; `img2img` and `inpaint` pass it. Verified 200 + valid outputs.
 - **P0 Android non-square size** — engine is square; uses the larger side and
   reports `size` (actual) + `requested_size`; `n` now generates distinct images.
-- **P1 PC ModelManager** — `ensure` switch calls `on_unload` after releasing the
+- **P1 PC ResidentModelGate** — `ensure` switch calls `on_unload` after releasing the
   lock.
 - **P1 Android ModelManager** — removed `System.gc()` from the lock; translated
   comments.
@@ -234,10 +234,10 @@ Repo cleanup: 109 scratch/test files removed (root untracked 128 → 29).
 
 ## 2026-10-23 — Verification closure (concurrency, states, load)
 
-- **PC ModelManager race fixed:** `on_unload("switch")` now runs while the lock
+- **PC ResidentModelGate race fixed:** `on_unload("switch")` now runs while the lock
   is held, so a concurrent `ensure` cannot install a new model before the old
   engine is released. `unload()` also calls the hook under the lock.
-- `pc/tools/test_model_manager_concurrency.py`: PASS — basic switch, release-before-new-
+- `pc/tools/test_resident_model_concurrency.py`: PASS — basic switch, release-before-new-
   state (second ensure blocked ≥0.15 s during a 0.25 s callback), 8 threads ×
   10 switches with no deadlock and `unload calls == load_count - 1`.
 - **Android state reporting:** Ktor `Monitoring` intercept tracks image/audio
@@ -267,14 +267,14 @@ Repo cleanup: 109 scratch/test files removed (root untracked 128 → 29).
 ## 2026-10-23 — PC busy/queue truth
 
 Audit asked whether PC `busy`/`queue` reflect reality. They did not:
-`ModelManager.begin()/end()` only updated `in_flight`, while `_busy` and `_queue`
+`ResidentModelGate.begin()/end()` only updated `in_flight`, while `_busy` and `_queue`
 were initialized once and never touched.
 
 - Fix: `_refresh_busy_locked()` sets `busy = in_flight > 0` and
   `queue = max(0, in_flight - 1)` after every `begin()`/`end()`. The HTTP
   middleware already wraps POST `/v1/images/*`, `/v1/audio/*`, `/v1/chat/*`
   in `begin()`/`end()` with `finally`, so failures reset the state too.
-- `pc/tools/test_model_manager_concurrency.py` gained `test_begin_end_updates_busy_and_queue`
+- `pc/tools/test_resident_model_concurrency.py` gained `test_begin_end_updates_busy_and_queue`
   (single, nested, drain, unbalanced end) — PASS.
 - New `pc/tools/test_pc_states.py` against a live server — PASS:
   | Step | Observed |
@@ -383,7 +383,7 @@ Caveats (measured):
 - VRAM sits at ~5.9 GB of 6 GB. `PRISM_ONNX_PROVIDER=cpu` is the safe fallback.
 - ORT reports 777 Memcpy nodes for CUDA on this QDQ graph ("unable to run CUDA
   graph"), so the gain is modest at 512.
-- `release_pipeline()` frees the ONNX sessions on idle/model switch, so the GPU
+- `release()` frees the ONNX sessions on idle/model switch, so the GPU
   is not held forever.
 - Found and fixed `/v1/audio/translations` 500: it called `transcriptions()`
   without `url`, so the default was a FastAPI `Form` marker. The suite now
@@ -459,7 +459,7 @@ inlines the external weights and validates against torch:
 
 **Single-resident fix:** upscale now calls
 `_manager.ensure("upscale", "RealESRGAN_x4v3")`, and `_release_engines` calls
-`release_upscale()`. Switching from generation to upscale frees the 5.9 GB
+`release()`. Switching from generation to upscale frees the 5.9 GB
 LCM sessions, so ESRGAN can use the GPU instead of spilling to CPU.
 Measured 512→1024: **torch CUDA 5.4–6.2 s** (was 117 s via CPU ONNX),
 ONNX CUDA 13.6 s, ONNX CPU 27 s on a 256×256 crop.
@@ -512,7 +512,7 @@ restart before the migration because its script path no longer exists.
 
 **Models contract.** `/v1/models` is the same contract for both products, so it
 now carries `kind` and `installed`. The installable catalog
-(`models_manager.catalog()`), not `build_registry`'s `missing` flag, decides
+(`model_catalog.catalog()`), not `build_registry`'s `missing` flag, decides
 both: image entries come from the registry, `upscale`/`vlm`/`audio` from the
 catalog, and an audio size counts as installed when
 `pc/models/faster-whisper-<name>/model.bin` exists and is larger than 50 MB.
@@ -541,7 +541,7 @@ launcher detects an occupied port and starts Prism on 8102. The permanent fix
 is the Administrator migration script.
 
 **Whisper residency truth (2026-10-26).** `_WHISPER_CACHE` holds the
-faster-whisper weights, while `ModelManager` only tracks the `audio` kind, so
+faster-whisper weights, while `ResidentModelGate` only tracks the `audio` kind, so
 `/health` used to report `audio_loaded=false` with a model in memory. It now
 reports `audio_model`, `audio_loaded` and `audio_whisper_models_resident` from
 that cache. Verified: `False/0` -> transcription -> `True/1` -> image

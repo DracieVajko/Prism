@@ -1,10 +1,10 @@
-"""ModelManager — always at most 1 heavy model resident."""
+"""ResidentModelGate — always at most 1 heavy model resident."""
 import pytest
-from unified.model_manager import ModelManager, ModelLoadingError
+from unified.resident_model import ResidentModelGate, ModelLoadingError
 
 
 def test_only_one_resident():
-    mm = ModelManager()
+    mm = ResidentModelGate()
     mm.ensure("image", "DreamShaper_8")
     assert mm.status()["loaded_kind"] == "image"
     mm.ensure("audio", "small")
@@ -14,7 +14,7 @@ def test_only_one_resident():
 
 
 def test_same_model_no_reload():
-    mm = ModelManager()
+    mm = ResidentModelGate()
     mm.ensure("image", "DreamShaper_8")
     n1 = mm.load_count
     mm.ensure("image", "DreamShaper_8")
@@ -22,7 +22,7 @@ def test_same_model_no_reload():
 
 
 def test_loading_503_shape():
-    mm = ModelManager()
+    mm = ResidentModelGate()
     mm.set_loading("image", "JuggernautXL_v9", True)
     with pytest.raises(ModelLoadingError) as e:
         mm.ensure("image", "DreamShaper_8")
@@ -31,7 +31,7 @@ def test_loading_503_shape():
 
 
 def test_unload_frees():
-    mm = ModelManager()
+    mm = ResidentModelGate()
     mm.ensure("image", "DreamShaper_8")
     assert mm.unload("test") is True
     assert mm.status()["loaded_kind"] is None

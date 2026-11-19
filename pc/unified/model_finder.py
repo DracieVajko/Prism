@@ -11,7 +11,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-logger = logging.getLogger("unified.finder")
+logger = logging.getLogger(__name__)
 
 HERE = Path(__file__).resolve().parent.parent
 MODELS_DIR = HERE / "models"

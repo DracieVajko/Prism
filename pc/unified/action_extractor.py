@@ -20,7 +20,7 @@ from typing import Any
 
 from unified.ai_client import AIClient, AIResponse
 
-logger = logging.getLogger("action_extractor")
+logger = logging.getLogger(__name__)
 
 
 class ActionType(Enum):

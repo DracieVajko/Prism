@@ -32,6 +32,7 @@ def _ensure_pipeline() -> Optional[object]:
     a missing model yields a clean unavailable state instead of an ImportError.
     """
     global _PIPELINE
+    had = _PIPELINE is not None
     if _PIPELINE is not None:
         return _PIPELINE
     if not (MODEL_DIR / "model_index.json").exists():
@@ -62,8 +63,9 @@ def _ensure_pipeline() -> Optional[object]:
         return None
 
 
-def release():
+def release() -> bool:
     global _PIPELINE
+    had = _PIPELINE is not None
     _PIPELINE = None
     try:
         import torch
@@ -71,6 +73,7 @@ def release():
             torch.cuda.empty_cache()
     except Exception:
         pass
+    return had
 
 
 def is_ready() -> bool:

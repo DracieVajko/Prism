@@ -18,7 +18,7 @@ import urllib.request
 from pathlib import Path
 from typing import Optional
 
-logger = logging.getLogger("unified.models")
+logger = logging.getLogger(__name__)
 
 HERE = Path(__file__).resolve().parent.parent
 MODELS_DIR = HERE / "models"
@@ -331,7 +331,7 @@ def _dir_gb(path: Path) -> float:
                if f.is_file() and not f.name.endswith(PARTIAL_SUFFIXES)) / 1e9
 
 
-def is_installed(task: dict) -> bool:
+def is_task_installed(task: dict) -> bool:
     """A model is installed if it has enough data (min_gb) or is a
     single-file model with an existing file."""
     if task.get("kind") == "whisper":
@@ -364,7 +364,7 @@ def catalog() -> list:
             "license": t.get("license", ""),
             "size_gb": t.get("min_gb", 0.0),
             "size_mb": int(round(t.get("min_gb", 0.0) * 1024)),
-            "installed": is_installed(t),
+            "installed": is_task_installed(t),
             "path": str(target),
             "installed_gb": round(_dir_gb(target), 2),
             "install_state": st.get("state", "idle"),
@@ -396,7 +396,7 @@ def _run_install(task: dict):
             dm.download_url(task)
         else:
             dm.download_hf(task)
-        ok = is_installed(task)
+        ok = is_task_installed(task)
         _set_state(task["id"], state="done" if ok else "error",
                    progress=100, error="" if ok else "download incomplete")
         logger.info("install %s -> %s", task["id"], "done" if ok else "error")
@@ -438,7 +438,7 @@ def install_blocking(model_id: str) -> dict:
     _run_install(task)
     st = _install_state.get(model_id, {})
     return {"id": model_id, "state": st.get("state", "idle"),
-            "installed": is_installed(task), "error": st.get("error", "")}
+            "installed": is_task_installed(task), "error": st.get("error", "")}
 
 
 def uninstall(model_id: str) -> dict:
@@ -476,8 +476,8 @@ def progress(model_id: str) -> dict:
         done = have.stat().st_size if have.is_file() else 0
         return {
             "id": model_id,
-            "state": st.get("state", "done" if is_installed(task) else "idle"),
-            "percent": st.get("progress", 100 if is_installed(task) else 0),
+            "state": st.get("state", "done" if is_task_installed(task) else "idle"),
+            "percent": st.get("progress", 100 if is_task_installed(task) else 0),
             "bytes_done": done,
             "bytes_total": size,
             "file_index": 0,
@@ -486,8 +486,8 @@ def progress(model_id: str) -> dict:
         }
     return {
         "id": model_id,
-        "state": st.get("state", "done" if is_installed(task) else "idle"),
-        "percent": st.get("progress", 100 if is_installed(task) else 0),
+        "state": st.get("state", "done" if is_task_installed(task) else "idle"),
+        "percent": st.get("progress", 100 if is_task_installed(task) else 0),
         "bytes_done": 0,
         "bytes_total": int(round(task.get("min_gb", 0.0) * 1024 * 1024 * 1024)),
         "file_index": 0,
@@ -511,7 +511,7 @@ def status(model_id: str) -> dict:
         "label": task.get("note") or task.get("repo") or task.get("url") or model_id,
         "license": task.get("license", ""),
         "path": str(target),
-        "installed": is_installed(task),
+        "installed": is_task_installed(task),
         "installed_gb": round(_dir_gb(target), 2),
         "state": _install_state.get(model_id, {}).get("state", "idle"),
         "error": _install_state.get(model_id, {}).get("error", ""),
@@ -523,7 +523,7 @@ def verify(model_id: str) -> dict:
     task = _task(model_id)
     if task is None:
         raise KeyError(f"unknown model id: {model_id}")
-    ok = is_installed(task)
+    ok = is_task_installed(task)
     return {
         "id": model_id,
         "verified": ok,

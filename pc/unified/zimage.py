@@ -26,7 +26,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-logger = logging.getLogger("unified.zimage")
+logger = logging.getLogger(__name__)
 
 MODEL_DIR = Path(__file__).resolve().parent.parent / "models" / "z-image-turbo"
 DEFAULT_PROMPT = "high quality, sharp natural detail, clean edges"

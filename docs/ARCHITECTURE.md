@@ -36,8 +36,8 @@ pc/webui_unified.html             PC WebUI (tabs, console, model manager, themes
 pc/unified/
   engine.py                    diffusion_server init + inpaint bridge
   lcm_onnx_numpy.py            ONNX LCM pipeline (txt2img/img2img/inpaint/harmonize)
-  model_manager.py             single-resident gate + idle unload
-  models_manager.py            PC install/uninstall/state (pc/download_models.py)
+  resident_model.py             single-resident gate + idle unload
+  model_catalog.py            PC install/uninstall/state (pc/download_models.py)
   model_finder.py              HF search + custom URL add/delete
   upscale.py                   Real-ESRGAN (torch) or Pillow fallback
   vlm.py                       Qwen3-VL-2B caption/chat (shared OCR engine)
@@ -112,9 +112,9 @@ Common JSON shapes:
    `/v1/images/*`, `/v1/audio/*`, `/v1/chat/*`, so the idle unloader cannot evict
    a model during a long generation.
 
-### 4.2 Single-resident ModelManager
+### 4.2 Single-resident model gate
 
-`pc/unified/model_manager.py`:
+`pc/unified/resident_model.py`:
 - `ensure(kind, id)` — if a different model is resident, unload it first, then
   report `loading` (503) while the caller loads weights.
 - `begin()/end()` — in-flight counter.
@@ -201,7 +201,7 @@ preset.
 ### 4.8 Model downloads (PC)
 
 `pc/download_models.py` tasks are `snapshot` (HF repo), `file` (single HF file) or
-`url` (direct). `models_manager` runs installs in a thread and exposes state.
+`url` (direct). `model_catalog` runs installs in a thread and exposes state.
 Cancellation uses `_CANCEL` + `CancelledError`; URL downloads stop in the chunk
 loop, HF snapshots stop between files (per-file `hf_hub_download`).
 
@@ -324,7 +324,7 @@ Returns `engine=cpu-harmonize`.
 
 ```
 WebUI → POST /v1/images/generations
-      → ModelManager.ensure("image", id)
+      → ResidentModelGate.ensure("image", id)
       → try torch/diffusers
       → fallback: LcmOnnxNumpy.generate(prompt, negative, guidance, size, steps)
          → text encoder → LCM loop (UNet ± CFG) → VAE decode

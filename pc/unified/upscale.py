@@ -16,7 +16,7 @@ from typing import Optional
 
 from PIL import Image
 
-logger = logging.getLogger("unified.upscale")
+logger = logging.getLogger(__name__)
 
 MAX_SIDE = 8192
 WEIGHT_NAMES = ("RealESRGAN_x4plus.pth", "RealESRGAN_x4plus.pt")
@@ -123,7 +123,7 @@ def _rrdb_net():
 _net_cache = {}
 
 
-def release_upscale() -> bool:
+def release() -> bool:
     """Drop cached Real-ESRGAN sessions so the VRAM is actually freed."""
     had = bool(_net_cache or _onnx_session)
     _net_cache.clear()

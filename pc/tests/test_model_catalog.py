@@ -2,7 +2,7 @@
 import pytest
 from pathlib import Path
 
-import unified.models_manager as mm
+import unified.model_catalog as mm
 
 
 def test_catalog_has_known_models():
@@ -15,17 +15,17 @@ def test_catalog_has_known_models():
         assert "installed" in r and "install_state" in r and "size_gb" in r
 
 
-def test_is_installed_for_url_kind(tmp_path, monkeypatch):
+def test_is_task_installed_for_url_kind(tmp_path, monkeypatch):
     monkeypatch.setattr(mm, "MODELS_DIR", tmp_path)
     task = {"id": "t", "kind": "url", "target": "T", "file": "w.bin", "min_gb": 0.001}
-    assert mm.is_installed(task) is False
+    assert mm.is_task_installed(task) is False
     d = tmp_path / "T"
     d.mkdir()
     (d / "w.bin").write_bytes(b"\0" * 2000)  # 2 KB >= 0.001 GB? no
-    assert mm.is_installed(task) is False
+    assert mm.is_task_installed(task) is False
     (d / "w.bin").write_bytes(b"\0" * 2_000_000)  # 2 MB > 1 MB
     task["min_gb"] = 0.001
-    assert mm.is_installed(task) is True
+    assert mm.is_task_installed(task) is True
 
 
 def test_uninstall_refuses_unknown_id():

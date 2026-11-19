@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Optional
 
-logger = logging.getLogger("ai_client")
+logger = logging.getLogger(__name__)
 
 
 class AIProvider(Enum):

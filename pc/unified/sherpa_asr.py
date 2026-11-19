@@ -18,7 +18,7 @@ from typing import Optional
 
 from unified.asr_common import model_dir, ram_allows
 
-logger = logging.getLogger("sherpa_asr")
+logger = logging.getLogger(__name__)
 
 MODEL_ID = "sherpa-zipformer-small"
 MAX_SECONDS_PER_CALL = 60.0  # streaming model handles long audio natively
@@ -137,9 +137,11 @@ def init(model_id: str = None) -> bool:
         return False
 
 
-def release():
+def release() -> bool:
     global _recognizer
+    had = _recognizer is not None
     _recognizer = None
+    return had
 
 
 def _normalise_language(code: Optional[str] = None) -> str:

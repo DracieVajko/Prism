@@ -77,7 +77,7 @@ python -m pytest tests -q                  # unit tests (44)
 python tools/test_pc_features.py           # e2e against :8200
 python tools/test_ffmpeg_presets.py
 python tools/test_pc_states.py
-python tools/test_model_manager_concurrency.py
+python tools/test_resident_model_concurrency.py
 ```
 
 The e2e drivers expect the server on `http://127.0.0.1:8200` (start uvicorn

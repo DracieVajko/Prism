@@ -30,9 +30,9 @@ from typing import Optional
 
 import httpx
 
-from unified.llm_monitor import acquire, loaded_models, release
+from unified.llm_monitor import acquire, loaded_models, release_model
 
-logger = logging.getLogger("llm_providers")
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Default prompts per operation. Override with PRISM_PROMPT_<OPERATION> env var.
@@ -231,7 +231,7 @@ def process_with_external_llm(
     finally:
         if acquired and not before_loaded:
             try:
-                release(model)
+                release_model(model)
             except Exception:
                 pass
 

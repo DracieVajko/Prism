@@ -37,7 +37,10 @@ The old `Start-Diffusion.ps1` / `Stop-Diffusion.ps1` lives in `pc/legacy/`
 (kept for reference). New PID files: `pc/run/unified.pid`,
 `pc/run/unified-shim.pid`.
 Env: `UNIFIED_WHISPER_URL` (default `http://127.0.0.1:4444`),
-`UNIFIED_NO_ENGINE=1` = without diffusion registration (always placeholder).
+`UNIFIED_NO_ENGINE=1` = without diffusion registration (always placeholder),
+`PRISM_API_TOKEN` = require `Authorization: Bearer <token>` on every `/v1/*`
+route (`/health` stays open). Without it the API is unauthenticated and must
+stay bound to localhost or behind a firewall/Tailscale.
 
 ## CLI
 

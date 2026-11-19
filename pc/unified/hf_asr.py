@@ -21,7 +21,7 @@ import os
 from pathlib import Path
 from typing import Optional, Tuple
 
-logger = logging.getLogger("hf_asr")
+logger = logging.getLogger(__name__)
 
 MODEL_ID = "qwen3-asr-0.6b"
 _HERE = Path(__file__).resolve().parent.parent  # pc/

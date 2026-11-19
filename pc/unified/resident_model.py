@@ -7,7 +7,7 @@ import logging
 import threading
 import time
 
-logger = logging.getLogger("model_manager")
+logger = logging.getLogger(__name__)
 
 
 class ModelLoadingError(Exception):
@@ -22,7 +22,7 @@ class ModelBusyError(Exception):
     pass
 
 
-class ModelManager:
+class ResidentModelGate:
     def __init__(self):
         self._lock = threading.RLock()
         self._loaded_kind = None

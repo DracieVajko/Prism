@@ -167,7 +167,7 @@ def test_acquire_allows_configured_concurrency(monkeypatch, http):
 
 
 def test_release_unloads_ollama_model(http):
-    assert llm_monitor.release("gemma4:12b") is None
+    assert llm_monitor.release_model("gemma4:12b") is None
     posts = [c for c in http["calls"] if c[0] == "POST"]
     assert len(posts) == 1
     assert posts[0][2]["keep_alive"] == 0
@@ -175,7 +175,7 @@ def test_release_unloads_ollama_model(http):
 
 def test_release_unloads_lmstudio_model(monkeypatch, http):
     monkeypatch.setenv("PRISM_LLM_PROVIDER", "lmstudio")
-    llm_monitor.release("qwen")
+    llm_monitor.release_model("qwen")
     posts = [c for c in http["calls"] if c[0] == "POST"]
     assert len(posts) == 1
     assert posts[0][1].endswith("/api/v0/models/unload")
@@ -183,14 +183,14 @@ def test_release_unloads_lmstudio_model(monkeypatch, http):
 
 def test_release_ignores_generic_provider(monkeypatch, http):
     monkeypatch.setenv("PRISM_LLM_PROVIDER", "openai")
-    llm_monitor.release("gpt-4o-mini")
+    llm_monitor.release_model("gpt-4o-mini")
     assert http["calls"] == []
 
 
 def test_llm_slot_releases_on_exit(monkeypatch):
     calls = []
     monkeypatch.setattr(llm_monitor, "acquire", lambda model=None: calls.append("acquire") or True)
-    monkeypatch.setattr(llm_monitor, "release", lambda model=None: calls.append("release"))
+    monkeypatch.setattr(llm_monitor, "release_model", lambda model=None: calls.append("release"))
     with llm_monitor.LLMSlot("gemma4:12b") as slot:
         assert slot.acquired is True
     assert calls == ["acquire", "release"]
@@ -199,7 +199,7 @@ def test_llm_slot_releases_on_exit(monkeypatch):
 def test_llm_slot_skips_release_when_not_acquired(monkeypatch):
     calls = []
     monkeypatch.setattr(llm_monitor, "acquire", lambda model=None: False)
-    monkeypatch.setattr(llm_monitor, "release", lambda model=None: calls.append("release"))
+    monkeypatch.setattr(llm_monitor, "release_model", lambda model=None: calls.append("release"))
     with llm_monitor.LLMSlot("gemma4:12b") as slot:
         assert slot.acquired is False
     assert calls == []

@@ -20,7 +20,7 @@ import logging
 import os
 from pathlib import Path
 
-logger = logging.getLogger("ocr_engine")
+logger = logging.getLogger(__name__)
 _HERE = Path(__file__).resolve().parent.parent  # pc/
 
 try:
@@ -211,7 +211,8 @@ class OCREngine:
             self._loaded = False
             return False
 
-    def release(self):
+    def release(self) -> bool:
+        had = self._loaded or self.model is not None or self.processor is not None
         self.processor = None
         self.model = None
         self._loaded = False
@@ -221,6 +222,7 @@ class OCREngine:
                 torch.cuda.empty_cache()
         except Exception:
             pass
+        return had
 
     def _prompt(self, task: str, language: str) -> str:
         task = (task or "ocr").strip().lower()

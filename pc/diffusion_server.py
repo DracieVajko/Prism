@@ -43,7 +43,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from pydantic import BaseModel
 
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("diffusion_server")
+logger = logging.getLogger(__name__)
 
 
 def _log_suppressed(e: Exception) -> None:

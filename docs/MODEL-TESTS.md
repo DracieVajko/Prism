@@ -76,7 +76,7 @@ languages/features.
   `rope_parameters`.
 - `/v1/images/restore`: releases SD/VLM/OCR/Z-Image engines first, so the
   2.6 GB InstructPix2Pix load fits next to nothing else.
-- `download_models.py` / `models_manager.py`: `.incomplete/.part/.lock` no
+- `download_models.py` / `model_catalog.py`: `.incomplete/.part/.lock` no
   longer count as installed; the InstructPix2Pix download was completed
   (15.93 GB) and now loads.
 - Test harness: ASR `text/plain` bodies are parsed correctly.

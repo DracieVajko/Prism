@@ -12,7 +12,7 @@ import os
 from pathlib import Path
 from typing import Optional, List, Tuple
 
-logger = logging.getLogger("silero_vad")
+logger = logging.getLogger(__name__)
 
 MODEL_ID = "silero-vad"
 MODEL_DIR_NAME = "silero-vad"
@@ -42,6 +42,7 @@ def _total_ram_gb() -> float:
 def init() -> bool:
     """Load Silero VAD model. Returns False if not available."""
     global _model, _utils
+    had = _model is not None or _utils is not None
     if _model is not None:
         return True
     if not is_installed():
@@ -64,10 +65,12 @@ def init() -> bool:
         return False
 
 
-def release():
+def release() -> bool:
     global _model, _utils
+    had = _model is not None or _utils is not None
     _model = None
     _utils = None
+    return had
 
 
 def detect_speech_segments(

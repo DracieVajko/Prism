@@ -16,7 +16,7 @@ from pathlib import Path
 
 from PIL import Image
 
-logger = logging.getLogger("unified.vlm")
+logger = logging.getLogger(__name__)
 
 _HERE = Path(__file__).resolve().parent.parent
 MODEL_ID = "qwen3-vl-2b"
@@ -37,13 +37,13 @@ def find_vlm_dir(dirs=None):
     return None
 
 
-def release_vlm() -> bool:
+def release() -> bool:
     """Drop the shared Qwen3-VL engine so diffusion/OCR can take the VRAM."""
     try:
         from unified.ocr_engine import reset_ocr_engine
         reset_ocr_engine(MODEL_ID)
     except Exception as exc:
-        logger.debug("release_vlm failed: %s", exc)
+        logger.debug("release failed: %s", exc)
     return True
 
 

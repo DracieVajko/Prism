@@ -14,7 +14,7 @@ from typing import Optional
 
 from unified.asr_common import model_dir, ram_allows, total_ram_gb
 
-logger = logging.getLogger("nemotron_asr")
+logger = logging.getLogger(__name__)
 
 MODEL_ID = "nemotron-asr-0.6b"
 MAX_SECONDS_PER_CALL = 40.0  # the model is trained on <=40 s windows
@@ -134,12 +134,14 @@ def _clear_cuda_cache():
         logger.debug("CUDA cache clear failed: %s", exc)
 
 
-def release():
+def release() -> bool:
     global _processor, _model, _device
+    had = _model is not None or _processor is not None
     _processor = None
     _model = None
     _device = None
     _clear_cuda_cache()
+    return had
 
 
 def _normalise_language(code: Optional[str]) -> str:

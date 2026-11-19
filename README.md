@@ -64,7 +64,7 @@ Running local AI should not require cloud accounts, subscriptions, or sending pr
 - **Single resident model:** at most one heavy engine loaded at a time (VRAM/RAM budget)
 - **Honest errors:** unavailable features return `503 will-not-load` with a reason, never faked
 - **Lazy models:** weights are never bundled; downloaded on demand
-- **LAN-only, no authentication:** do not expose ports to the internet; use Tailscale or your LAN firewall
+- **LAN-only, optional bearer token:** set `PRISM_API_TOKEN` to require `Authorization: Bearer <token>` on `/v1/*`; without it the server is unauthenticated, so do not expose ports to the internet; use Tailscale or your LAN firewall
 
 ## Models
 
@@ -240,7 +240,7 @@ See `docs/ONDEVICE-PLAN.md` and `docs/RESEARCH-IMPROVEMENTS.md` for the full pla
 
 ## Security
 
-LAN-only, no authentication. The server defaults to binding `127.0.0.1` (localhost only). To allow LAN access, pass `--host 0.0.0.0` (or `-Remote` in the PowerShell launchers, or `PRISM_HOST=0.0.0.0`). **Do not expose ports 8101 / 8102 to the internet** — the API has no authentication. Use Tailscale or your LAN firewall to restrict access. The NSFW safety checker is disabled in the launchers.
+LAN-only, optional bearer token. The server defaults to binding `127.0.0.1` (localhost only). To allow LAN access, pass `--host 0.0.0.0` (or `-Remote` in the PowerShell launchers, or `PRISM_HOST=0.0.0.0`). Set `PRISM_API_TOKEN` to require `Authorization: Bearer <token>` on every `/v1/*` route (`/health` stays open for probes). Without a token the API is unauthenticated: **do not expose ports 8101 / 8102 to the internet**. Use Tailscale or your LAN firewall to restrict access. The NSFW safety checker is disabled in the launchers.
 
 ## License
 

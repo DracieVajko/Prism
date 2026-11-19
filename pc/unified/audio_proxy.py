@@ -4,7 +4,7 @@ import json
 import logging
 import urllib.request
 
-logger = logging.getLogger("unified.audio_proxy")
+logger = logging.getLogger(__name__)
 
 
 def transcribe_via_service(base_url, content: bytes, filename: str,

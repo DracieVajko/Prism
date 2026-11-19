@@ -6,7 +6,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-logger = logging.getLogger("unified.ytdlp")
+logger = logging.getLogger(__name__)
 
 
 class YtDlpMissing(Exception):

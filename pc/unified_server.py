@@ -3,7 +3,7 @@
 
 
 Combines DiffusionServer (:8101) + WhisperApi (:4444) without duplicating
-heavy logic: delegates to existing lazy modules (behind the ModelManager
+heavy logic: delegates to existing lazy modules (behind the ResidentModelGate
 gate), so idle VRAM/RAM stays free. At most one heavy model resident.
 Routes (frozen for Odysseus):
 GET /health, GET /v1/models, POST /v1/images/generations|edits,
@@ -44,7 +44,7 @@ from unified.ffmpeg_tools import (
     get_media_info, get_presets,
 )
 from unified.engine import init_diffusion_engine, try_real_inpaint
-from unified.model_manager import ModelManager, ModelLoadingError
+from unified.resident_model import ResidentModelGate, ModelLoadingError
 from unified.action_extractor import ActionExtractor, ActionType
 from unified.action_handlers import process_action, process_actions
 from unified.ai_client import AIClient, get_ai_client
@@ -61,14 +61,20 @@ from unified.transcription_utils import (
 )
 from unified.upscale import (ESRGAN_MODELS, SWINIR_MODELS, ZIMAGE_MODELS,
                              upscale_image_b64)
-from unified.vlm import MODEL_ID as VLM_ID, caption_image_b64, EngineMissing, release_vlm
+from unified.vlm import (MODEL_ID as VLM_ID, caption_image_b64, EngineMissing,
+                         release as release_vlm)
 
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("unified_server")
+logger = logging.getLogger(__name__)
+
+# Optional bearer-token gate. The product is local-first, so it is off by
+# default; setting PRISM_API_TOKEN turns it on for every /v1 route except
+# /health. This is the supported way to expose Prism to a LAN or Tailscale.
+API_TOKEN = os.environ.get("PRISM_API_TOKEN", "").strip()
 
 HERE = Path(__file__).resolve().parent
 WHISPER_SERVICE_URL = os.getenv("UNIFIED_WHISPER_URL", "http://127.0.0.1:4444")
-_manager = ModelManager()
+_manager = ResidentModelGate()
 _START_TS = time.time()
 
 
@@ -84,12 +90,12 @@ def _release_engines(reason: str = ""):
     except Exception:
         pass
     try:
-        from unified.lcm_onnx_numpy import release_pipeline
+        from unified.lcm_onnx_numpy import release as release_pipeline
         release_pipeline()
     except Exception:
         pass
     try:
-        from unified.upscale import release_upscale
+        from unified.upscale import release as release_upscale
         release_upscale()
     except Exception:
         pass
@@ -139,13 +145,17 @@ async def lifespan(application):
     except Exception as e:
         logger.warning(f"engine init skipped: {e}")
     _manager.on_unload = _release_engines
-    logger.warning(
-        "SECURITY: Prism API has NO authentication. "
-        "Bind to 127.0.0.1 (default) for local use only. "
-        "LAN access (--host 0.0.0.0 / -Remote) exposes an unauthenticated API "
-        "to the network. Do NOT expose port %s to the internet.",
-        os.getenv("PORT", "8101"),
-    )
+    if API_TOKEN:
+        logger.info("API bearer-token authentication enabled")
+    else:
+        logger.warning(
+            "SECURITY: Prism API has NO authentication. "
+            "Bind to 127.0.0.1 (default) for local use only, or set "
+            "PRISM_API_TOKEN to require Authorization: Bearer <token>. "
+            "LAN access (--host 0.0.0.0 / -Remote) without a token exposes "
+            "an unauthenticated API; do NOT expose port %s to the internet.",
+            os.getenv("PORT", "8101"),
+        )
     task = asyncio.create_task(_idle_unloader())
     try:
         yield
@@ -190,6 +200,25 @@ def _custom_openapi():
 app.openapi = _custom_openapi
 
 _TRACKED_PREFIXES = ("/v1/images/", "/v1/audio/", "/v1/chat/")
+
+
+@app.middleware("http")
+async def _require_token(request, call_next):
+    """Require the configured bearer token for /v1 routes.
+
+    /health stays open so process supervisors can probe the server; the WebUI
+    and static assets stay open because they are local files.
+    """
+    path = request.url.path
+    if (not API_TOKEN or request.method == "OPTIONS"
+            or path == "/health" or not path.startswith("/v1/")):
+        return await call_next(request)
+    if request.headers.get("authorization", "") != f"Bearer {API_TOKEN}":
+        return JSONResponse(status_code=401, content={
+            "error": "unauthorized",
+            "detail": "send Authorization: Bearer $PRISM_API_TOKEN",
+        })
+    return await call_next(request)
 
 
 @app.middleware("http")
@@ -470,7 +499,7 @@ def list_models():
     # The installable catalog is the source of truth for `installed` and kind;
     # build_registry's `missing` flag is not always populated.
     try:
-        from unified import models_manager as _mm
+        from unified import model_catalog as _mm
     except Exception:
         _mm = None
     try:
@@ -1758,7 +1787,7 @@ def _transcribe_with_whisper(tmp_path: str, wanted: str, language, rid: str = ""
         use_local = local_bin.is_file() and local_bin.stat().st_size > 50 * 1024 * 1024
     else:
         try:
-            from unified.models_manager import whisper_installed
+            from unified.model_catalog import whisper_installed
             use_local = whisper_installed(wanted)
         except Exception:
             use_local = local_bin.is_file() and local_bin.stat().st_size > 50 * 1024 * 1024
@@ -1857,7 +1886,7 @@ def _transcribe_pcm(raw: bytes, rate: int, wanted: str, language):
     folder = CUSTOM_WHISPER_DIRS.get(wanted) or f"faster-whisper-{wanted}"
     local = Path(__file__).resolve().parent / "models" / folder
     try:
-        from unified.models_manager import whisper_installed
+        from unified.model_catalog import whisper_installed
         use_local = (wanted in CUSTOM_WHISPER_DIRS
                      and (local / "model.bin").is_file()) or whisper_installed(wanted)
     except Exception:
@@ -2998,37 +3027,45 @@ async def convert_image_endpoint(
             pass
 
 
-@app.post("/v1/ffmpeg/extract-audio")
-async def extract_audio_endpoint(
-    file: UploadFile = File(...),
-    format: str = Form(default="wav"),
-    request_id: str = Form(default=""),
-):
-    rid = request_id or "req-" + uuid.uuid4().hex[:8]
+_MEDIA_EXT_KINDS = {
+    ".jpg": "image", ".jpeg": "image", ".png": "image", ".webp": "image",
+    ".avif": "image",
+    ".mp3": "audio", ".m4a": "audio", ".aac": "audio", ".wav": "audio",
+    ".opus": "audio", ".flac": "audio",
+}
+
+
+def _media_output_kind(ext: str) -> str:
+    return _MEDIA_EXT_KINDS.get(ext, "video")
+
+
+async def _run_media_transform(file: UploadFile, rid: str, default_name: str,
+                               transform, runtime_status: int = 500):
+    """Read an upload, run an ffmpeg helper, store and clean up the result.
+
+    The extract/trim/compress endpoints shared the same 40-line temp-file,
+    base64, output-store and cleanup block; keep one implementation.
+    """
     content = await file.read()
     if not content:
         return JSONResponse(status_code=400, content={"error": "Empty file"})
 
-    suffix = Path(file.filename or "video.mp4").suffix or ".mp4"
+    suffix = Path(file.filename or default_name).suffix or ".mp4"
     tmp = None
     try:
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as t:
             tmp = t.name
             t.write(content)
 
-        out_path, info = extract_audio(Path(tmp), audio_format=format)
-
+        out_path, info = transform(Path(tmp))
         out_data = Path(out_path).read_bytes()
         out_b64 = base64.b64encode(out_data).decode()
-        _ext = Path(out_path).suffix.lower() or ".bin"
-        _kind = ("image" if _ext in (".jpg", ".jpeg", ".png", ".webp", ".avif") else
-                 "audio" if _ext in (".mp3", ".m4a", ".aac", ".wav", ".opus", ".flac") else
-                 "video")
-        out_meta = _store_output(_kind, _ext, out_data, rid)
+        ext = Path(out_path).suffix.lower() or ".bin"
+        out_meta = _store_output(_media_output_kind(ext), ext, out_data, rid)
 
         try:
             Path(out_path).unlink(missing_ok=True)
-        except Exception:
+        except OSError:
             pass
 
         return {
@@ -3039,16 +3076,31 @@ async def extract_audio_endpoint(
             "info": {
                 "duration": info.get("format", {}).get("duration"),
                 "size": info.get("format", {}).get("size"),
-            }
+            },
         }
+    except ValueError as e:
+        return JSONResponse(status_code=400, content={"error": str(e)[:200]})
     except RuntimeError as e:
-        return JSONResponse(status_code=500, content={"error": str(e)[:200]})
+        return JSONResponse(status_code=runtime_status,
+                            content={"error": str(e)[:200]})
     finally:
         try:
             if tmp:
                 Path(tmp).unlink(missing_ok=True)
-        except Exception:
+        except OSError:
             pass
+
+
+@app.post("/v1/ffmpeg/extract-audio")
+async def extract_audio_endpoint(
+    file: UploadFile = File(...),
+    format: str = Form(default="wav"),
+    request_id: str = Form(default=""),
+):
+    rid = request_id or "req-" + uuid.uuid4().hex[:8]
+    return await _run_media_transform(
+        file, rid, "video.mp4",
+        lambda path: extract_audio(path, audio_format=format))
 
 
 @app.post("/v1/ffmpeg/trim")
@@ -3059,50 +3111,8 @@ async def trim_endpoint(
     request_id: str = Form(default=""),
 ):
     rid = request_id or "req-" + uuid.uuid4().hex[:8]
-    content = await file.read()
-    if not content:
-        return JSONResponse(status_code=400, content={"error": "Empty file"})
-
-    suffix = Path(file.filename or "media.mp4").suffix or ".mp4"
-    tmp = None
-    try:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as t:
-            tmp = t.name
-            t.write(content)
-
-        out_path, info = trim_media(Path(tmp), start, end)
-
-        out_data = Path(out_path).read_bytes()
-        out_b64 = base64.b64encode(out_data).decode()
-        _ext = Path(out_path).suffix.lower() or ".bin"
-        _kind = ("image" if _ext in (".jpg", ".jpeg", ".png", ".webp", ".avif") else
-                 "audio" if _ext in (".mp3", ".m4a", ".aac", ".wav", ".opus", ".flac") else
-                 "video")
-        out_meta = _store_output(_kind, _ext, out_data, rid)
-
-        try:
-            Path(out_path).unlink(missing_ok=True)
-        except Exception:
-            pass
-
-        return {
-            "file": out_b64,
-            "outputs": [out_meta],
-            "filename": Path(out_path).name,
-            "request_id": rid,
-            "info": {
-                "duration": info.get("format", {}).get("duration"),
-                "size": info.get("format", {}).get("size"),
-            }
-        }
-    except RuntimeError as e:
-        return JSONResponse(status_code=500, content={"error": str(e)[:200]})
-    finally:
-        try:
-            if tmp:
-                Path(tmp).unlink(missing_ok=True)
-        except Exception:
-            pass
+    return await _run_media_transform(
+        file, rid, "media.mp4", lambda path: trim_media(path, start, end))
 
 
 @app.post("/v1/ffmpeg/compress")
@@ -3112,50 +3122,10 @@ async def compress_endpoint(
     request_id: str = Form(default=""),
 ):
     rid = request_id or "req-" + uuid.uuid4().hex[:8]
-    content = await file.read()
-    if not content:
-        return JSONResponse(status_code=400, content={"error": "Empty file"})
-
-    suffix = Path(file.filename or "video.mp4").suffix or ".mp4"
-    tmp = None
-    try:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as t:
-            tmp = t.name
-            t.write(content)
-
-        out_path, info = compress_video(Path(tmp), target_size_mb)
-
-        out_data = Path(out_path).read_bytes()
-        out_b64 = base64.b64encode(out_data).decode()
-        _ext = Path(out_path).suffix.lower() or ".bin"
-        _kind = ("image" if _ext in (".jpg", ".jpeg", ".png", ".webp", ".avif") else
-                 "audio" if _ext in (".mp3", ".m4a", ".aac", ".wav", ".opus", ".flac") else
-                 "video")
-        out_meta = _store_output(_kind, _ext, out_data, rid)
-
-        try:
-            Path(out_path).unlink(missing_ok=True)
-        except Exception:
-            pass
-
-        return {
-            "file": out_b64,
-            "outputs": [out_meta],
-            "filename": Path(out_path).name,
-            "request_id": rid,
-            "info": {
-                "duration": info.get("format", {}).get("duration"),
-                "size": info.get("format", {}).get("size"),
-            }
-        }
-    except (ValueError, RuntimeError) as e:
-        return JSONResponse(status_code=400, content={"error": str(e)[:200]})
-    finally:
-        try:
-            if tmp:
-                Path(tmp).unlink(missing_ok=True)
-        except Exception:
-            pass
+    return await _run_media_transform(
+        file, rid, "video.mp4",
+        lambda path: compress_video(path, target_size_mb),
+        runtime_status=400)
 
 
 @app.post("/v1/ffmpeg/info")
@@ -3436,7 +3406,7 @@ def open_outputs():
 
 # ---------- model install/uninstall (PC) ----------
 
-from unified import models_manager as _mm
+from unified import model_catalog as _mm
 
 
 class InstallRequest(BaseModel):
