@@ -1035,3 +1035,17 @@ Android (`Android/data/<pkg>/files/output/<kind>/`):
 
 - [x] Deleted the unused PC `models/SmolVLM_500M` folder (0.95 GB) after the
       catalog removal. Android's `smolvlm-500m-gguf` is separate and stays.
+
+## CI contract-fuzz fixes (2026-11-20)
+
+- [x] `POST /v1/videos/upscale` stopped being a false 503: CI now installs
+      `ffmpeg`/`ffprobe` before the Schemathesis step, so the endpoint is
+      exercised instead of excluded. Malformed uploaded video now returns 400
+      (`invalid or unsupported video`) instead of falling through to 500.
+- [x] `DELETE` and `GET /v1/outputs/{rel}` now validate the path before
+      `Path.resolve()`/`stat()`: empty, traversal, >255-byte components and
+      >1024-byte paths return 400; `OSError` (including ENAMETOOLONG) is caught.
+      No more `OSError: [Errno 36] File name too long` -> 500.
+- [x] Added `pc/tests/test_outputs.py` (long fuzz path + roundtrip) and
+      `pc/tests/test_video_upscale.py` (missing file, bad scale, unknown model).
+      Schemathesis 4.x flag was already fixed with `--max-failures 1`.

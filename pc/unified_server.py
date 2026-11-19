@@ -59,7 +59,8 @@ from unified.transcription_utils import (
     estimate_transcription_time,
     SUPPORTED_FORMATS,
 )
-from unified.upscale import upscale_image_b64
+from unified.upscale import (ESRGAN_MODELS, SWINIR_MODELS, ZIMAGE_MODELS,
+                             upscale_image_b64)
 from unified.vlm import MODEL_ID as VLM_ID, caption_image_b64, EngineMissing, release_vlm
 
 logging.basicConfig(level=logging.INFO)
@@ -1070,6 +1071,11 @@ async def video_upscale(
     if scale not in (2, 3, 4):
         return JSONResponse(status_code=400,
                             content={"error": f"scale must be 2/3/4, got {scale}"})
+    allowed_models = ESRGAN_MODELS | SWINIR_MODELS | ZIMAGE_MODELS
+    if (model or "").strip().lower() not in allowed_models:
+        return JSONResponse(status_code=400, content={
+            "error": f"unknown upscale model '{model}'",
+            "detail": "expected RealESRGAN_x4v3, swinir-realsr-x4 or z-image-turbo"})
     raw = await file.read()
     if not raw:
         return JSONResponse(status_code=400, content={"error": "empty file"})
@@ -1083,7 +1089,12 @@ async def video_upscale(
     try:
         src = tmpdir / f"input{suffix}"
         src.write_bytes(raw)
-        info = _probe_video(src)
+        try:
+            info = _probe_video(src)
+        except Exception as e:
+            return JSONResponse(status_code=400, content={
+                "error": "invalid or unsupported video",
+                "detail": str(e)[:200]})
         proc_fps = float(fps) if fps and fps > 0 else min(info["fps"] or 24.0, 30.0)
         if proc_fps <= 0:
             return JSONResponse(status_code=400,
@@ -1096,7 +1107,9 @@ async def video_upscale(
              str(frames_dir / "%06d.png")],
             capture_output=True, text=True)
         if extract.returncode != 0:
-            raise RuntimeError((extract.stderr or "frame extraction failed")[:300])
+            return JSONResponse(status_code=400, content={
+                "error": "invalid or unsupported video",
+                "detail": (extract.stderr or "frame extraction failed")[:300]})
         frames = sorted(frames_dir.glob("*.png"))
         if not frames:
             return JSONResponse(status_code=400, content={"error": "no video frames"})
@@ -3309,10 +3322,33 @@ def cancel_job(rid: str):
 
 # ---------- outputs ----------
 
+MAX_OUTPUT_REL_BYTES = 1024
+MAX_OUTPUT_SEGMENT_BYTES = 255
+
+
 def _output_path(rel: str) -> Path:
-    """Resolve a client-supplied output path, refusing anything outside output/."""
+    """Resolve a client-supplied output path, refusing anything outside output/.
+
+    A fuzzed path can be longer than the filesystem allows; validate before
+    Path.resolve()/stat() so an over-long name returns 400 instead of an
+    uncaught OSError -> 500. The limit is deliberately below both the POSIX
+    PATH_MAX and the Windows 260-character legacy limit for normal trees.
+    """
+    if not rel:
+        raise ValueError("empty output path")
+    if len(rel.encode("utf-8")) > MAX_OUTPUT_REL_BYTES:
+        raise ValueError("output path too long")
+    segments = rel.replace("\\", "/").split("/")
+    if any(len(seg.encode("utf-8")) > MAX_OUTPUT_SEGMENT_BYTES
+           for seg in segments):
+        raise ValueError("output path component too long")
+    if any(seg in ("", ".", "..") for seg in segments):
+        raise ValueError("invalid output path")
     root = OUTPUT_DIR.resolve()
-    target = (root / rel).resolve()
+    try:
+        target = (root / rel).resolve()
+    except OSError as e:
+        raise ValueError(f"invalid output path: {e}") from e
     if root not in target.parents and target != root:
         raise ValueError("path outside output/")
     return target
@@ -3347,9 +3383,16 @@ def get_output(rel: str):
         target = _output_path(rel)
     except ValueError as e:
         return JSONResponse(status_code=400, content={"error": str(e)})
-    if not target.is_file():
+    try:
+        is_file = target.is_file()
+    except OSError as e:
+        return JSONResponse(status_code=400, content={"error": str(e)[:200]})
+    if not is_file:
         return JSONResponse(status_code=404, content={"error": "not found"})
-    return FileResponse(target, filename=target.name)
+    try:
+        return FileResponse(target, filename=target.name)
+    except OSError as e:
+        return JSONResponse(status_code=400, content={"error": str(e)[:200]})
 
 
 @app.delete("/v1/outputs/{rel:path}")
@@ -3358,9 +3401,18 @@ def delete_output(rel: str):
         target = _output_path(rel)
     except ValueError as e:
         return JSONResponse(status_code=400, content={"error": str(e)})
-    if not target.is_file():
+    try:
+        is_file = target.is_file()
+    except OSError as e:
+        return JSONResponse(status_code=400, content={"error": str(e)[:200]})
+    if not is_file:
         return JSONResponse(status_code=404, content={"error": "not found"})
-    target.unlink()
+    try:
+        target.unlink()
+    except FileNotFoundError:
+        return JSONResponse(status_code=404, content={"error": "not found"})
+    except OSError as e:
+        return JSONResponse(status_code=400, content={"error": str(e)[:200]})
     return {"removed": rel}
 
 
