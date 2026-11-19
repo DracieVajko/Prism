@@ -1939,7 +1939,7 @@ def _transcribe_chunked(audio_path: Path, wanted: str, language, rid: str = ""):
             prev = (prev + " " + text).strip()[-400:]
             _job_update(rid, done=end, message=f"chunk {idx + 1}/{len(chunks)}")
     finally:
-        cleanup_chunks(chunks, keep_original=True)
+        cleanup_chunks(chunks)
     return " ".join(texts).strip(), language, segments
 
 

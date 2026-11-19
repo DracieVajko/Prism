@@ -103,23 +103,11 @@ lmstudio/
 # llama.cpp + mtmd sources (cloned by android/tools/fetch_third_party.ps1)
 android/third_party/
 
-# desloppify local state
+# desloppify local state, scorecard and skill copies
 .desloppify/
-
-# desloppify generated scorecard
 scorecard.png
-
-# opencode session artifacts (desloppify skill copy)
 .opencode/
-
-# desloppify local state (do not commit)
-.desloppify/
-
-# Claude skills (downloaded by desloppify skill)
 .claude/
 
 # Schemathesis cache
 .schemathesis/
-
-# desloppify local state
-.desloppify/

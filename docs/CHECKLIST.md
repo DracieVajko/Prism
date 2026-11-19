@@ -1049,3 +1049,30 @@ Android (`Android/data/<pkg>/files/output/<kind>/`):
 - [x] Added `pc/tests/test_outputs.py` (long fuzz path + roundtrip) and
       `pc/tests/test_video_upscale.py` (missing file, bad scale, unknown model).
       Schemathesis 4.x flag was already fixed with `--max-failures 1`.
+
+## Desloppify code-health pass (2026-11-20)
+
+- [x] Installed `desloppify 1.0.1`, installed the Claude/OpenCode skill docs, and
+      kept `.desloppify/`, `scorecard.png`, `.opencode/` and `.claude/` ignored.
+- [x] Scanned `D:\AI\Prism`; reviewed all 20 subjective dimensions and imported
+      the blind review. Strict score moved from the plan-start 64.4 to 69.3
+      (overall 71.3, objective 81.2).
+- [x] Fixed the convention outliers: all PC loggers use
+      `logging.getLogger(__name__)`; `model_manager.py`/`models_manager.py`
+      became `resident_model.py` (`ResidentModelGate`) and `model_catalog.py`
+      (`is_task_installed`); every engine `release()` now returns `bool`, with
+      `llm_monitor.release_model()` separated; extract/trim/compress share
+      `_run_media_transform`; `cleanup_chunks` no longer has a dead
+      `keep_original` parameter.
+- [x] Added optional `PRISM_API_TOKEN` bearer auth for every `/v1/*` route
+      (`/health` and CORS preflight exempt), with 401/200 tests and LAN
+      documentation. Default remains localhost-friendly.
+- [x] Added tests for `transcription_utils`, `onnx_env`, `registry`,
+      `audio_splitter`, `ffmpeg_tools`, the resident-model gate and the model
+      catalog. Test health rose from 35.3 to 68.5.
+- [x] Remaining: 18 subjective dimensions are below the 85 target and the
+      strict score stays 69.3 until those reviews are cleared. The largest drags
+      are mid elegance (64), init coupling (58), structure/package layout (60),
+      type safety (68) and contracts (70). The 61 "recovered, no evidence"
+      review records were marked false positive after the fresh review replaced
+      them.

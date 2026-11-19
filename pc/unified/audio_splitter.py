@@ -142,7 +142,7 @@ def format_timestamp(seconds: float) -> str:
     return f"{h:02d}:{m:02d}:{s:02d}"
 
 
-def cleanup_chunks(chunks: List[Tuple[Path, float, float]], keep_original: bool = True):
+def cleanup_chunks(chunks: List[Tuple[Path, float, float]]):
     """Clean up temporary chunk files."""
     for chunk_path, _, _ in chunks:
         if chunk_path.name.startswith("chunk_"):
