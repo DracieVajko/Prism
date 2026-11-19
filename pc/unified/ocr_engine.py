@@ -253,6 +253,10 @@ def get_ocr_engine(model_id: str = "nemotron-ocr-0") -> OCREngine:
 
 def reset_ocr_engine(model_id: str | None = None):
     if model_id is None:
+        for eng in _engines.values():
+            eng.release()
         _engines.clear()
     else:
-        _engines.pop(model_id, None)
+        eng = _engines.pop(model_id, None)
+        if eng is not None:
+            eng.release()

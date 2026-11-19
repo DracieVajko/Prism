@@ -1181,6 +1181,20 @@ def restore(req: RestoreRequest):
     rid = req.request_id or f"req-{uuid.uuid4().hex[:8]}"
     if not req.image:
         return JSONResponse(status_code=400, content={"error": "missing image b64"})
+    # InstructPix2Pix needs ~2.6 GB on top of whatever is resident; drop the
+    # other heavy engines first (a 4.3 GB OCR model made the load fail).
+    _release_sd_best_effort()
+    _release_vlm_best_effort()
+    try:
+        from unified.ocr_engine import reset_ocr_engine
+        reset_ocr_engine()
+    except Exception:
+        pass
+    try:
+        from unified.zimage import release as release_zimage
+        release_zimage()
+    except Exception:
+        pass
     try:
         from unified.restore import restore_b64
         out = restore_b64(req.image, prompt=req.prompt or "restore and colorize this old photo",

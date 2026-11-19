@@ -949,3 +949,18 @@ Android (`Android/data/<pkg>/files/output/<kind>/`):
 - [ ] Known failures: Nemotron ASR (transformers 5.21 get_audio_features
       incompatibility), instruct-pix2pix (incomplete download), Z-Image under
       LLM memory pressure (works when free), OCR re-test blocked by low RAM.
+
+## Full installed-model test (2026-11-19)
+
+- [x] With LM Studio unloaded (22 GB free RAM, GPU idle), 20 of 21 installed
+      models passed through the real API: Whisper turbo/large, Granite Speech,
+      Real-ESRGAN, SwinIR, Z-Image (615.9 s), all four OCR models + Qwen3-VL
+      describe, SmolVLM, DDColor, GFPGAN, SwinIR restore, InstructPix2Pix, and
+      all four image models. Matrix: docs/MODEL-TESTS.md.
+- [x] InstructPix2Pix fixed by releasing SD/VLM/OCR/Z-Image before its 2.6 GB
+      load; completed download (15.93 GB).
+- [x] OCR fixed and verified on GPU: nemotron 2,343 chars, qwen3-vl 2,767,
+      granite 44 on the slide, Ovis 7,995 with bboxes.
+- [ ] Nemotron ASR still returns an empty transcript (transformers 5.21 RNNT
+      generation path); Whisper and Granite cover ASR meanwhile.
+- [ ] Optional non-installed models remain untested until downloaded.
