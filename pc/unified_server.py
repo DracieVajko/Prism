@@ -1245,10 +1245,8 @@ from unified.media_routes import (router as media_router, _output_path,
                                  _store_b64, _transcribe_with_vad,
                                  _transcribe_with_whisper, transcriptions,
                                  _chat_vision_parts, _transcribe_pcm,
-                                 transcribe_alias)
+                                 transcribe_alias, InstallRequest)
 
-logger.error("DEBUG startup _store_b64 in globals: %s", "_store_b64" in globals())
-logger.error("DEBUG startup media_routes file: %s", __import__("unified.media_routes", fromlist=["__file__"]).__file__)
 app.routes.extend(media_router.routes)
 _output_path = _output_path  # keep test/compatibility alias
 _store_b64 = _store_b64
@@ -1258,6 +1256,7 @@ transcriptions = transcriptions
 _chat_vision_parts = _chat_vision_parts
 _transcribe_pcm = _transcribe_pcm
 transcribe_alias = transcribe_alias
+InstallRequest = InstallRequest
 
 
 @app.on_event("startup")
