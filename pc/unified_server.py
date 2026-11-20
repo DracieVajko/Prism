@@ -45,6 +45,11 @@ from unified.upscale import (
 from unified.vlm import MODEL_ID as VLM_ID
 from unified.vlm import release as release_vlm
 
+try:
+    from unified import model_catalog as _mm
+except Exception:
+    _mm = None
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -1237,12 +1242,14 @@ from unified.media_routes import (
     _transcribe_with_whisper,
     transcribe_alias,
     transcriptions,
+    ALLOWED_WHISPER,
 )
 from unified.media_routes import router as media_router
 
 app.routes.extend(media_router.routes)
 _output_path = _output_path  # keep test/compatibility alias
 _store_b64 = _store_b64
+ALLOWED_WHISPER = ALLOWED_WHISPER
 _transcribe_with_vad = _transcribe_with_vad
 _transcribe_with_whisper = _transcribe_with_whisper
 transcriptions = transcriptions
