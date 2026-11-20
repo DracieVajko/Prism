@@ -32,7 +32,7 @@ def test_vad_uses_segment_transcriber(monkeypatch):
     monkeypatch.setattr("unified.silero_vad.is_installed", lambda: True)
     monkeypatch.setattr("unified.silero_vad.transcribe_with_vad", fake_transcribe_with_vad)
     monkeypatch.setattr(
-        "unified_server._transcribe_with_whisper",
+        "unified.media_routes._transcribe_with_whisper",
         lambda path, wanted, lang, rid="": ("hello", lang or "en", []),
     )
     text, lang = asyncio.run(

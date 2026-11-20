@@ -2,19 +2,19 @@
 import asyncio
 import inspect
 
-import unified_server as us
+import unified.media_routes as mr
 
 
 def test_transcribe_alias_forwards_only_known_kwargs(monkeypatch):
-    real = us.transcriptions
+    real = mr.transcriptions
     captured = {}
 
     async def fake(**kwargs):
         captured.update(kwargs)
         return {"ok": True}
 
-    monkeypatch.setattr(us, "transcriptions", fake)
-    asyncio.run(us.transcribe_alias(file=None, language="en"))
+    monkeypatch.setattr(mr, "transcriptions", fake)
+    asyncio.run(mr.transcribe_alias(file=None, language="en"))
 
     # bind() raises TypeError when the alias passes a parameter the real
     # endpoint does not accept (the previous `model_name` bug).

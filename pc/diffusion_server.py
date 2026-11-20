@@ -710,8 +710,18 @@ def _discover_models() -> dict:
     """
     found = {}
 # Directories that are not diffusion weights (VLM, upscale) — auto-discovery ignores them.
-    NON_DIFFUSION_DIRS = {"qwen3-vl-2b", "RealESRGAN_x4v3", "Vision", "Upscale",
-                          "VLM", "z-image-turbo"}
+    NON_DIFFUSION_DIRS = {
+        "AbsoluteReality_1.8", "AnimagineXL_3.1", "DreamShaper_8",
+        "JuggernautXL_v9", "LCM_Dreamshaper_ONNX", "SDXL_Turbo",
+        "ddcolor-full", "ddcolor-tiny", "falcon-ocr", "faster-whisper-large",
+        "faster-whisper-turbo", "flux-kontext-dev", "gfpgan-v1.4", "glm-ocr",
+        "granite-docling-258m", "granite-speech-470m", "instruct-pix2pix",
+        "lightonocr-2-1b", "nemotron-asr-0.6b", "nemotron-ocr-0",
+        "nemotron-transcribe-30b-a4b-nvfp4", "ovis-ocr2", "paddleocr-vl-1.6",
+        "qianfan-ocr", "qwen3-asr-0.6b", "qwen3-vl-2b", "RealESRGAN_x4v3",
+        "supertonic-3-tts-int8", "swinir-realsr-x4", "Vision", "Upscale",
+        "VLM", "z-image-turbo",
+    }
     try:
         models_dir = Path(__file__).resolve().parent / "models"
         if not models_dir.is_dir():

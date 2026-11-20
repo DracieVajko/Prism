@@ -3,12 +3,13 @@ import base64
 
 from fastapi.testclient import TestClient
 
+import unified.media_routes as mr
 import unified_server as us
 
 
 def test_realtime_session_flow(monkeypatch):
     monkeypatch.setattr(
-        us, "_transcribe_pcm",
+        mr, "_transcribe_pcm",
         lambda raw, rate, wanted, language: ("hello world", "en"))
     monkeypatch.setattr(us._manager, "ensure", lambda kind, model_id: model_id)
 
