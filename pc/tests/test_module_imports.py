@@ -17,7 +17,6 @@ MODULES = [
     "unified.restore_flux",
     "unified.silero_vad",
     "unified.tts_engine",
-    "tools.convert_esrgan_onnx",
     "tools.download_gemma4",
     "tools.download_nemotron_asr",
     "legacy.run_diffusion_menu",
