@@ -84,6 +84,9 @@ router = APIRouter()
 HERE = Path(__file__).resolve().parent.parent
 
 # _us is defined below; router must exist before route decorators.
+ALLOWED_WHISPER = ("tiny", "base", "small", "medium", "turbo", "large",
+                   "ivrit-whisper-turbo")
+
 def _us():
     import unified_server as us
     return us
@@ -766,8 +769,7 @@ def _store_b64(kind: str, ext: str, b64: str, rid: str = "") -> dict:
 ALLOWED_AUDIO_EXT = {".mp3", ".mp4", ".mpeg", ".mpga", ".m4a", ".wav",
                      ".webm", ".ogg", ".flac", ".opus"}
 MAX_FILE_SIZE = 500 * 1024 * 1024
-ALLOWED_WHISPER = ("tiny", "base", "small", "medium", "turbo", "large",
-                   "ivrit-whisper-turbo")
+
 # CTranslate2 checkpoints whose folder name is not faster-whisper-<id>.
 CUSTOM_WHISPER_DIRS = {"ivrit-whisper-turbo": "ivrit-whisper-turbo"}
 
