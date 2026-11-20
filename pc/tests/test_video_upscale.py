@@ -1,7 +1,6 @@
 """Video upscale input validation (no model/ffmpeg work needed)."""
-from fastapi.testclient import TestClient
-
 import unified_server as us
+from fastapi.testclient import TestClient
 
 
 def test_video_upscale_requires_file():

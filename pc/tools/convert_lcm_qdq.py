@@ -14,8 +14,9 @@ Rewrite to:
   Conv(x_f, w_f, bias) -> out
 """
 from pathlib import Path
+
 import onnx
-from onnx import helper, numpy_helper
+from onnx import helper
 
 SRC = Path(r"D:\AI\DiffusionServer\models\LCM_Dreamshaper_ONNX\unet\model.onnx")
 DST = Path(r"D:\AI\DiffusionServer\models\LCM_Dreamshaper_ONNX\unet\model_qdq.onnx")
@@ -51,7 +52,7 @@ for n in list(g.node):
         skipped += 1
         continue
 
-    prefix = w_q[:-len(".weight_quantized")] if w_q.endswith(".weight_quantized") else w_q
+    prefix = w_q.removesuffix(".weight_quantized")
     w_scale_name = prefix + ".weight_scale"
     if w_scale_name not in inits:
         skipped += 1

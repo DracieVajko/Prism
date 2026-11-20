@@ -1,6 +1,6 @@
 """ResidentModelGate — always at most 1 heavy model resident."""
 import pytest
-from unified.resident_model import ResidentModelGate, ModelLoadingError
+from unified.resident_model import ModelLoadingError, ResidentModelGate
 
 
 def test_only_one_resident():

@@ -8,7 +8,7 @@ it.
 """
 
 from dataclasses import dataclass
-from typing import Optional, Protocol, Tuple
+from typing import Protocol
 
 
 class AsrEngineModule(Protocol):
@@ -18,14 +18,14 @@ class AsrEngineModule(Protocol):
 
     def enabled(self) -> bool: ...
 
-    def is_installed(self, model_id: Optional[str] = None) -> bool: ...
+    def is_installed(self, model_id: str | None = None) -> bool: ...
 
     def transcribe(
         self,
         audio_path: str,
-        language: Optional[str] = None,
-        model_id: Optional[str] = None,
-    ) -> Tuple[str, str]: ...
+        language: str | None = None,
+        model_id: str | None = None,
+    ) -> tuple[str, str]: ...
 
 
 @dataclass(frozen=True)
@@ -41,23 +41,23 @@ class AsrEngine:
     def default_id(self) -> str:
         return self.module.MODEL_ID
 
-    def installed(self, model_id: Optional[str] = None) -> bool:
+    def installed(self, model_id: str | None = None) -> bool:
         return self.module.is_installed(model_id or self.default_id)
 
     def transcribe(
         self,
         audio_path: str,
-        language: Optional[str] = None,
-        model_id: Optional[str] = None,
-    ) -> Tuple[str, str]:
+        language: str | None = None,
+        model_id: str | None = None,
+    ) -> tuple[str, str]:
         return self.module.transcribe(
             audio_path, language, model_id or self.default_id)
 
 
-_ENGINES: Optional[Tuple[AsrEngine, ...]] = None
+_ENGINES: tuple[AsrEngine, ...] | None = None
 
 
-def engines() -> Tuple[AsrEngine, ...]:
+def engines() -> tuple[AsrEngine, ...]:
     """Build the registry once; engine modules are only imported on first use."""
     global _ENGINES
     if _ENGINES is None:
@@ -98,7 +98,7 @@ def engines() -> Tuple[AsrEngine, ...]:
     return _ENGINES
 
 
-def resolve_engine(raw_model: str) -> Tuple[Optional[AsrEngine], str]:
+def resolve_engine(raw_model: str) -> tuple[AsrEngine | None, str]:
     """Resolve a request model name to ``(engine or None, model id)``.
 
     * ``nemotron-*`` / ``sherpa-*`` select that engine explicitly, so the

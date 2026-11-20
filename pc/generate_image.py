@@ -80,7 +80,6 @@ def cmd_catalog_models(_):
 
 
 def cmd_doctor(_):
-    import os
     from pathlib import Path
     here = Path(__file__).resolve().parent
     cfg = json.loads((here / "models.json").read_text(encoding="utf-8"))
@@ -287,7 +286,7 @@ def cmd_models(_):
 
 
 def cmd_install(a):
-    from unified.model_catalog import install_blocking, catalog
+    from unified.model_catalog import install_blocking
     for mid in a.ids:
         print(f"[{mid}] installing…", flush=True)
         try:
@@ -344,7 +343,7 @@ def cmd_video(a):
     )
     print("saved ->", out)
     fmt = info.get("format", {})
-    print("duration=%ss size=%s format=%s" % (fmt.get("duration"), fmt.get("size"), fmt.get("format_name")))
+    print("duration={}s size={} format={}".format(fmt.get("duration"), fmt.get("size"), fmt.get("format_name")))
 
 
 def cmd_audio(a):
@@ -356,12 +355,12 @@ def cmd_audio(a):
     )
     print("saved ->", out)
     fmt = info.get("format", {})
-    print("duration=%ss size=%s" % (fmt.get("duration"), fmt.get("size")))
+    print("duration={}s size={}".format(fmt.get("duration"), fmt.get("size")))
 
 
 def cmd_extract(a):
     from unified.ffmpeg_tools import extract_audio
-    out, info = extract_audio(
+    out, _info = extract_audio(
         Path(a.input), output_path=Path(a.output) if a.output else None,
         audio_format=a.format,
     )
@@ -375,27 +374,29 @@ def cmd_trim(a):
         output_path=Path(a.output) if a.output else None,
     )
     print("saved ->", out)
-    print("duration=%ss" % info.get("format", {}).get("duration"))
+    print("duration={}s".format(info.get("format", {}).get("duration")))
 
 
 def cmd_compress(a):
     from unified.ffmpeg_tools import compress_video
-    out, info = compress_video(
+    out, _info = compress_video(
         Path(a.input), a.size_mb,
         output_path=Path(a.output) if a.output else None,
     )
     print("saved ->", out)
-    print("size=%sMB" % round(Path(out).stat().st_size / 1e6, 2))
+    print(f"size={round(Path(out).stat().st_size / 1e6, 2)}MB")
 
 
 def cmd_mediainfo(a):
     import json as _json
+
     from unified.ffmpeg_tools import get_media_info
     print(_json.dumps(get_media_info(Path(a.input)), indent=2))
 
 
 def cmd_presets(_):
     import json as _json
+
     from unified.ffmpeg_tools import get_presets
     print(_json.dumps(get_presets(), indent=2))
 
@@ -410,8 +411,9 @@ def cmd_search(a):
 
 
 def cmd_add(a):
-    from unified.model_finder import start_add, add_state
     import time as _t
+
+    from unified.model_finder import add_state, start_add
     res = start_add(a.repo_id, a.name)
     name = res.get("id", a.name)
     print(f"adding {a.repo_id} -> models/{name} …", flush=True)

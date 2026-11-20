@@ -1,9 +1,6 @@
 """ASR engine helpers — install detection, env gate, language mapping."""
-import pytest
 
-from unified import nemotron_asr
-from unified import sherpa_asr
-
+from unified import nemotron_asr, sherpa_asr
 
 # ---------------------------------------------------------------------------
 # Sherpa-ONNX

@@ -2,10 +2,9 @@
 import base64
 import io
 
-from PIL import Image
-
 import benchmark
 import generate_image
+from PIL import Image
 
 
 def _png_bytes(color):

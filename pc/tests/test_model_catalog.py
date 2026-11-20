@@ -1,7 +1,6 @@
 """Model manager (PC): catalog, installed detection, uninstall guard."""
-import pytest
-from pathlib import Path
 
+import pytest
 import unified.model_catalog as mm
 
 

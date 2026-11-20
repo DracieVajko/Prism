@@ -1,7 +1,8 @@
 """Z-Image tiling helpers (pure functions, no model or GPU needed)."""
+import itertools
+
 import numpy as np
 from PIL import Image
-
 from unified import zimage
 
 
@@ -9,7 +10,7 @@ def test_positions_cover_edges():
     pos = zimage._positions(3000, 1024, 96)
     assert pos[0] == 0
     assert pos[-1] + 1024 == 3000
-    assert all(b > a for a, b in zip(pos, pos[1:]))
+    assert all(b > a for a, b in itertools.pairwise(pos))
 
 
 def test_positions_single_tile():

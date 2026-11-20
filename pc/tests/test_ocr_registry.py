@@ -10,8 +10,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from unified import ocr_engine  # noqa: E402
-import download_models  # noqa: E402
+import download_models
+from unified import ocr_engine
 
 
 def test_catalog_and_engine_agree():

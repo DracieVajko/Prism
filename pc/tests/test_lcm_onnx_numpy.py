@@ -5,7 +5,6 @@ import io
 import numpy as np
 import pytest
 from PIL import Image
-
 from unified import lcm_onnx_numpy as lcm
 
 

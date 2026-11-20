@@ -3,7 +3,6 @@
 Usage:
     python pc/tools/download_gemma4.py
 """
-import os
 import sys
 from pathlib import Path
 

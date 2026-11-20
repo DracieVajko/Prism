@@ -39,7 +39,7 @@ def test_switch_releases_before_new_state_visible():
     t_holder = {}
 
     def switch_to_b():
-        t0 = time.time()
+        time.time()
         mm.ensure("audio", "B")
         t_holder["b_done"] = time.time()
 

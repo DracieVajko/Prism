@@ -16,9 +16,8 @@ import re
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Any
 
-from unified.ai_client import AIClient, AIResponse
+from unified.ai_client import AIClient
 
 logger = logging.getLogger(__name__)
 

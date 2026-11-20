@@ -1,6 +1,7 @@
 """Upscale — Real-ESRGAN-x4v3 default, Pillow fallback s tile hookom."""
 import base64
 import io
+
 import pytest
 from PIL import Image
 from unified.upscale import upscale_image_b64

@@ -14,7 +14,6 @@ import os
 import subprocess
 import wave
 from pathlib import Path
-from typing import Optional
 
 from unified.asr_common import model_dir, ram_allows
 
@@ -40,12 +39,12 @@ MODEL_MIN_RAM_GB = {
 _active_id = MODEL_ID
 
 
-def _model_dir(model_id: str = None) -> Path:
+def _model_dir(model_id: str | None = None) -> Path:
     mid = model_id or _active_id
     return model_dir(MODEL_DIRS.get(mid, mid), MODEL_ID)
 
 
-def is_installed(model_id: str = None) -> bool:
+def is_installed(model_id: str | None = None) -> bool:
     d = _model_dir(model_id)
     # Sherpa-ONNX models are typically .onnx files + tokens.txt
     has_encoder = any(d.glob("*encoder*.onnx")) if d.exists() else False
@@ -66,7 +65,7 @@ _device = None
 _active_id = MODEL_ID
 
 
-def init(model_id: str = None) -> bool:
+def init(model_id: str | None = None) -> bool:
     """Load a Sherpa-ONNX ASR model. Returns False and logs the reason on failure."""
     global _recognizer, _active_id
     mid = model_id or _active_id
@@ -144,7 +143,7 @@ def release() -> bool:
     return had
 
 
-def _normalise_language(code: Optional[str] = None) -> str:
+def _normalise_language(code: str | None = None) -> str:
     """Map a language code to Sherpa-ONNX supported language."""
     if not code:
         return "auto"
@@ -152,7 +151,7 @@ def _normalise_language(code: Optional[str] = None) -> str:
     # Sherpa-ONNX models typically support a limited set of languages
     known = {
         "en", "zh", "yue", "ja", "ko", "de", "fr", "es", "pt", "it", "ru",
-        "nl", "uk", "ar", "hi", "th", "vi", "tr", "pl", "nl", "id", "ms",
+        "nl", "uk", "ar", "hi", "th", "vi", "tr", "pl", "id", "ms",
     }
     base = c.split("-")[0]
     if base in known:
@@ -193,8 +192,8 @@ def _read_audio_16k(path: str):
     return samples, sample_rate
 
 
-def transcribe(audio_path: str, language: Optional[str] = None,
-               model_id: str = None) -> tuple[str, str]:
+def transcribe(audio_path: str, language: str | None = None,
+               model_id: str | None = None) -> tuple[str, str]:
     """Transcribe one audio file using Sherpa-ONNX streaming.
 
     Returns (text, language_used).

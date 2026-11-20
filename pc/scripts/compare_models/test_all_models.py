@@ -1,18 +1,17 @@
 """Complete transcription test: ALL models — Whisper small/turbo/large, Nemotron 0.6B, Gemma4 post-processing."""
 
-import asyncio
-import json
 import sys
-import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from unified import nemotron_asr
 from unified.audio_splitter import get_audio_duration
 from unified.ffmpeg_tools import extract_audio
-from unified import nemotron_asr
 from unified.transcription_utils import (
-    format_transcription, split_text_into_chunks, validate_video_file,
+    format_transcription,
+    split_text_into_chunks,
+    validate_video_file,
 )
 from unified_server import _transcribe_with_whisper
 
@@ -68,7 +67,7 @@ def test_nemotron():
             str(AUDIO_OUT), None, "nemotron-asr-0.6b"
         )
         segments = [{"text": text, "start": 0.0, "end": 60.0}]
-        print(f"Model: nemotron-asr-0.6b")
+        print("Model: nemotron-asr-0.6b")
         print(f"Jazyk: {lang}")
         print(f"Segmentov: {len(segments)}")
         print(f"Text (prvych 500 znakov): {text[:500]}")
@@ -136,7 +135,7 @@ def main():
     print(f"Video validovane: {VIDEO.name}")
 
     # Step 1: Extract audio
-    audio_path = extract_audio_from_video()
+    extract_audio_from_video()
 
     # Step 2: Test all whisper variants
     for variant in ("small", "turbo", "large"):
@@ -147,14 +146,14 @@ def main():
 
     # Step 4-5: Test output formats + chunking with first successful result
     for engine, (text, lang, segments) in results.items():
-        if engine.startswith("whisper") or engine.startswith("nemotron"):
+        if engine.startswith(("whisper", "nemotron")):
             test_output_formats(text, lang, engine)
             test_text_chunking(text, max_chars=2000)
             break
 
     # Step 6: External LLM post-processing
     if results:
-        first_text = list(results.values())[0][0]
+        first_text = next(iter(results.values()))[0]
         test_external_llm_postprocess(first_text)
 
     # Cleanup

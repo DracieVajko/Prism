@@ -1,5 +1,12 @@
 """Stage 1: full-quality txt2img + stats. Usage: python stage1_gen.py <Model>"""
-import base64, json, os, subprocess, sys, time, urllib.request
+import base64
+import json
+import os
+import subprocess
+import sys
+import time
+import urllib.request
+
 BASE = "http://127.0.0.1:8100"
 model = sys.argv[1]
 _ALIAS = {"DreamShaper": "DreamShaper_8", "RealisticVision": "RealisticVision_V6_B1", "MeinaMix": "MeinaMix_V11"}

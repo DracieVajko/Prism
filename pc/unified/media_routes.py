@@ -7,6 +7,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
+import logging
 import os
 import shutil
 import subprocess
@@ -15,62 +16,67 @@ import tempfile
 import threading
 import time
 import uuid
-import logging
+
 logger = logging.getLogger(__name__)
 from pathlib import Path
 
 from fastapi import APIRouter, File, Form, UploadFile, WebSocket
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field
-from typing import List, Optional
 
 
 class UpscaleRequest(BaseModel):
     image: str = ""
     scale: int = 2
-    model: Optional[str] = "RealESRGAN_x4v3"
-    prompt: Optional[str] = ""
+    model: str | None = "RealESRGAN_x4v3"
+    prompt: str | None = ""
     strength: float = 0.33
     seed: int = 0
-    request_id: Optional[str] = ""
+    request_id: str | None = ""
 
 
 class ColorizeRequest(BaseModel):
     image: str = ""
-    model: Optional[str] = "ddcolor-full"
-    request_id: Optional[str] = ""
+    model: str | None = "ddcolor-full"
+    request_id: str | None = ""
 
 
 class RestoreRequest(BaseModel):
     image: str = ""
-    prompt: Optional[str] = "restore and colorize this old photo, remove damage, enhance clarity, natural daylight colors, preserve original faces and clothing"
+    prompt: str | None = "restore and colorize this old photo, remove damage, enhance clarity, natural daylight colors, preserve original faces and clothing"
     strength: float = 0.5
     steps: int = 20
     guidance: float = 7.5
     image_guidance: float = 1.5
-    request_id: Optional[str] = ""
+    request_id: str | None = ""
 
 
 class FaceRestoreRequest(BaseModel):
     image: str = ""
-    request_id: Optional[str] = ""
+    request_id: str | None = ""
 
 
 class SwinIRRequest(BaseModel):
     image: str = ""
-    request_id: Optional[str] = ""
+    request_id: str | None = ""
 
 
 class CaptionRequest(BaseModel):
     image: str = ""
-    prompt: Optional[str] = "Describe the image in detail."
+    prompt: str | None = "Describe the image in detail."
     max_tokens: int = 256
-    model: Optional[str] = ""
-    request_id: Optional[str] = ""
+    model: str | None = ""
+    request_id: str | None = ""
 
-from unified.ffmpeg_tools import (compress_video, extract_audio, get_media_info,
-                                 get_presets, trim_media)
-from unified.vlm import (MODEL_ID as VLM_ID, caption_image_b64, EngineMissing)
+from unified.ffmpeg_tools import (
+    compress_video,
+    extract_audio,
+    get_media_info,
+    get_presets,
+    trim_media,
+)
+from unified.vlm import MODEL_ID as VLM_ID
+from unified.vlm import EngineMissing, caption_image_b64
 
 router = APIRouter()
 HERE = Path(__file__).resolve().parent.parent
@@ -144,7 +150,7 @@ async def video_upscale(
     if scale not in (2, 3, 4):
         return JSONResponse(status_code=400,
                             content={"error": f"scale must be 2/3/4, got {scale}"})
-    from unified.upscale import (ESRGAN_MODELS, SWINIR_MODELS, ZIMAGE_MODELS)
+    from unified.upscale import ESRGAN_MODELS, SWINIR_MODELS, ZIMAGE_MODELS
     allowed_models = ESRGAN_MODELS | SWINIR_MODELS | ZIMAGE_MODELS
     if (model or "").strip().lower() not in allowed_models:
         return JSONResponse(status_code=400, content={
@@ -248,7 +254,7 @@ def colorize(req: ColorizeRequest):
     if not req.image:
         return JSONResponse(status_code=400, content={"error": "missing image b64"})
     try:
-        from unified.colorize import colorize_b64, release as release_colorize
+        from unified.colorize import colorize_b64
         out = colorize_b64(req.image)
     except FileNotFoundError:
         return JSONResponse(status_code=503, content={
@@ -418,7 +424,7 @@ def chat_completions(body: dict):
     # llama.cpp, OpenAI, Mistral, Gemini, ...). Vision path uses SmolVLM.
     if not image:
         try:
-            from unified.llm_providers import process_with_external_llm, _get_config
+            from unified.llm_providers import _get_config, process_with_external_llm
             cfg = _get_config()
             if not cfg.get("base_url"):
                 return JSONResponse(status_code=503, content={
@@ -566,7 +572,6 @@ def _run_batch(bid: str, jobs: list, stop_on_error: bool) -> None:
                 elif kind == "convert-image":
                     # image bytes passed as base64 under job["image_b64"]
                     import base64 as _b64
-                    import io as _io
                     import tempfile as _tf
                     from pathlib import Path as _P
                     raw = _b64.b64decode(job.get("image_b64", ""))
@@ -575,7 +580,7 @@ def _run_batch(bid: str, jobs: list, stop_on_error: bool) -> None:
                         t.write(raw)
                         tmp = t.name
                     try:
-                        out_path, info = convert_image(_P(tmp), preset=job.get("preset", "jpg-95"))
+                        out_path, _info = convert_image(_P(tmp), preset=job.get("preset", "jpg-95"))
                         out_data = _P(out_path).read_bytes()
                         out_b64 = base64.b64encode(out_data).decode()
                         meta = _us()._store_output("image", _P(out_path).suffix.lower() or ".jpg",
@@ -609,9 +614,9 @@ def _run_batch(bid: str, jobs: list, stop_on_error: bool) -> None:
 
 
 class BatchRequest(BaseModel):
-    jobs: List[dict] = Field(min_length=1)
+    jobs: list[dict] = Field(min_length=1)
     stop_on_error: bool = True
-    request_id: Optional[str] = ""
+    request_id: str | None = ""
 
 
 @router.post("/v1/batch")
@@ -672,8 +677,8 @@ def _job_start(rid: str, kind: str, total: float = 0.0, message: str = "") -> No
                     _JOBS.pop(old, None)
 
 
-def _job_update(rid: str, done: float = None, total: float = None,
-                message: str = None) -> None:
+def _job_update(rid: str, done: float | None = None, total: float | None = None,
+                message: str | None = None) -> None:
     with _JOBS_LOCK:
         job = _JOBS.get(rid)
         if not job:
@@ -877,7 +882,7 @@ def _transcribe_with_whisper(tmp_path: str, wanted: str, language, rid: str = ""
 
 def _segments_to_srt(segments: list) -> str:
     def ts(t: float) -> str:
-        ms = int(round(t * 1000))
+        ms = round(t * 1000)
         h, rem = divmod(ms, 3_600_000)
         m, rem = divmod(rem, 60_000)
         sec, ms = divmod(rem, 1000)
@@ -894,7 +899,7 @@ def _segments_to_srt(segments: list) -> str:
 
 def _segments_to_vtt(segments: list) -> str:
     def ts(t: float) -> str:
-        ms = int(round(t * 1000))
+        ms = round(t * 1000)
         h, rem = divmod(ms, 3_600_000)
         m, rem = divmod(rem, 60_000)
         sec, ms = divmod(rem, 1000)
@@ -915,7 +920,7 @@ def _resample_pcm16(raw: bytes, rate: int) -> np.ndarray:
     """PCM16 mono at `rate` -> float32 mono at 16 kHz."""
     a = np.frombuffer(raw, dtype=np.int16).astype(np.float32) / 32768.0
     if rate and rate != 16000 and a.size > 1:
-        n = max(1, int(round(a.size * 16000.0 / rate)))
+        n = max(1, round(a.size * 16000.0 / rate))
         a = np.interp(np.linspace(0, a.size - 1, n),
                       np.arange(a.size), a).astype(np.float32)
     return a
@@ -964,7 +969,7 @@ def _transcribe_chunked(audio_path: Path, wanted: str, language, rid: str = ""):
             raise JobCancelled()
         return _transcribe_with_whisper(str(audio_path), wanted, language, rid)
 
-    from unified.audio_splitter import split_audio_with_ffmpeg, cleanup_chunks
+    from unified.audio_splitter import cleanup_chunks, split_audio_with_ffmpeg
     chunks = split_audio_with_ffmpeg(audio_path, chunk_seconds=300, overlap_seconds=0,
                                      output_dir=Path(tempfile.gettempdir()))
     _job_update(rid, total=dur, message=f"{len(chunks)} chunks")
@@ -1093,7 +1098,7 @@ async def transcriptions(
         if up is not None:
             return JSONResponse(status_code=400, content={"error": "send either file or url, not both"})
         try:
-            from unified.ytdlp import download_audio, YtDlpMissing, DownloadFailed
+            from unified.ytdlp import DownloadFailed, YtDlpMissing, download_audio
             tmp_wav = download_audio(url)
         except YtDlpMissing as e:
             return JSONResponse(status_code=503, content={"error": "yt-dlp missing",
@@ -1102,7 +1107,7 @@ async def transcriptions(
             return JSONResponse(status_code=400, content={"error": "download failed",
                                                          "detail": str(e)[:200]})
         content = Path(tmp_wav).read_bytes()
-        filename = Path(tmp_wav).name
+        Path(tmp_wav).name
         suffix = ".wav"
         up = None
     if up is None and not url:
@@ -1123,7 +1128,6 @@ async def transcriptions(
     all_exts = VIDEO_EXTS | AUDIO_EXTS
     if suffix not in all_exts:
         return JSONResponse(status_code=415, content={"error": f"Unsupported format: {suffix}. Supported: {', '.join(sorted(all_exts))}"})
-    is_video = suffix in VIDEO_EXTS
     content = await up.read() if up is not None else content
     if not content:
         return JSONResponse(status_code=400, content={"error": "Empty file uploaded"})
@@ -1335,7 +1339,7 @@ async def transcriptions(
 
 @router.post("/v1/audio/transcribe-batch")
 async def transcribe_batch(
-    files: List[UploadFile] = File(default=None),
+    files: list[UploadFile] = File(default=None),
     model: str = Form(default="whisper-1"),
     device: str = Form(default=""),
     language: str = Form(default=None),
@@ -1377,7 +1381,6 @@ async def transcribe_batch(
     for file in files:
         if not file.filename:
             continue
-        file_rid = f"{rid}-{file.filename}"
         t_start = time.perf_counter()
         try:
             content = await file.read()
@@ -1604,7 +1607,7 @@ async def realtime_asr(ws: WebSocket):
                     wanted = "turbo"
                 try:
                     _us()._manager.ensure("audio", wanted)
-                    text, lang = await asyncio.to_thread(
+                    text, _lang = await asyncio.to_thread(
                         _transcribe_pcm, raw, rate, wanted, language)
                     await ws.send_json({
                         "type": "conversation.item.input_audio_transcription.completed",
@@ -1691,8 +1694,8 @@ async def ocr_endpoint(
             "error": "OCR model failed to load"})
 
     try:
-        import tempfile
         import os
+        import tempfile
         # Save uploaded file to temp
         tmp = tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file.filename or ".jpg")[1])
         content = await file.read()
@@ -1802,11 +1805,11 @@ async def text_process(
 
 # ---------- text-to-speech ----------
 class SpeechRequest(BaseModel):
-    model: Optional[str] = "supertonic-3"
+    model: str | None = "supertonic-3"
     input: str = Field(min_length=1)
-    voice: Optional[str] = "0"
-    response_format: Optional[str] = "mp3"
-    speed: Optional[float] = Field(default=1.0, strict=True)
+    voice: str | None = "0"
+    response_format: str | None = "mp3"
+    speed: float | None = Field(default=1.0, strict=True)
 
 
 @router.post("/v1/audio/speech", responses={
@@ -1869,23 +1872,23 @@ def webui():
 
 class ConvertRequest(BaseModel):
     preset: str = "mp4-h264"
-    resize: Optional[str] = None
-    trim_start: Optional[float] = None
-    trim_end: Optional[float] = None
-    request_id: Optional[str] = ""
+    resize: str | None = None
+    trim_start: float | None = None
+    trim_end: float | None = None
+    request_id: str | None = ""
 
 
 class AudioConvertRequest(BaseModel):
     preset: str = "mp3-128"
-    trim_start: Optional[float] = None
-    trim_end: Optional[float] = None
-    request_id: Optional[str] = ""
+    trim_start: float | None = None
+    trim_end: float | None = None
+    request_id: str | None = ""
 
 
 class TrimRequest(BaseModel):
     start: float = 0.0
     end: float = 10.0
-    request_id: Optional[str] = ""
+    request_id: str | None = ""
 
 
 @router.get("/v1/ffmpeg/presets")
@@ -2422,7 +2425,6 @@ def open_outputs():
 
 # ---------- model install/uninstall (PC) ----------
 
-from unified import model_catalog as _mm
 
 
 class InstallRequest(BaseModel):

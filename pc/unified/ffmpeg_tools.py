@@ -6,9 +6,7 @@ import json
 import logging
 import os
 import subprocess
-import tempfile
 from pathlib import Path
-from typing import Optional, Dict, List, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -151,12 +149,12 @@ def get_media_info(path: Path) -> dict:
 def convert_video(
     input_path: Path,
     preset: str = "mp4-h264",
-    output_path: Optional[Path] = None,
-    resize: Optional[str] = None,
-    trim_start: Optional[float] = None,
-    trim_end: Optional[float] = None,
-    custom_args: Optional[List[str]] = None,
-) -> Tuple[Path, dict]:
+    output_path: Path | None = None,
+    resize: str | None = None,
+    trim_start: float | None = None,
+    trim_end: float | None = None,
+    custom_args: list[str] | None = None,
+) -> tuple[Path, dict]:
     """Convert video with preset."""
     if preset not in VIDEO_PRESETS:
         raise ValueError(f"Unknown preset: {preset}. Available: {list(VIDEO_PRESETS.keys())}")
@@ -226,11 +224,11 @@ def convert_video(
 def convert_audio(
     input_path: Path,
     preset: str = "mp3-128",
-    output_path: Optional[Path] = None,
-    trim_start: Optional[float] = None,
-    trim_end: Optional[float] = None,
-    custom_args: Optional[List[str]] = None,
-) -> Tuple[Path, dict]:
+    output_path: Path | None = None,
+    trim_start: float | None = None,
+    trim_end: float | None = None,
+    custom_args: list[str] | None = None,
+) -> tuple[Path, dict]:
     """Convert audio with preset."""
     if preset not in AUDIO_PRESETS:
         raise ValueError(f"Unknown preset: {preset}. Available: {list(AUDIO_PRESETS.keys())}")
@@ -274,9 +272,9 @@ def convert_audio(
 
 def extract_audio(
     input_path: Path,
-    output_path: Optional[Path] = None,
+    output_path: Path | None = None,
     audio_format: str = "wav",
-) -> Tuple[Path, dict]:
+) -> tuple[Path, dict]:
     """Extract audio from video file."""
     if output_path is None:
         output_path = input_path.parent / f"{input_path.stem}_audio.{audio_format}"
@@ -338,8 +336,8 @@ def trim_media(
     input_path: Path,
     start: float,
     end: float,
-    output_path: Optional[Path] = None,
-) -> Tuple[Path, dict]:
+    output_path: Path | None = None,
+) -> tuple[Path, dict]:
     """Trim media file to specified time range."""
     if output_path is None:
         ext = input_path.suffix
@@ -367,8 +365,8 @@ def trim_media(
 def compress_video(
     input_path: Path,
     target_size_mb: float = 10,
-    output_path: Optional[Path] = None,
-) -> Tuple[Path, dict]:
+    output_path: Path | None = None,
+) -> tuple[Path, dict]:
     """Compress video to target size using two-pass encoding."""
     info = get_media_info(input_path)
     duration = float(info.get("format", {}).get("duration", 0))
@@ -416,8 +414,8 @@ def compress_video(
 def convert_image(
     input_path: Path,
     preset: str = "jpg-95",
-    output_path: Optional[Path] = None,
-) -> Tuple[Path, dict]:
+    output_path: Path | None = None,
+) -> tuple[Path, dict]:
     """Convert a single image with an image preset."""
     if preset not in IMAGE_PRESETS:
         raise ValueError(f"Unknown preset: {preset}. Available: {list(IMAGE_PRESETS.keys())}")

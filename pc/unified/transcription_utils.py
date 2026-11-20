@@ -8,13 +8,10 @@ Provides:
 - Video/audio file validation and preparation
 """
 
-import io
 import logging
-import math
 import re
 from datetime import timedelta
 from pathlib import Path
-from typing import List, Tuple, Optional, Dict, Any
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +54,7 @@ def format_timestamp_hms(seconds: float) -> str:
     return f"{hours:02d}:{minutes:02d}:{secs:02d}"
 
 
-def format_as_txt(segments: List[dict], language: str = "unknown") -> str:
+def format_as_txt(segments: list[dict], language: str = "unknown") -> str:
     """Format transcription as plain text.
 
     Args:
@@ -80,7 +77,7 @@ def format_as_txt(segments: List[dict], language: str = "unknown") -> str:
     return "\n".join(lines)
 
 
-def format_as_md(segments: List[dict], language: str = "unknown") -> str:
+def format_as_md(segments: list[dict], language: str = "unknown") -> str:
     """Format transcription as Markdown with timestamps.
 
     Args:
@@ -90,7 +87,7 @@ def format_as_md(segments: List[dict], language: str = "unknown") -> str:
     Returns:
         Markdown-formatted transcription
     """
-    lines = [f"# Transcription"]
+    lines = ["# Transcription"]
     lines.append(f"**Language:** {language}")
     lines.append(f"**Total segments:** {len(segments)}")
     lines.append("")
@@ -114,7 +111,7 @@ def format_as_md(segments: List[dict], language: str = "unknown") -> str:
     return "\n".join(lines)
 
 
-def format_as_srt(segments: List[dict], language: str = "unknown") -> str:
+def format_as_srt(segments: list[dict], language: str = "unknown") -> str:
     """Format transcription as SRT subtitle file.
 
     Args:
@@ -139,7 +136,7 @@ def format_as_srt(segments: List[dict], language: str = "unknown") -> str:
     return "\n".join(lines)
 
 
-def format_as_json(segments: List[dict], language: str = "unknown") -> str:
+def format_as_json(segments: list[dict], language: str = "unknown") -> str:
     """Format transcription as JSON.
 
     Args:
@@ -159,7 +156,7 @@ def format_as_json(segments: List[dict], language: str = "unknown") -> str:
 
 
 def format_transcription(
-    segments: List[dict],
+    segments: list[dict],
     format: str = "txt",
     language: str = "unknown",
 ) -> str:
@@ -190,7 +187,7 @@ def split_text_into_chunks(
     text: str,
     max_chars: int = DEFAULT_MAX_CHARS_PER_CHUNK,
     overlap: int = 200,
-) -> List[str]:
+) -> list[str]:
     """Split text into chunks for AI context limits.
 
     Splits at sentence boundaries when possible to avoid cutting
@@ -240,7 +237,7 @@ def split_text_into_chunks(
 def split_text_by_sentences(
     text: str,
     max_chars: int = DEFAULT_MAX_CHARS_PER_CHUNK,
-) -> List[str]:
+) -> list[str]:
     """Split text into chunks at sentence boundaries.
 
     More aggressive sentence-boundary splitting than split_text_into_chunks.
@@ -370,9 +367,9 @@ def estimate_transcription_time(duration_seconds: float, model_type: str = "whis
 
 
 def merge_transcript_segments(
-    segments_list: List[List[dict]],
+    segments_list: list[list[dict]],
     separator: str = "\n\n---\n\n",
-) -> List[dict]:
+) -> list[dict]:
     """Merge multiple transcript segment lists into one.
 
     Adjusts timestamps if segments come from different files

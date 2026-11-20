@@ -129,8 +129,8 @@ if __name__ == "__main__":
         arr = generate("erruption volcano", size=size, steps=4)
         out = Path(rf"D:\AI\DiffusionServer\py_lcm_{size}.png")
         # save PNG via PIL-free minimal writer
-        from struct import pack
         import zlib
+        from struct import pack
         h, w, _ = arr.shape
         raw = b"".join(b"\x00" + arr[y].tobytes() for y in range(h))
         def chunk(t, d):

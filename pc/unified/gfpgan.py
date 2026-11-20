@@ -9,7 +9,6 @@ import io
 import logging
 import time
 from pathlib import Path
-from typing import Optional
 
 import numpy as np
 from PIL import Image
@@ -32,9 +31,8 @@ def _ensure_nvidia_dlls():
         logger.debug("onnx_env register failed: %s", e)
 
 
-def _get_session() -> Optional[object]:
+def _get_session() -> object | None:
     global _SESSION, _PROVIDER
-    had = _SESSION is not None
     if _SESSION is not None:
         return _SESSION
     if not MODEL_FILE.exists():

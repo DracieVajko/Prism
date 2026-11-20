@@ -5,7 +5,6 @@ Saves output/<model>.png + output/benchmark.json (timings + image stats).
 Long run (SDXL cold loads take minutes) - run in background.
 """
 import base64
-import io
 import json
 import sys
 import time
@@ -27,8 +26,8 @@ JOBS = [
 
 
 def stats(path):
-    from PIL import Image
     import numpy as np
+    from PIL import Image
     arr = np.asarray(Image.open(path).convert("RGB")).astype(float)
     return {"mean": round(float(arr.mean()), 1), "std": round(float(arr.std()), 1),
             "black_pct": round(float((arr.sum(axis=2) == 0).mean() * 100), 1)}

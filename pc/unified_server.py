@@ -15,56 +15,35 @@ from __future__ import annotations
 import asyncio
 import base64
 import io
-import shutil
-import subprocess
-import tempfile
-import threading
-import json
 import logging
 import os
-import sys
 import time
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 import numpy as np
-from fastapi import (FastAPI, File, Form, Request, UploadFile, WebSocket,
-                     WebSocketDisconnect)
+from fastapi import (
+    FastAPI,
+    File,
+    Form,
+    Request,
+    UploadFile,
+)
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import (FileResponse, HTMLResponse, JSONResponse,
-                               RedirectResponse, Response)
-from pydantic import BaseModel, Field
-from typing import Optional, Tuple, List
-
-from unified.audio_proxy import transcribe_via_service
-from unified.audio_splitter import get_audio_duration
-from unified.asr import resolve_engine
-from unified.ffmpeg_tools import (
-    VIDEO_PRESETS, AUDIO_PRESETS, IMAGE_PRESETS, RESIZE_PRESETS,
-    convert_video, convert_audio, convert_image, extract_audio, trim_media, compress_video,
-    get_media_info, get_presets,
+from fastapi.responses import (
+    JSONResponse,
+    RedirectResponse,
 )
+from pydantic import BaseModel
 from unified.engine import init_diffusion_engine, try_real_inpaint
-from unified.resident_model import ResidentModelGate, ModelLoadingError
-from unified.action_extractor import ActionExtractor, ActionType
-from unified.action_handlers import process_action, process_actions
-from unified.ai_client import AIClient, get_ai_client
 from unified.registry import build_registry
-from unified.transcription_utils import (
-    format_transcription,
-    split_text_into_chunks,
-    merge_transcript_segments,
-    validate_audio_file,
-    validate_video_file,
-    get_media_duration_seconds,
-    estimate_transcription_time,
-    SUPPORTED_FORMATS,
+from unified.resident_model import ModelLoadingError, ResidentModelGate
+from unified.upscale import (
+    upscale_image_b64,
 )
-from unified.upscale import (ESRGAN_MODELS, SWINIR_MODELS, ZIMAGE_MODELS,
-                             upscale_image_b64)
-from unified.vlm import (MODEL_ID as VLM_ID, caption_image_b64, EngineMissing,
-                         release as release_vlm)
+from unified.vlm import MODEL_ID as VLM_ID
+from unified.vlm import release as release_vlm
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -191,8 +170,8 @@ def _custom_openapi():
         "500": {"description": "Internal server error"},
         "503": {"description": "Service unavailable (model/engine not loaded)"},
     }
-    for _path, _methods in (schema.get("paths") or {}).items():
-        for _method, _spec in (_methods or {}).items():
+    for _methods in (schema.get("paths") or {}).values():
+        for _spec in (_methods or {}).values():
             if not isinstance(_spec, dict):
                 continue
             _responses = _spec.setdefault("responses", {})
@@ -277,7 +256,7 @@ def _device():
 
 def _onnx_provider_label():
     try:
-        from unified.onnx_env import available_providers, provider_label, pick_providers
+        from unified.onnx_env import pick_providers, provider_label
         return provider_label(pick_providers("qdq"))
     except Exception:
         return "unknown"
@@ -308,7 +287,7 @@ def _raise_loading(e: ModelLoadingError):
 # ---------- models ----------
 
 class GenRequest(BaseModel):
-    model: Optional[str] = ""
+    model: str | None = ""
     prompt: str = ""
     negative_prompt: str = ""
     guidance: float = 1.0
@@ -316,23 +295,23 @@ class GenRequest(BaseModel):
     size: str = "768x768"
     quality: str = "medium"
     response_format: str = "b64_json"
-    request_id: Optional[str] = ""
+    request_id: str | None = ""
 
 
 class InpaintRequest(BaseModel):
     image: str = ""
-    mask: Optional[str] = ""
+    mask: str | None = ""
     prompt: str = ""
     negative_prompt: str = ""
     guidance: float = 1.0
-    model: Optional[str] = ""
+    model: str | None = ""
     strength: float = 0.75
     steps: int = 0
     mode: str = "add"          # add | remove | color
     color: str = "#0066ff"     # target color for mode=color
-    width: Optional[int] = None
-    height: Optional[int] = None
-    request_id: Optional[str] = ""
+    width: int | None = None
+    height: int | None = None
+    request_id: str | None = ""
 
 
 class OutpaintRequest(BaseModel):
@@ -340,7 +319,7 @@ class OutpaintRequest(BaseModel):
     image: str = ""
     prompt: str = ""
     negative_prompt: str = ""
-    model: Optional[str] = ""
+    model: str | None = ""
     # Pixels per side; `margin` (fraction of the shorter side) is used for the
     # sides that are left at 0.
     left: int = 0
@@ -351,63 +330,63 @@ class OutpaintRequest(BaseModel):
     guidance: float = 1.0
     strength: float = 0.99
     steps: int = 6
-    request_id: Optional[str] = ""
+    request_id: str | None = ""
 
 
 class HarmonizeRequest(BaseModel):
     image: str = ""
     prompt: str = ""
-    model: Optional[str] = ""
+    model: str | None = ""
     color_match: bool = True
     seam_fix: bool = True
-    body_mask: Optional[str] = ""
-    seam_mask: Optional[str] = ""
-    mask: Optional[str] = ""
+    body_mask: str | None = ""
+    seam_mask: str | None = ""
+    mask: str | None = ""
     strength: float = 0.5
     max_side: int = 1024
     steps: int = 0
-    request_id: Optional[str] = ""
+    request_id: str | None = ""
 
 
 class UpscaleRequest(BaseModel):
     image: str = ""
     scale: int = 2
-    model: Optional[str] = "RealESRGAN_x4v3"
+    model: str | None = "RealESRGAN_x4v3"
     # Z-Image Turbo only; ignored by Real-ESRGAN and SwinIR.
-    prompt: Optional[str] = ""
+    prompt: str | None = ""
     strength: float = 0.33
     seed: int = 0
-    request_id: Optional[str] = ""
+    request_id: str | None = ""
 
 class ColorizeRequest(BaseModel):
     image: str = ""
-    model: Optional[str] = "ddcolor-full"
-    request_id: Optional[str] = ""
+    model: str | None = "ddcolor-full"
+    request_id: str | None = ""
 
 class RestoreRequest(BaseModel):
     image: str = ""
-    prompt: Optional[str] = "restore and colorize this old photo, remove damage, enhance clarity, natural daylight colors, preserve original faces and clothing"
+    prompt: str | None = "restore and colorize this old photo, remove damage, enhance clarity, natural daylight colors, preserve original faces and clothing"
     strength: float = 0.5
     steps: int = 20
     guidance: float = 7.5
     image_guidance: float = 1.5
-    request_id: Optional[str] = ""
+    request_id: str | None = ""
 
 class FaceRestoreRequest(BaseModel):
     image: str = ""
-    request_id: Optional[str] = ""
+    request_id: str | None = ""
 
 class SwinIRRequest(BaseModel):
     image: str = ""
-    request_id: Optional[str] = ""
+    request_id: str | None = ""
 
 
 class CaptionRequest(BaseModel):
     image: str = ""
-    prompt: Optional[str] = "Describe the image in detail."
+    prompt: str | None = "Describe the image in detail."
     max_tokens: int = 256
-    model: Optional[str] = ""
-    request_id: Optional[str] = ""
+    model: str | None = ""
+    request_id: str | None = ""
 
 
 def _release_vlm_best_effort():
@@ -451,17 +430,17 @@ def root():
 def health():
     reg = _image_registry()
     st = _manager.status()
-    actual_model, actual_kind = "", None
+    actual_model, _actual_kind = "", None
     try:
         import diffusion_server as ds
         if getattr(ds, "_pipe", None) is not None and getattr(ds, "_model_id", ""):
-            actual_model, actual_kind = ds._model_id, "image"
+            actual_model, _actual_kind = ds._model_id, "image"
     except Exception:
         pass
     if not actual_model and st["loaded_kind"] == "vlm":
-        actual_model, actual_kind = VLM_ID, "vlm"
+        actual_model, _actual_kind = VLM_ID, "vlm"
     if not actual_model and st["loaded_kind"] == "audio":
-        actual_model, actual_kind = st["loaded_id"], "audio"
+        actual_model, _actual_kind = st["loaded_id"], "audio"
     # faster-whisper weights live in the media module's cache, not in the
     # manager, so report what is actually resident instead of bookkeeping.
     whisper_name = ""
@@ -478,7 +457,7 @@ def health():
         "current_model": actual_model or st["loaded_id"],
         "device": _device(),
         "onnx_provider": _onnx_provider_label(),
-        "available_models": sorted(list(reg.get("image_models", {}).keys())),
+        "available_models": sorted(reg.get("image_models", {}).keys()),
         "loading": st["loading"],
         "loading_model": st["loading_model"],
         "busy": st["busy"],
@@ -890,7 +869,6 @@ MAX_OUTPAINT_PIXELS = 4_000_000
 
 def _edge_pad_image(img, left: int, right: int, top: int, bottom: int):
     """Pad with replicated edge pixels so the model has real context to extend."""
-    import numpy as np
     from PIL import Image
 
     arr = np.asarray(img.convert("RGB"))
@@ -900,7 +878,6 @@ def _edge_pad_image(img, left: int, right: int, top: int, bottom: int):
 
 def _border_mask(width: int, height: int, left: int, right: int,
                  top: int, bottom: int):
-    import numpy as np
     from PIL import Image
 
     m = np.zeros((height, width), dtype=np.uint8)
@@ -928,8 +905,12 @@ def outpaint(req: OutpaintRequest):
         return _raise_loading(e)
     try:
         import numpy as np  # noqa: F401
-        from unified.lcm_onnx_numpy import (_b64_image_to_pil, _pil_to_b64,
-                                            find_lcm_dir, inpaint_b64)
+        from unified.lcm_onnx_numpy import (
+            _b64_image_to_pil,
+            _pil_to_b64,
+            find_lcm_dir,
+            inpaint_b64,
+        )
     except Exception as e:
         return JSONResponse(status_code=503, content={
             "error": "will not load", "detail": f"outpaint engine unavailable: {str(e)[:160]}"})
@@ -951,7 +932,7 @@ def outpaint(req: OutpaintRequest):
     top = int(req.top or 0)
     bottom = int(req.bottom or 0)
     if req.margin and req.margin > 0:
-        m = int(round(short * float(req.margin)))
+        m = round(short * float(req.margin))
         left = left or m
         right = right or m
         top = top or m
@@ -1243,11 +1224,18 @@ def models_delete(req: DeleteModelRequest):
         return JSONResponse(status_code=500, content={"error": str(e)[:200]})
 
 
-from unified.media_routes import (router as media_router, _output_path,
-                                 _store_b64, _transcribe_with_vad,
-                                 _transcribe_with_whisper, transcriptions,
-                                 _chat_vision_parts, _transcribe_pcm,
-                                 transcribe_alias, InstallRequest)
+from unified.media_routes import (
+    InstallRequest,
+    _chat_vision_parts,
+    _output_path,
+    _store_b64,
+    _transcribe_pcm,
+    _transcribe_with_vad,
+    _transcribe_with_whisper,
+    transcribe_alias,
+    transcriptions,
+)
+from unified.media_routes import router as media_router
 
 app.routes.extend(media_router.routes)
 _output_path = _output_path  # keep test/compatibility alias

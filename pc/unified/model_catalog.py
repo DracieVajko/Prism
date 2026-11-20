@@ -16,7 +16,6 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -123,7 +122,7 @@ def whisper_installed(name: str) -> bool:
     return tok.is_file() and tok.stat().st_size > 1024
 
 
-def whisper_task(name: str) -> Optional[dict]:
+def whisper_task(name: str) -> dict | None:
     src = WHISPER_SOURCES.get(name)
     if not src:
         return None
@@ -151,7 +150,7 @@ def whisper_entry(name: str) -> dict:
         "label": task["note"],
         "license": task["license"],
         "size_gb": task["min_gb"],
-        "size_mb": int(round(task["min_gb"] * 1024)),
+        "size_mb": round(task["min_gb"] * 1024),
         "installed": installed,
         "path": str(whisper_dir(name)),
         "installed_gb": round(_dir_gb(whisper_dir(name)), 2),
@@ -183,7 +182,7 @@ def _http_open(url: str, start: int = 0, timeout: int = 60):
 
 
 def _download_whisper_file(model_id: str, repo: str, rel: str, dest: Path,
-                           expected: Optional[int], progress_span: tuple,
+                           expected: int | None, progress_span: tuple,
                            verify_json: bool = False) -> None:
     """Resume a single file across mirrors, verifying the exact size."""
     dest.parent.mkdir(parents=True, exist_ok=True)
@@ -272,8 +271,7 @@ def _run_whisper_install(name: str) -> None:
                     h.update(chunk)
             if h.hexdigest() != digest:
                 raise RuntimeError(
-                    "model.bin sha256 mismatch (expected %s, got %s)"
-                    % (digest[:12], h.hexdigest()[:12]))
+                    f"model.bin sha256 mismatch (expected {digest[:12]}, got {h.hexdigest()[:12]})")
         ok = whisper_installed(name)
         _set_state(name, state="done" if ok else "error", progress=100,
                    error="" if ok else "files incomplete after download", cancel=False)
@@ -363,7 +361,7 @@ def catalog() -> list:
             "description": t.get("description") or t.get("note") or "",
             "license": t.get("license", ""),
             "size_gb": t.get("min_gb", 0.0),
-            "size_mb": int(round(t.get("min_gb", 0.0) * 1024)),
+            "size_mb": round(t.get("min_gb", 0.0) * 1024),
             "installed": is_task_installed(t),
             "path": str(target),
             "installed_gb": round(_dir_gb(target), 2),
@@ -489,7 +487,7 @@ def progress(model_id: str) -> dict:
         "state": st.get("state", "done" if is_task_installed(task) else "idle"),
         "percent": st.get("progress", 100 if is_task_installed(task) else 0),
         "bytes_done": 0,
-        "bytes_total": int(round(task.get("min_gb", 0.0) * 1024 * 1024 * 1024)),
+        "bytes_total": round(task.get("min_gb", 0.0) * 1024 * 1024 * 1024),
         "file_index": 0,
         "file_count": 1,
         "error": st.get("error", ""),

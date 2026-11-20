@@ -5,8 +5,7 @@ them installed it must initialise the registry. The tests below therefore key
 off what is actually installed instead of assuming one environment.
 """
 import pytest
-
-import unified.engine as engine
+from unified import engine
 
 
 def _stack_available() -> bool:

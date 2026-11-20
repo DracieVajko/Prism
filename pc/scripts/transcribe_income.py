@@ -100,7 +100,7 @@ def resolve_gain(path: Path) -> tuple[float, str]:
 
 
 def srt_ts(t):
-    ms = int(round(t * 1000))
+    ms = round(t * 1000)
     h, rem = divmod(ms, 3_600_000)
     m, rem = divmod(rem, 60_000)
     s, ms = divmod(rem, 1000)

@@ -16,7 +16,6 @@ from pathlib import Path
 
 import pytest
 from PIL import Image
-
 from unified import restore as rs
 
 PC_DIR = Path(__file__).resolve().parents[1]
@@ -167,8 +166,8 @@ def test_restore_b64_empty_raises():
 
 def test_restore_api_contract(monkeypatch):
     """The endpoint keeps its contract: 400 bad input, 503 model unavailable."""
-    from fastapi.testclient import TestClient
     import unified_server as us
+    from fastapi.testclient import TestClient
 
     client = TestClient(us.app)
 

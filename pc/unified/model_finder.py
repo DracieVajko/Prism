@@ -113,7 +113,7 @@ def start_add(repo_id: str, name: str = "") -> dict:
 def start_add_url(url: str, name: str = "", kind: str = "custom") -> dict:
     """Direct URL (GGUF/ONNX/bin/safetensors) — same contract as Android."""
     u = (url or "").strip()
-    if not (u.startswith("http://") or u.startswith("https://")):
+    if not (u.startswith(("http://", "https://"))):
         raise ValueError("url must be http(s)")
     file_name = urllib.parse.urlparse(u).path.rsplit("/", 1)[-1] or "model.bin"
     target_name = (name or file_name.rsplit(".", 1)[0])

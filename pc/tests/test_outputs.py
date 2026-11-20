@@ -1,8 +1,7 @@
 """Output path validation: long fuzz paths must be 400, never 500."""
 import pytest
-from fastapi.testclient import TestClient
-
 import unified_server as us
+from fastapi.testclient import TestClient
 
 
 def test_output_path_accepts_normal_relative_path(tmp_path, monkeypatch):

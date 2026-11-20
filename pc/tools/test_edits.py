@@ -4,10 +4,10 @@ import io
 import json
 import sys
 import tempfile
-from pathlib import Path
 import time
 import urllib.error
 import urllib.request
+from pathlib import Path
 
 PORT = sys.argv[1] if len(sys.argv) > 1 else "8101"
 MODEL = sys.argv[2] if len(sys.argv) > 2 else "DreamShaper_8"
@@ -44,7 +44,7 @@ def main():
     try:
         with urllib.request.urlopen(req, timeout=600) as r:
             status, payload = r.status, json.loads(r.read().decode())
-    except Exception as e:  # noqa: BLE001 - want body on HTTPError too
+    except Exception as e:
         if isinstance(e, urllib.error.HTTPError):
             print(f"status={e.code} elapsed={time.time()-t0:.1f}s", flush=True)
             print("BODY:", e.read().decode()[:600], flush=True)

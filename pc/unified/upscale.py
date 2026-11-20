@@ -12,7 +12,6 @@ import logging
 import os
 import time
 from pathlib import Path
-from typing import Optional
 
 from PIL import Image
 
@@ -60,8 +59,8 @@ def find_onnx_weight(dirs=None):
 
 def _rrdb_net():
     import torch
-    from torch import nn
     import torch.nn.functional as F
+    from torch import nn
 
     def _conv(in_ch, out_ch, k=3, s=1):
         return nn.Conv2d(in_ch, out_ch, k, s, k // 2)
@@ -167,6 +166,7 @@ _onnx_session = {}
 def _load_onnx_session(weight: Path):
     """Load or reuse an ONNX Runtime session for Real-ESRGAN."""
     import onnxruntime as ort
+
     from unified.onnx_env import pick_providers
     key = str(weight)
     sess = _onnx_session.get(key)

@@ -1,6 +1,6 @@
 """Unified WebUI must have 4 tabs: Generate, Edit/Inpaint, Upscale, Transcribe."""
-from fastapi.testclient import TestClient
 import unified_server as us
+from fastapi.testclient import TestClient
 
 
 def test_webui_has_unified_tabs():

@@ -9,9 +9,9 @@ import base64
 import json
 import sys
 import tempfile
-from pathlib import Path
 import time
 import urllib.request
+from pathlib import Path
 
 PORT = sys.argv[1] if len(sys.argv) > 1 else "8101"
 BASE = f"http://127.0.0.1:{PORT}"
@@ -32,8 +32,8 @@ def main():
     raw = base64.b64decode(body["data"][0]["b64_json"])
     with open(OUT, "wb") as f:
         f.write(raw)
-    from PIL import Image
     import numpy as np
+    from PIL import Image
     arr = np.asarray(Image.open(OUT).convert("RGB")).astype(float)
     black = (arr.sum(axis=2) == 0).mean()
     print(f"bytes={len(raw)} mean={arr.mean():.1f} std={arr.std():.1f} "

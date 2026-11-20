@@ -10,7 +10,6 @@ Enabled with PRISM_ASR_ENGINE=nemotron, or per-request with
 import logging
 import os
 from pathlib import Path
-from typing import Optional
 
 from unified.asr_common import model_dir, ram_allows, total_ram_gb
 
@@ -37,12 +36,12 @@ MODEL_MIN_RAM_GB = {
 _active_id = MODEL_ID
 
 
-def _model_dir(model_id: str = None) -> Path:
+def _model_dir(model_id: str | None = None) -> Path:
     mid = model_id or _active_id
     return model_dir(MODEL_DIRS.get(mid, mid), MODEL_ID)
 
 
-def is_installed(model_id: str = None) -> bool:
+def is_installed(model_id: str | None = None) -> bool:
     d = _model_dir(model_id)
     has_weights = (d / "model.safetensors").exists() or (d / "model.safetensors.index.json").exists()
     return has_weights and (d / "config.json").exists()
@@ -74,7 +73,7 @@ def _auto_device():
     return "cpu"
 
 
-def init(model_id: str = None) -> bool:
+def init(model_id: str | None = None) -> bool:
     """Load a Nemotron variant. Returns False and logs the reason on failure."""
     global _processor, _model, _device, _active_id
     mid = model_id or _active_id
@@ -144,7 +143,7 @@ def release() -> bool:
     return had
 
 
-def _normalise_language(code: Optional[str]) -> str:
+def _normalise_language(code: str | None) -> str:
     """Map a Whisper-style code to one the Nemotron prompt dictionary knows."""
     if not code:
         return "auto"
@@ -167,8 +166,8 @@ def _normalise_language(code: Optional[str]) -> str:
     return "auto"
 
 
-def transcribe(audio_path: str, language: Optional[str] = None,
-               model_id: str = None) -> tuple[str, str]:
+def transcribe(audio_path: str, language: str | None = None,
+               model_id: str | None = None) -> tuple[str, str]:
     """Transcribe one file. Returns (text, language_used)."""
     if model_id and model_id != _active_id:
         if not init(model_id):

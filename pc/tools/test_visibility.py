@@ -77,7 +77,7 @@ def main():
     check("health-idle", h.get("busy") is False and h.get("queue") == 0)
 
     # 2) 503 during cold load: RV loads (slow) in background, DS asked meanwhile
-    res_a, prog_seen = {}, []
+    res_a, _prog_seen = {}, []
     rid_a = "vis-load-rv-001"
 
     def load_rv():

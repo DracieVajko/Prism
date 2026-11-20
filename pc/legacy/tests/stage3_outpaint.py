@@ -1,5 +1,13 @@
 """Outpaint-via-inpaint only. Usage: python stage3_outpaint.py <Model> [steps]"""
-import base64, io, json, os, subprocess, sys, time, urllib.request
+import base64
+import io
+import json
+import os
+import subprocess
+import sys
+import time
+import urllib.request
+
 BASE = "http://127.0.0.1:8100"
 model = sys.argv[1]
 _ALIAS = {"DreamShaper": "DreamShaper_8", "RealisticVision": "RealisticVision_V6_B1", "MeinaMix": "MeinaMix_V11"}
@@ -9,6 +17,8 @@ cfg = json.load(open(r"D:\AI\DiffusionServer\pc\models.json", encoding="utf-8"))
 prof = cfg["models"][model]
 outdir = r"D:\AI\DiffusionServer\pc\legacy\tests\output"
 from PIL import Image, ImageDraw
+
+
 def gpu():
     try:
         o = subprocess.check_output(["nvidia-smi","--query-gpu=memory.used,memory.total,utilization.gpu","--format=csv,noheader,nounits"],text=True,timeout=15).strip().splitlines()[0].split(",")
@@ -27,7 +37,7 @@ body=json.dumps({"model":model,"image":base64.b64encode(bc.getvalue()).decode(),
 req=urllib.request.Request(BASE+"/v1/images/inpaint",data=body,headers={"Content-Type":"application/json"})
 t0=time.time()
 with urllib.request.urlopen(req,timeout=600) as r: res=json.loads(r.read().decode())
-print("outpaint ok in %.1fs server_elapsed=%s vram=%s" % (time.time()-t0, res.get("elapsed"), gpu()),flush=True)
+print("outpaint ok in {:.1f}s server_elapsed={} vram={}".format(time.time()-t0, res.get("elapsed"), gpu()),flush=True)
 op=os.path.join(outdir,model+"-outpaint.png")
 with open(op,"wb") as f: f.write(base64.b64decode(res["image"]))
 oimg=Image.open(op)

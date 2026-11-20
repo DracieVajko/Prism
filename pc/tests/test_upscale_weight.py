@@ -1,8 +1,9 @@
 """Upscale — weight discovery is a pure function (testable without torch)."""
-from unified.upscale import find_weight, upscale_image_b64
 import base64
 import io
+
 from PIL import Image
+from unified.upscale import find_weight, upscale_image_b64
 
 
 def _red_dot_b64(size=16):

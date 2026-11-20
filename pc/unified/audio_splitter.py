@@ -1,10 +1,8 @@
 """FFmpeg utilities for audio processing (splitting, conversion, etc.)."""
 import logging
-import subprocess
-import tempfile
 import math
+import subprocess
 from pathlib import Path
-from typing import List, Tuple, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -37,9 +35,9 @@ def split_audio_with_ffmpeg(
     input_path: Path,
     chunk_seconds: int = WHISPER_CHUNK_SECONDS,
     overlap_seconds: int = WHISPER_OVERLAP_SECONDS,
-    output_dir: Optional[Path] = None,
+    output_dir: Path | None = None,
     keep_original: bool = True
-) -> List[Tuple[Path, float, float]]:
+) -> list[tuple[Path, float, float]]:
     """
     Split audio file into overlapping chunks using FFmpeg.
     
@@ -101,10 +99,10 @@ def split_audio_with_ffmpeg(
 
 
 def transcribe_chunks(
-    chunks: List[Tuple[Path, float, float]],
+    chunks: list[tuple[Path, float, float]],
     transcribe_fn,
-    language: Optional[str] = None
-) -> Tuple[str, str]:
+    language: str | None = None
+) -> tuple[str, str]:
     """
     Transcribe multiple chunks and combine results with timestamps.
     
@@ -142,7 +140,7 @@ def format_timestamp(seconds: float) -> str:
     return f"{h:02d}:{m:02d}:{s:02d}"
 
 
-def cleanup_chunks(chunks: List[Tuple[Path, float, float]]):
+def cleanup_chunks(chunks: list[tuple[Path, float, float]]):
     """Clean up temporary chunk files."""
     for chunk_path, _, _ in chunks:
         if chunk_path.name.startswith("chunk_"):
@@ -163,9 +161,9 @@ def cleanup_chunks(chunks: List[Tuple[Path, float, float]]):
 async def transcribe_with_splitting(
     audio_path: Path,
     transcribe_fn,
-    language: Optional[str] = None,
+    language: str | None = None,
     max_duration_without_split: float = AUTO_SPLIT_THRESHOLD_SECONDS
-) -> Tuple[str, str]:
+) -> tuple[str, str]:
     """
     High-level function: transcribe audio, auto-splitting if needed.
     

@@ -1,6 +1,6 @@
 """yt-dlp wrapper — 400 on a bad URL, 503 without yt-dlp, 200 on success."""
 import pytest
-from unified.ytdlp import download_audio, YtDlpMissing, DownloadFailed
+from unified.ytdlp import DownloadFailed, YtDlpMissing, download_audio
 
 
 def test_missing_ytdlp(monkeypatch):

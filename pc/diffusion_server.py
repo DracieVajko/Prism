@@ -7,10 +7,11 @@ Odysseus's image generation tool.
 Usage:
     python3 scripts/diffusion_server.py --model /path/to/model --port 8101
 """
-import os
-import sys
 import importlib
 import importlib.machinery
+import os
+import sys
+
 # Block xformers — create a fake module that reports as not installed
 _fake = type(sys)("xformers")
 _fake.__version__ = "0.0.0"
@@ -29,18 +30,17 @@ import logging
 import threading
 import time
 import uuid
-from pathlib import Path
-from dataclasses import dataclass, field, fields
-
 from contextlib import asynccontextmanager, contextmanager
+from dataclasses import dataclass, field
+from pathlib import Path
 
 import torch
 import uvicorn
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
-from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-from starlette.middleware.trustedhost import TrustedHostMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -535,8 +535,10 @@ def _load_omnigen2_pipeline(model_path: str, torch_dtype, target_device: str, us
     """
     global _pipe
     try:
+        from omnigen2.models.transformers.transformer_omnigen2 import (
+            OmniGen2Transformer2DModel,
+        )
         from omnigen2.pipelines.omnigen2.pipeline_omnigen2 import OmniGen2Pipeline
-        from omnigen2.models.transformers.transformer_omnigen2 import OmniGen2Transformer2DModel
     except Exception as exc:
         logger.warning("OmniGen2 package import failed: %s", exc)
         return False
@@ -576,6 +578,7 @@ def _ensure_transformers_compat():
     each from_single_file attempt)."""
     try:
         import sys as _sys
+
         import transformers as _tf
         _target = getattr(_tf, "CLIPImageProcessor", None)
         if _target is None:
@@ -608,10 +611,10 @@ def _ensure_transformers_compat():
                         continue
                     if getattr(_mod, "__name__", "") == "transformers" and hasattr(_mod, "CLIPImageProcessor"):
                         if not hasattr(_mod, "CLIPFeatureExtractor"):
-                            _mod.CLIPFeatureExtractor = getattr(_mod, "CLIPImageProcessor")
+                            _mod.CLIPFeatureExtractor = _mod.CLIPImageProcessor
                         _o2 = getattr(_mod, "_objects", None)
                         if isinstance(_o2, dict) and "CLIPFeatureExtractor" not in _o2:
-                            _o2["CLIPFeatureExtractor"] = getattr(_mod, "CLIPImageProcessor")
+                            _o2["CLIPFeatureExtractor"] = _mod.CLIPImageProcessor
                 except Exception:
                     continue
         except Exception as _e:
@@ -842,7 +845,7 @@ def _init_lazy():
             raise RuntimeError(
                 f"default_model '{file_default}' not in registry. "
                 f"Available: {sorted(registry.keys())}")
-        _DEFAULT_MODEL = file_default or sorted(registry.keys())[0]
+        _DEFAULT_MODEL = file_default or min(registry.keys())
     logger.info("Default model: %s", _DEFAULT_MODEL)
     try:
         if bool(data.get("auto_discover", True)):
@@ -1760,7 +1763,8 @@ async def _run_edit(prompt, raw, n, size, quality, strength, response_format, re
     accepts_image = _pipeline_accepts_arg("image")
     accepts_input_images = _pipeline_accepts_arg("input_images")
 
-    from PIL import Image as PILImage, ImageOps
+    from PIL import Image as PILImage
+    from PIL import ImageOps
 
     width, height = _require_size(size, ABS_MAX_SIDE)
     steps = _quality_steps(quality)
@@ -1889,7 +1893,6 @@ def _get_inpaint_pipe():
         return _img2img_pipe, 'img2img'
 
     import diffusers
-    model_path = _args.model
     torch_dtype = _active_torch_dtype()
 
     # Check if the main pipeline IS already an inpaint pipeline
@@ -2275,7 +2278,6 @@ class HarmonizeRequest(BaseModel):
     strength: float | None = None
     max_side: int = 1024
     model: str = ""  # registry model id; "" = configured default
-    model: str = ""  # registry model id; "" = configured default
     request_id: str = ""
 
 
@@ -2424,9 +2426,7 @@ def _harmonize_needs_model(req: "HarmonizeRequest") -> bool:
     if seam_fix > 0.01 and (req.seam_mask or ""):
         return True
     # Legacy whole-image fallback (no masks at all) runs img2img.
-    if not (req.body_mask or req.mask or req.seam_mask):
-        return True
-    return False
+    return bool(not (req.body_mask or req.mask or req.seam_mask))
 
 
 def _harmonize_locked(req: HarmonizeRequest):

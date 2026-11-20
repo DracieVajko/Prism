@@ -40,9 +40,10 @@ def test_unified_contract_paths_exist():
 def test_upscale_contract_shape():
     import base64
     import io
-    from PIL import Image
-    from fastapi.testclient import TestClient
+
     import unified_server as us
+    from fastapi.testclient import TestClient
+    from PIL import Image
 
     buf = io.BytesIO()
     Image.new("RGB", (32, 32), (255, 0, 0)).save(buf, format="PNG")
@@ -55,8 +56,8 @@ def test_upscale_contract_shape():
 
 
 def test_audio_transcription_contract_shape():
-    from fastapi.testclient import TestClient
     import unified_server as us
+    from fastapi.testclient import TestClient
 
     c = TestClient(us.app)
     # an empty upload must return 400, not 500 (contract)

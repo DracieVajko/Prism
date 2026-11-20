@@ -1,5 +1,11 @@
 """Minimal round-trip check: 1 generation with quality=low (4 steps)."""
-import base64, json, os, sys, time, urllib.request
+import base64
+import json
+import os
+import sys
+import time
+import urllib.request
+
 BASE = "http://127.0.0.1:8100"
 model = sys.argv[1] if len(sys.argv) > 1 else "DreamShaper_8"
 outdir = r"D:\AI\DiffusionServer\pc\legacy\tests\output"

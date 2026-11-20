@@ -1,7 +1,6 @@
 """Optional bearer-token gate for the PC API."""
-from fastapi.testclient import TestClient
-
 import unified_server as us
+from fastapi.testclient import TestClient
 
 
 def test_health_stays_open_and_v1_requires_token(monkeypatch):

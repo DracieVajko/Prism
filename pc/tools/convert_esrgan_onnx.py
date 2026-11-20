@@ -13,7 +13,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import numpy as np
 import torch
-
 from unified.upscale import _load_net, find_weight
 
 
@@ -50,9 +49,8 @@ def main() -> int:
         print("inlined external weights ->", out.stat().st_size, "bytes")
 
     # Validate: ONNX vs torch on a real image crop (random noise explodes).
-    import numpy as np
-    from PIL import Image
     import onnxruntime as ort
+    from PIL import Image
     sample = Path(__file__).resolve().parent / "testdata" / "images" / "test_512.png"
     if sample.is_file():
         crop = Image.open(sample).convert("RGB").crop((0, 0, 64, 64))

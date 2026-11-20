@@ -286,9 +286,8 @@ class OCREngine:
         Used by OCR (`transcribe_pil`) and by the VLM caption/chat path, so a
         single Qwen3-VL copy serves both endpoints.
         """
-        if self.model is None or self.processor is None:
-            if not self.init():
-                raise RuntimeError(f"{self.model_id} failed to load")
+        if (self.model is None or self.processor is None) and not self.init():
+            raise RuntimeError(f"{self.model_id} failed to load")
         import torch
 
         if image.mode != "RGB":

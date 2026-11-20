@@ -1,6 +1,5 @@
 """yt-dlp wrapper for audio URLs (YouTube / direct links)."""
 import logging
-import os
 import shutil
 import subprocess
 import tempfile

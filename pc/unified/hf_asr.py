@@ -19,7 +19,6 @@ from __future__ import annotations
 import logging
 import os
 from pathlib import Path
-from typing import Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -106,7 +105,7 @@ def _dir(model_id: str) -> Path:
     return _HERE / "models" / model_id
 
 
-def is_installed(model_id: str = None) -> bool:
+def is_installed(model_id: str | None = None) -> bool:
     mid = model_id or MODEL_ID
     d = _dir(mid)
     if not (d / "config.json").exists():
@@ -125,6 +124,7 @@ def release() -> bool:
     _models.clear()
     try:
         import gc
+
         import torch
         gc.collect()
         if torch.cuda.is_available():
@@ -153,8 +153,8 @@ def _pipeline(model_id: str):
     return pipe
 
 
-def transcribe(audio_path: str, language: Optional[str] = None,
-               model_id: Optional[str] = None) -> Tuple[str, str]:
+def transcribe(audio_path: str, language: str | None = None,
+               model_id: str | None = None) -> tuple[str, str]:
     mid = model_id or MODEL_ID
     if mid in QWEN_ASR_IDS:
         # Qwen3-ASR ships its own transcribe() API; the generic ASR pipeline

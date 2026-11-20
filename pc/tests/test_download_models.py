@@ -1,8 +1,6 @@
 """Model catalog integrity and download helpers (no network)."""
-import pytest
-
 import download_models as dm
-
+import pytest
 
 ALL_TASK_LISTS = [
     dm.TASKS,

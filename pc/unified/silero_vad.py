@@ -10,7 +10,6 @@ Model: silero-vad/v5.onnx (ONNX Runtime compatible)
 import logging
 import os
 from pathlib import Path
-from typing import Optional, List, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +41,6 @@ def _total_ram_gb() -> float:
 def init() -> bool:
     """Load Silero VAD model. Returns False if not available."""
     global _model, _utils
-    had = _model is not None or _utils is not None
     if _model is not None:
         return True
     if not is_installed():
@@ -80,16 +78,14 @@ def detect_speech_segments(
     min_speech_duration_ms: int = 250,
     min_silence_duration_ms: int = 100,
     window_size_samples: int = 512,
-) -> List[Tuple[float, float]]:
+) -> list[tuple[float, float]]:
     """Detect speech segments in an audio file.
 
     Returns list of (start_seconds, end_seconds) tuples for speech regions.
     """
-    if _model is None:
-        if not init():
-            raise RuntimeError("Silero VAD not available")
+    if _model is None and not init():
+        raise RuntimeError("Silero VAD not available")
 
-    import torch
     from torchaudio import load as load_audio
 
     wav, sr = load_audio(audio_path)
@@ -116,10 +112,10 @@ def detect_speech_segments(
 
 def transcribe_with_vad(
     audio_path: str,
-    language: Optional[str] = None,
+    language: str | None = None,
     transcribe_fn=None,
     sample_rate: int = 16000,
-) -> tuple[str, str, List[Tuple[float, float]]]:
+) -> tuple[str, str, list[tuple[float, float]]]:
     """Transcribe audio using VAD pre-filtering.
 
     Only speech segments are sent to the transcription engine, saving time
@@ -137,10 +133,9 @@ def transcribe_with_vad(
         return "", "en", []
 
     # Extract speech segments and transcribe each
-    import torch
-    from torchaudio import load as load_audio
     import tempfile
-    import os
+
+    from torchaudio import load as load_audio
 
     wav, sr = load_audio(audio_path)
     if sr != sample_rate:
@@ -161,7 +156,7 @@ def transcribe_with_vad(
         torchaudio.save(tmp_path, segment_wav, sample_rate)
 
         try:
-            text, lang = transcribe_fn(tmp_path, language)
+            text, _lang = transcribe_fn(tmp_path, language)
             if text:
                 all_text_parts.append(text)
         finally:

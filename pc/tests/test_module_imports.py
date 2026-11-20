@@ -6,7 +6,6 @@ tests for the engines live in their own test files.
 """
 import importlib
 
-
 MODULES = [
     "unified.action_extractor",
     "unified.action_handlers",

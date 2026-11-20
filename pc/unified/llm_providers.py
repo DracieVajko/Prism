@@ -23,10 +23,8 @@ Default prompts per operation (overridable via env vars PRISM_PROMPT_<OPERATION>
                   decisions, action items, and open questions.
 """
 
-import json
 import logging
 import os
-from typing import Optional
 
 import httpx
 
@@ -61,7 +59,7 @@ def _get_prompt(operation: str) -> str:
 _OPERATION_ALIASES = {"summarize": "summary", "summarise": "summary"}
 
 
-def _resolve_instruction(instruction: str, operation: Optional[str],
+def _resolve_instruction(instruction: str, operation: str | None,
                          target_lang: str) -> str:
     """Pick the prompt to send: explicit instruction > named operation > cleanup.
 
@@ -164,7 +162,7 @@ def process_with_external_llm(
     text: str,
     instruction: str = "cleanup",
     target_lang: str = "en",
-    operation: Optional[str] = None,
+    operation: str | None = None,
 ) -> str:
     """Send text to an external LLM provider and return the processed result.
 

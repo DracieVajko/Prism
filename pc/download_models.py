@@ -292,7 +292,7 @@ def run_with_retries(fn, label, tries=5):
     for attempt in range(1, tries + 1):
         try:
             return fn()
-        except Exception as e:  # noqa: BLE001 - network flakes, retry
+        except Exception as e:
             print(f"[{label}] attempt {attempt}/{tries} failed: {str(e)[:200]}", flush=True)
             if attempt == tries:
                 raise
@@ -339,7 +339,7 @@ def download_url(task):
 
 
 def download_hf(task):
-    from huggingface_hub import hf_hub_download, snapshot_download
+    from huggingface_hub import hf_hub_download
     target = BASE / task["target"]
     target.mkdir(parents=True, exist_ok=True)
     if dir_size_gb(target) >= task["min_gb"]:
@@ -360,6 +360,7 @@ def download_hf(task):
         run_with_retries(_dl, task["id"])
     else:
         import fnmatch
+
         from huggingface_hub import list_repo_files
         print(f"[{task['id']}] snapshot {task['repo']} -> {target} ...", flush=True)
         allow = task.get("allow") or ["*"]

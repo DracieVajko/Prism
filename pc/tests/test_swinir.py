@@ -12,7 +12,6 @@ import types
 import numpy as np
 import pytest
 from PIL import Image
-
 from unified import swinir as sw
 
 RUN_MODEL_TESTS = os.environ.get("PRISM_RUN_MODEL_TESTS") == "1"

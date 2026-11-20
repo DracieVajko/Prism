@@ -13,7 +13,6 @@ import io
 import logging
 import time
 from pathlib import Path
-from typing import Optional
 
 import numpy as np
 from PIL import Image
@@ -47,9 +46,8 @@ def _ensure_nvidia_dlls():
         logger.debug("onnx_env register failed: %s", e)
 
 
-def _get_session() -> Optional[object]:
+def _get_session() -> object | None:
     global _SESSION, _PROVIDER, _ACTIVE_ID
-    had = _SESSION is not None
     if _SESSION is not None:
         return _SESSION
     if MODEL_FILE.exists():
@@ -157,7 +155,7 @@ def _rgb_to_lab_l(rgb: np.ndarray) -> np.ndarray:
         xyz = linear @ M.T
         # Normalize by D65 white
         Xn, Yn, Zn = 0.95047, 1.0, 1.08883
-        x, y, z = xyz[:, :, 0] / Xn, xyz[:, :, 1] / Yn, xyz[:, :, 2] / Zn
+        _x, y, _z = xyz[:, :, 0] / Xn, xyz[:, :, 1] / Yn, xyz[:, :, 2] / Zn
         def f(t):
             delta = 6 / 29
             return np.where(t > delta**3, np.cbrt(t), t / (3 * delta**2) + 4 / 29)
@@ -199,8 +197,6 @@ def colorize_b64(image_b64: str) -> dict:
 
     Returns {"image": base64_png, "engine": "ddcolor-full", "elapsed": seconds}.
     """
-    import base64
-    from PIL import Image
 
     t0 = time.time()
     raw = base64.b64decode(image_b64)

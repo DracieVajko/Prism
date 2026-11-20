@@ -3,11 +3,12 @@
 Interactive menu system for Odysseus Diffusion Server.
 Run with: python run_diffusion_menu.py
 """
-import os
 import base64
-import requests
+import os
 import time
 from datetime import datetime
+
+import requests
 
 # Configuration (relative to this script: portable, no hardcoded paths)
 SERVER_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -209,8 +210,6 @@ def generate_image(model, prompt, size, steps, positive_prompt, filename):
     # Use the negative prompt from config
     payload['negative_prompt'] = NEGATIVE_PROMPT
     
-    url = f"{SERVER_URL}/v1/images/generations"
-    headers = {'Content-Type': 'application/json'}
     
     print("Sending request...")
     start = time.time()
@@ -234,7 +233,7 @@ def generate_image(model, prompt, size, steps, positive_prompt, filename):
         if response.status_code == 200:
             data = response.json()
             b64 = data['data'][0]['b64_json']
-            img_bytes = base64.b64decode(b64)
+            base64.b64decode(b64)
             
             # Generate filename with model id
             timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -244,7 +243,7 @@ def generate_image(model, prompt, size, steps, positive_prompt, filename):
             with open(out_path, 'wb') as f:
                 f.write(base64.b64decode(response.json()['data'][0]['b64_json']))
             
-            elapsed = time.time() - start
+            time.time() - start
             print(f"\nGeneration complete in {time.time() - start:.1f}s!")
             print(f"Saved to: {out_path}")
         else:

@@ -10,9 +10,8 @@ import json
 import logging
 import os
 from abc import ABC, abstractmethod
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
-from typing import Any
 
 from unified.action_extractor import Action, ActionType
 
@@ -127,7 +126,6 @@ class CalendarHandler(ActionHandler):
 
         start = action.start_time or datetime.now().isoformat()
         end = action.end_time or start
-        duration = action.duration_minutes or 60
 
         ics_content = f"""BEGIN:VCALENDAR
 VERSION:2.0
@@ -276,8 +274,8 @@ class EmailHandler(ActionHandler):
 
         try:
             import smtplib
-            from email.mime.text import MIMEText
             from email.mime.multipart import MIMEMultipart
+            from email.mime.text import MIMEText
         except ImportError:
             return {"action": "email", "status": "error", "reason": "email modules not available"}
 
@@ -345,7 +343,7 @@ class NoteHandler(ActionHandler):
 
     def __init__(self, name: str = "note", notes_file: str | None = None):
         super().__init__(name)
-        self.notes_file = reminders_file = str(
+        self.notes_file = str(
             Path.home() / ".prism" / "notes.txt"
         )
         Path(self.notes_file).parent.mkdir(parents=True, exist_ok=True)

@@ -5,7 +5,6 @@ release assets) and extracted under pc/models/supertonic-3-tts-int8. Synthesis
 returns PCM; encoding to mp3/aac/opus/... is done with ffmpeg.
 """
 import array
-import json
 import os
 import subprocess
 import tarfile

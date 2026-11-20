@@ -4,11 +4,9 @@ Used by /v1/documents/extract. PDF text extraction uses pdfminer when the PDF
 has a text layer; scanned (image-only) PDFs fall back to rendering each page
 with pypdfium2 and running the installed OCR engine on it.
 """
-import io
-import os
 import tempfile
-import zipfile
 import xml.etree.ElementTree as ET
+import zipfile
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent.parent

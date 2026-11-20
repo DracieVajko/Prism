@@ -19,7 +19,6 @@ import io
 import logging
 import time
 from pathlib import Path
-from typing import Optional
 
 import torch
 from PIL import Image
@@ -32,9 +31,8 @@ MODEL_DIR = Path(__file__).resolve().parent.parent / "models" / "flux-kontext-de
 _PIPELINE = None
 
 
-def _ensure_pipeline() -> Optional[object]:
+def _ensure_pipeline() -> object | None:
     global _PIPELINE
-    had = _PIPELINE is not None
     if _PIPELINE is not None:
         return _PIPELINE
     if not (MODEL_DIR / "model_index.json").exists():

@@ -7,14 +7,13 @@ live here so the engine modules do not carry their own copies.
 
 import logging
 from pathlib import Path
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
 MODELS_DIR = Path(__file__).resolve().parent.parent / "models"
 
 
-def model_dir(subdir: Optional[str], default: str) -> Path:
+def model_dir(subdir: str | None, default: str) -> Path:
     """Directory for *subdir* (or *default* when the id is empty)."""
     return MODELS_DIR / (subdir or default)
 

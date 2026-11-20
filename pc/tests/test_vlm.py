@@ -1,9 +1,10 @@
 """VLM caption — bad input 400, missing model 503, not 500."""
-import pytest
-from unified.vlm import caption_image_b64, find_vlm_dir, EngineMissing
 import base64
 import io
+
+import pytest
 from PIL import Image
+from unified.vlm import EngineMissing, caption_image_b64, find_vlm_dir
 
 
 def _red_dot_b64(size=32):
@@ -29,8 +30,8 @@ def test_caption_missing_model_raises(tmp_path):
 def test_caption_contract_no_model(monkeypatch):
     # UNIFIED_NO_ENGINE simulates a missing engine: 503 will-not-load, never 500.
     monkeypatch.setenv("UNIFIED_NO_ENGINE", "1")
-    from fastapi.testclient import TestClient
     import unified_server as us
+    from fastapi.testclient import TestClient
     c = TestClient(us.app)
     r = c.post("/v1/images/caption", json={"image": _red_dot_b64()})
     assert r.status_code == 503, r.text[:200]
@@ -42,8 +43,8 @@ def test_chat_completions_text_without_provider_503(monkeypatch):
     # server must answer 503 with a clear reason, never 500.
     monkeypatch.delenv("PRISM_LLM_BASE_URL", raising=False)
     monkeypatch.delenv("PRISM_LLM_PROVIDER", raising=False)
-    from fastapi.testclient import TestClient
     import unified_server as us
+    from fastapi.testclient import TestClient
     c = TestClient(us.app)
     r = c.post("/v1/chat/completions", json={
         "model": "qwen3-vl-2b",
@@ -55,8 +56,8 @@ def test_chat_completions_text_without_provider_503(monkeypatch):
 
 def test_chat_completions_vision_no_model_503(monkeypatch):
     monkeypatch.setenv("UNIFIED_NO_ENGINE", "1")
-    from fastapi.testclient import TestClient
     import unified_server as us
+    from fastapi.testclient import TestClient
     c = TestClient(us.app)
     img = _red_dot_b64()
     r = c.post("/v1/chat/completions", json={

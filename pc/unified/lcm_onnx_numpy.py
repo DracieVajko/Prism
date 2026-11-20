@@ -63,7 +63,9 @@ def _to_pil(arr: np.ndarray) -> Image.Image:
 class LcmOnnxNumpy:
     def __init__(self, model_dir: Path, use_gpu: bool | None = None):
         import os
+
         import onnxruntime as ort
+
         from unified.onnx_env import pick_providers
         self.dir = Path(model_dir)
         self._vocab = None
@@ -290,7 +292,7 @@ class LcmOnnxNumpy:
         pos = self._encode_text(prompt)
         neg = self._encode_text(negative_prompt) if (negative_prompt and guidance > 1.0) else None
         # start at a later timestep based on strength
-        start = int(round((1.0 - max(0.05, min(1.0, strength))) * steps))
+        start = round((1.0 - max(0.05, min(1.0, strength))) * steps)
         ts = self._timesteps(max(1, min(8, steps)))[start:]
         t0 = ts[0]
         a0 = float(self.alphas_cumprod[t0])
@@ -317,7 +319,7 @@ class LcmOnnxNumpy:
         pos = self._encode_text(prompt)
         neg = self._encode_text(negative_prompt) if (negative_prompt and guidance > 1.0) else None
 
-        start = int(round((1.0 - max(0.05, min(1.0, strength))) * steps))
+        start = round((1.0 - max(0.05, min(1.0, strength))) * steps)
         ts = self._timesteps(max(1, min(8, steps)))[start:]
         t0 = ts[0]
         a0 = float(self.alphas_cumprod[t0])
@@ -339,7 +341,7 @@ def _colorize(src: Image.Image, mask: Image.Image, color: str) -> Image.Image:
         hex_color = "".join(c * 2 for c in hex_color)
     tr, tg, tb = (int(hex_color[i:i + 2], 16) / 255.0 for i in (0, 2, 4))
     th, ts, _ = colorsys.rgb_to_hsv(tr, tg, tb)
-    src_rgb = np.asarray(src.convert("RGB")).astype(np.float32) / 255.0
+    np.asarray(src.convert("RGB")).astype(np.float32) / 255.0
     hsv = np.asarray(src.convert("HSV")).astype(np.float32) / 255.0
     hsv[..., 0] = th
     hsv[..., 1] = np.clip(ts, 0.35, 1.0)

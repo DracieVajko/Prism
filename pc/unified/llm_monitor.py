@@ -18,11 +18,9 @@ Provider support is best-effort:
 * Others (OpenAI/Anthropic/custom): assumed to have no locally resident
   model limit; always allowed, no unload.
 """
-import json
 import logging
 import os
 import time
-from typing import Optional
 
 import httpx
 
@@ -123,8 +121,8 @@ def _unload_model_lmstudio(base: str, model: str, headers: dict) -> bool:
     return False
 
 
-def acquire(model: Optional[str] = None, timeout: Optional[int] = None,
-            poll_interval: Optional[int] = None) -> bool:
+def acquire(model: str | None = None, timeout: int | None = None,
+            poll_interval: int | None = None) -> bool:
     """Wait until we are allowed to load ``model``. Returns True if acquired
     within timeout, False if timed out (caller should fall back)."""
     cfg = _cfg()
@@ -159,7 +157,7 @@ def acquire(model: Optional[str] = None, timeout: Optional[int] = None,
         time.sleep(poll_interval)
 
 
-def release_model(model: Optional[str] = None) -> None:
+def release_model(model: str | None = None) -> None:
     """Unload the model we loaded (best-effort)."""
     cfg = _cfg()
     provider = cfg["provider"]
@@ -178,7 +176,7 @@ def release_model(model: Optional[str] = None) -> None:
 class LLMSlot:
     """Context manager that acquires a slot on entry and releases on exit."""
 
-    def __init__(self, model: Optional[str] = None):
+    def __init__(self, model: str | None = None):
         self.model = model
         self.acquired = False
 

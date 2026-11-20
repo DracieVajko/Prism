@@ -12,7 +12,6 @@ import io
 import logging
 import time
 from pathlib import Path
-from typing import Optional
 
 from PIL import Image
 
@@ -24,7 +23,7 @@ MODEL_DIR = Path(__file__).resolve().parent.parent / "models" / "instruct-pix2pi
 _PIPELINE = None
 
 
-def _ensure_pipeline() -> Optional[object]:
+def _ensure_pipeline() -> object | None:
     """Load InstructPix2Pix on first use.
 
     torch and diffusers are imported only after the weights are confirmed to
@@ -32,7 +31,6 @@ def _ensure_pipeline() -> Optional[object]:
     a missing model yields a clean unavailable state instead of an ImportError.
     """
     global _PIPELINE
-    had = _PIPELINE is not None
     if _PIPELINE is not None:
         return _PIPELINE
     if not (MODEL_DIR / "model_index.json").exists():

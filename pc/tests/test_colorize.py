@@ -9,7 +9,6 @@ import os
 
 import pytest
 from PIL import Image
-
 from unified import colorize as cz
 
 RUN_MODEL_TESTS = os.environ.get("PRISM_RUN_MODEL_TESTS") == "1"

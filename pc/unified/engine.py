@@ -6,7 +6,6 @@ without a CLI init. init_diffusion_engine() initializes it in lazy mode
 Namespace — called once at unified_server startup, never on import.
 Without torch/diffusers it returns False and unified_server uses the placeholder/stub path.
 """
-import argparse
 import base64
 import logging
 
@@ -16,8 +15,8 @@ _inited = False
 
 def _have_torch():
     try:
-        import torch  # noqa: F401
         import diffusers  # noqa: F401
+        import torch  # noqa: F401
         return True
     except Exception:
         return False
@@ -66,8 +65,9 @@ def try_real_inpaint(image_b64, mask_b64, prompt, model_id,
         if force_engine:
             raise RuntimeError("diffusion engine not initialized")
         return None
-    import diffusion_server as ds
     import uuid
+
+    import diffusion_server as ds
     ds.ensure_model_loaded(model_id)
     req = ds.InpaintRequest(
         image=image_b64, mask=mask_b64, prompt=prompt or "",

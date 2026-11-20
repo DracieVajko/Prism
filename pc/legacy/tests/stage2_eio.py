@@ -1,5 +1,13 @@
 """Stage 2: edits + inpaint + outpaint-via-inpaint. Usage: python stage2_eio.py <Model>"""
-import base64, io, json, os, subprocess, sys, time, urllib.request
+import base64
+import io
+import json
+import os
+import subprocess
+import sys
+import time
+import urllib.request
+
 BASE = "http://127.0.0.1:8100"
 model = sys.argv[1]
 _ALIAS = {"DreamShaper": "DreamShaper_8", "RealisticVision": "RealisticVision_V6_B1", "MeinaMix": "MeinaMix_V11"}
@@ -8,6 +16,8 @@ cfg = json.load(open(r"D:\AI\DiffusionServer\pc\models.json", encoding="utf-8"))
 prof = cfg["models"][model]
 outdir = r"D:\AI\DiffusionServer\pc\legacy\tests\output"
 from PIL import Image, ImageDraw
+
+
 def gpu():
     try:
         o = subprocess.check_output(["nvidia-smi","--query-gpu=memory.used,memory.total,utilization.gpu","--format=csv,noheader,nounits"],text=True,timeout=15).strip().splitlines()[0].split(",")
@@ -34,6 +44,7 @@ b.write(png+f"\r\n--{bnd}--\r\n".encode())
 t0=time.time()
 req=urllib.request.Request(BASE+"/v1/images/edits",data=b.getvalue(),headers={"Content-Type":f"multipart/form-data; boundary={bnd}"})
 import urllib.error as _ue
+
 try:
     with urllib.request.urlopen(req,timeout=600) as r: er=json.loads(r.read().decode())
     print(f"edit ok in {time.time()-t0:.1f}s vram={gpu()}", flush=True)

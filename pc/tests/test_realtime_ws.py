@@ -1,10 +1,9 @@
 """OpenAI transcription WebSocket: Cindy's event sequence, no model load."""
 import base64
 
-from fastapi.testclient import TestClient
-
 import unified.media_routes as mr
 import unified_server as us
+from fastapi.testclient import TestClient
 
 
 def test_realtime_session_flow(monkeypatch):

@@ -4,7 +4,16 @@ Usage (venv python):
 Does: /health, /v1/models, generations (saves PNG), edits, inpaint, outpaint-via-inpaint.
 Measures: VRAM (nvidia-smi), RAM, generation time. Prints JSON summary.
 """
-import argparse, base64, io, json, os, subprocess, sys, time, urllib.request, urllib.error
+import argparse
+import base64
+import io
+import json
+import os
+import subprocess
+import sys
+import time
+import urllib.error
+import urllib.request
 
 SERVER_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, SERVER_DIR)
@@ -65,13 +74,13 @@ def main():
     base = f"http://{args.host}:{args.port}"
     outdir = os.path.join(SERVER_DIR, "tests", "output")
     os.makedirs(outdir, exist_ok=True)
-    neg = cfg.get("negative_prompt", "")
+    cfg.get("negative_prompt", "")
     summary = {"model": args.model, "profile": prof["label"]}
 
     print(f"== {args.model}: /health ==", flush=True)
     summary["health"] = http_get(base + "/health")
     print(summary["health"], flush=True)
-    print(f"== /v1/models ==", flush=True)
+    print("== /v1/models ==", flush=True)
     summary["models"] = http_get(base + "/v1/models")
     print(summary["models"], flush=True)
     summary["vram_idle"] = nvidia_mem()
@@ -109,7 +118,7 @@ def main():
 
     # --- TEST: edits (multipart, like OpenAI) ---
     print("== edits ==", flush=True)
-    import urllib.parse, mimetypes
+    import urllib.parse
     boundary = "----testboundary123"
     with open(gen_path, "rb") as f:
         png_bytes = f.read()

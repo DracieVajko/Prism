@@ -27,7 +27,7 @@ def register_nvidia_dlls() -> list:
         import importlib.util
         spec = importlib.util.find_spec("nvidia")
         if spec and spec.submodule_search_locations:
-            base = Path(list(spec.submodule_search_locations)[0])
+            base = Path(next(iter(spec.submodule_search_locations)))
             for d in base.glob("*/bin"):
                 dirs.append(str(d))
             for d in base.glob("*/bin/x86_64"):

@@ -109,6 +109,7 @@ def release() -> bool:
     _pipe = None
     try:
         import gc
+
         import torch
         gc.collect()
         if torch.cuda.is_available():
