@@ -75,6 +75,8 @@ from unified.ffmpeg_tools import (
     get_presets,
     trim_media,
 )
+from unified.action_extractor import ActionType
+from unified.upscale import upscale_image_b64
 from unified.vlm import MODEL_ID as VLM_ID
 from unified.vlm import EngineMissing, caption_image_b64
 
