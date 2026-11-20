@@ -388,6 +388,9 @@ class CaptionRequest(BaseModel):
     model: str | None = ""
     request_id: str | None = ""
 
+class InstallRequest(BaseModel):
+    id: str = ""
+
 
 def _release_vlm_best_effort():
     try:
