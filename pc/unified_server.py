@@ -10,6 +10,8 @@ GET /health, GET /v1/models, POST /v1/images/generations|edits,
 POST /v1/images/inpaint|harmonize|upscale, POST /v1/audio/transcriptions|translations,
 GET /v1/images/progress/{id}, GET /webui, GET / -> /webui
 """
+from __future__ import annotations
+
 import asyncio
 import base64
 import io
