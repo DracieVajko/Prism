@@ -20,7 +20,6 @@ import logging
 import time
 from pathlib import Path
 
-import torch
 from PIL import Image
 
 logger = logging.getLogger(__name__)
@@ -39,6 +38,7 @@ def _ensure_pipeline() -> object | None:
         logger.warning("FLUX.1-Kontext-dev model not found: %s", MODEL_DIR)
         return None
     try:
+        import torch
         from diffusers import FluxKontextPipeline
         _PIPELINE = FluxKontextPipeline.from_pretrained(
             str(MODEL_DIR), torch_dtype=torch.bfloat16
