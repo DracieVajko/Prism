@@ -1291,27 +1291,47 @@ class MainActivity : AppCompatActivity() {
                                     } else {
                                         val mode = spinnerGemmaMode.selectedItem?.toString() ?: "cleanup"
                                         val targetLang = spinnerLang.selectedItem?.toString() ?: "sk"
-                                        val prompt = when (mode) {
-                                            "cleanup" -> "Fix spelling, grammar, and punctuation in this transcription. Keep the original language. Return only the corrected text:\n\n$text"
-                                            "translate" -> "Translate the following text to ${langName(targetLang)}. Return only the translation:\n\n$text"
-                                            "summarize" -> "Summarize the following text in a few sentences. Return only the summary:\n\n$text"
-                                            "rewrite" -> "Rewrite the following text to be clearer and more readable. Return only the rewritten text:\n\n$text"
-                                            else -> text
+                                        // Split long transcripts so the model context window is never exceeded.
+                                        // Reserve ~1024 output tokens and leave headroom for the prompt.
+                                        val maxInputChars = 1500
+                                        val chunks = mutableListOf<String>()
+                                        var remaining = text
+                                        while (remaining.length > maxInputChars) {
+                                            var cut = remaining.lastIndexOf(". ", maxInputChars)
+                                            if (cut < maxInputChars / 2) cut = remaining.lastIndexOf(" ", maxInputChars)
+                                            if (cut < maxInputChars / 2) cut = maxInputChars
+                                            chunks.add(remaining.substring(0, cut + 1).trim())
+                                            remaining = remaining.substring(cut + 1).trim()
                                         }
-                                        val result = GemmaLib.generateText(handle, prompt, 1024)
+                                        if (remaining.isNotEmpty()) chunks.add(remaining)
+                                        if (chunks.isEmpty()) chunks.add(text)
+                                        val results = mutableListOf<String>()
+                                        for (chunk in chunks) {
+                                            val prompt = when (mode) {
+                                                "cleanup" -> "Fix spelling, grammar, and punctuation in this transcription. Keep the original language. Return only the corrected text:\n\n$chunk"
+                                                "translate" -> "Translate the following text to ${langName(targetLang)}. Return only the translation:\n\n$chunk"
+                                                "summarize" -> "Summarize the following text in a few sentences. Return only the summary:\n\n$chunk"
+                                                "rewrite" -> "Rewrite the following text to be clearer and more readable. Return only the rewritten text:\n\n$chunk"
+                                                else -> chunk
+                                            }
+                                            val result = GemmaLib.generateText(handle, prompt, 1024)
+                                            if (result != null && result.isNotBlank() && !result.contains('\uFFFD')) {
+                                                results.add(result.trim())
+                                            } else {
+                                                results.add(chunk)
+                                            }
+                                        }
+                                        val processedText = results.joinToString("\n\n")
+                                        ppNote = " (Gemma4 $mode${if (chunks.size > 1) ", ${chunks.size} chunks" else ""})"
+                                        try {
+                                            val tp = "Generate a short (max 6 words) title for this text. Return only the title, no quotes:\n\n${processedText.take(2000)}"
+                                            val tr = GemmaLib.generateText(handle, tp, 32)
+                                            if (tr != null && tr.isNotBlank()) {
+                                                lastTranscriptTitle = tr.trim().trim('"').take(60)
+                                            }
+                                        } catch (_: Exception) { /* ignore */ }
                                         GemmaLib.releaseTextModel(handle)
-                                        if (result != null && result.isNotBlank()
-                                            && !result.contains('\uFFFD')) {
-                                            finalText = result.trim()
-                                            ppNote = " (Gemma4 $mode)"
-                                            try {
-                                                val tp = "Generate a short (max 6 words) title for this text. Return only the title, no quotes:\n\n$finalText"
-                                                val tr = GemmaLib.generateText(handle, tp, 32)
-                                                if (tr != null && tr.isNotBlank()) {
-                                                    lastTranscriptTitle = tr.trim().trim('"').take(60)
-                                                }
-                                            } catch (_: Exception) { /* ignore */ }
-                                        } else {
+                                        if (processedText.isBlank()) {
                                             ppNote = " (Gemma4 returned nothing usable)"
                                         }
                                     }
