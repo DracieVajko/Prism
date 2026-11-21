@@ -263,6 +263,13 @@
                             android:inputType="textUri"
                             android:textSize="12sp" />
 
+                        <Button
+                            android:id="@+id/btnLlmSettings"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="8dp"
+                            android:text="LLM settings (cloud / PC)" />
+
                         <TextView
                             android:id="@+id/textRemoteStatus"
                             android:layout_width="match_parent"

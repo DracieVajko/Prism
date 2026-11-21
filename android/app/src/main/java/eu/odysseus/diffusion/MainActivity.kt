@@ -123,6 +123,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var spinnerAcceleration: android.widget.Spinner
     private lateinit var spinnerConnectionMode: android.widget.Spinner
     private lateinit var editRemoteHost: EditText
+    private lateinit var btnLlmSettings: android.widget.Button
     private lateinit var textRemoteStatus: TextView
     private var settingsReady = false
     private lateinit var screenInpaint: View
@@ -190,6 +191,7 @@ class MainActivity : AppCompatActivity() {
         spinnerAcceleration = findViewById(R.id.spinnerAcceleration)
         spinnerConnectionMode = findViewById(R.id.spinnerConnectionMode)
         editRemoteHost = findViewById(R.id.editRemoteHost)
+        btnLlmSettings = findViewById(R.id.btnLlmSettings)
         textRemoteStatus = findViewById(R.id.textRemoteStatus)
 
         genPrompt = findViewById(R.id.genPrompt)
@@ -1061,6 +1063,14 @@ class MainActivity : AppCompatActivity() {
         editRemoteHost.setText(savedHost)
         updateRemoteStatusText()
 
+        // ---------- LLM provider settings ----------
+        AppConfig.llmProvider = prefs.getString("llm_provider", "gemma") ?: "gemma"
+        AppConfig.llmBaseUrl = prefs.getString("llm_base_url", "") ?: ""
+        AppConfig.llmApiKey = prefs.getString("llm_api_key", "") ?: ""
+        AppConfig.llmModel = prefs.getString("llm_model", "") ?: ""
+        AppConfig.llmMaxContextTokens = prefs.getInt("llm_max_context", 4096)
+        AppConfig.llmOutputReserve = prefs.getInt("llm_output_reserve", 1024)
+
         fun applyTheme(mode: String) {
             val m = when (mode) {
                 "light" -> androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_NO
@@ -1133,6 +1143,55 @@ class MainActivity : AppCompatActivity() {
                 updateRemoteStatusText()
                 refreshGenerateModels()
             }
+
+        btnLlmSettings.setOnClickListener {
+            val prefs = getSharedPreferences("settings", android.content.Context.MODE_PRIVATE)
+            val layout = android.widget.LinearLayout(this)
+            layout.orientation = android.widget.LinearLayout.VERTICAL
+            val pad = (16 * resources.displayMetrics.density).toInt()
+            layout.setPadding(pad, pad, pad, pad)
+            fun labeledEdit(label: String, value: String, hint: String = ""): android.widget.EditText {
+                val tv = android.widget.TextView(this).apply { text = label; textSize = 12f }
+                val et = android.widget.EditText(this).apply { setText(value); setHint(hint); textSize = 12f }
+                layout.addView(tv)
+                layout.addView(et)
+                return et
+            }
+            val etProvider = labeledEdit("Provider (gemma/gemini/openai/mistral/custom/pc)", AppConfig.llmProvider)
+            val etBase = labeledEdit("Base URL (OpenAI-compatible)", AppConfig.llmBaseUrl, "https://api.openai.com/v1")
+            val etKey = labeledEdit("API key", AppConfig.llmApiKey, "sk-...")
+            val etModel = labeledEdit("Model name", AppConfig.llmModel, "gpt-4o-mini")
+            val etCtx = labeledEdit("Max context tokens", AppConfig.llmMaxContextTokens.toString(), "4096")
+            val etReserve = labeledEdit("Output reserve tokens", AppConfig.llmOutputReserve.toString(), "1024")
+            android.app.AlertDialog.Builder(this)
+                .setTitle("LLM settings")
+                .setView(layout)
+                .setPositiveButton("Save") { _, _ ->
+                    val provider = etProvider.text.toString().trim().ifEmpty { "gemma" }
+                    val base = etBase.text.toString().trim()
+                    val key = etKey.text.toString().trim()
+                    val model = etModel.text.toString().trim()
+                    val ctx = etCtx.text.toString().toIntOrNull() ?: 4096
+                    val reserve = etReserve.text.toString().toIntOrNull() ?: 1024
+                    AppConfig.llmProvider = provider
+                    AppConfig.llmBaseUrl = base
+                    AppConfig.llmApiKey = key
+                    AppConfig.llmModel = model
+                    AppConfig.llmMaxContextTokens = ctx
+                    AppConfig.llmOutputReserve = reserve
+                    prefs.edit()
+                        .putString("llm_provider", provider)
+                        .putString("llm_base_url", base)
+                        .putString("llm_api_key", key)
+                        .putString("llm_model", model)
+                        .putInt("llm_max_context", ctx)
+                        .putInt("llm_output_reserve", reserve)
+                        .apply()
+                    toast("LLM settings saved")
+                }
+                .setNegativeButton("Cancel", null)
+                .show()
+        }
         }
 
         settingsReady = true
@@ -1278,66 +1337,88 @@ class MainActivity : AppCompatActivity() {
                         // Only claim Gemma4 ran when it actually produced the text.
                         var ppNote = ""
                         if (switchGemma.isChecked) {
-                            transcribeStatus.text = "post-processing with Gemma4..."
+                            transcribeStatus.text = "post-processing..."
                             transcribeProgress.visibility = android.view.View.VISIBLE
                             try {
-                                val modelPath = findGemmaModelPath()
-                                if (modelPath == null) {
-                                    ppNote = " (Gemma4 skipped: model not downloaded)"
-                                } else {
-                                    val handle = GemmaLib.loadTextModel(modelPath)
-                                    if (handle == 0L) {
-                                        ppNote = " (Gemma4 skipped: model failed to load)"
+                                val mode = spinnerGemmaMode.selectedItem?.toString() ?: "cleanup"
+                                val targetLang = spinnerLang.selectedItem?.toString() ?: "sk"
+                                val provider = AppConfig.llmProvider
+                                // Split long transcripts so the model context window is never exceeded.
+                                val maxInputChars = ((AppConfig.llmMaxContextTokens - AppConfig.llmOutputReserve) * 4 / 5).toInt().coerceAtLeast(500)
+                                val chunks = mutableListOf<String>()
+                                var remaining = text
+                                while (remaining.length > maxInputChars) {
+                                    var cut = remaining.lastIndexOf(". ", maxInputChars)
+                                    if (cut < maxInputChars / 2) cut = remaining.lastIndexOf(" ", maxInputChars)
+                                    if (cut < maxInputChars / 2) cut = maxInputChars
+                                    chunks.add(remaining.substring(0, cut + 1).trim())
+                                    remaining = remaining.substring(cut + 1).trim()
+                                }
+                                if (remaining.isNotEmpty()) chunks.add(remaining)
+                                if (chunks.isEmpty()) chunks.add(text)
+                                val results = mutableListOf<String>()
+                                for (chunk in chunks) {
+                                    val prompt = when (mode) {
+                                        "cleanup" -> "Fix spelling, grammar, and punctuation in this transcription. Keep the original language. Return only the corrected text:\n\n$chunk"
+                                        "translate" -> "Translate the following text to ${langName(targetLang)}. Return only the translation:\n\n$chunk"
+                                        "summarize" -> "Summarize the following text in a few sentences. Return only the summary:\n\n$chunk"
+                                        "rewrite" -> "Rewrite the following text to be clearer and more readable. Return only the rewritten text:\n\n$chunk"
+                                        else -> chunk
+                                    }
+                                    val result = if (provider == "gemma" || provider == "gemini") {
+                                        val modelPath = findGemmaModelPath()
+                                        if (modelPath == null) null
+                                        else {
+                                            val handle = GemmaLib.loadTextModel(modelPath)
+                                            if (handle == 0L) null
+                                            else {
+                                                val r = GemmaLib.generateText(handle, prompt, 1024)
+                                                GemmaLib.releaseTextModel(handle)
+                                                r
+                                            }
+                                        }
                                     } else {
-                                        val mode = spinnerGemmaMode.selectedItem?.toString() ?: "cleanup"
-                                        val targetLang = spinnerLang.selectedItem?.toString() ?: "sk"
-                                        // Split long transcripts so the model context window is never exceeded.
-                                        // Reserve ~1024 output tokens and leave headroom for the prompt.
-                                        val maxInputChars = 1500
-                                        val chunks = mutableListOf<String>()
-                                        var remaining = text
-                                        while (remaining.length > maxInputChars) {
-                                            var cut = remaining.lastIndexOf(". ", maxInputChars)
-                                            if (cut < maxInputChars / 2) cut = remaining.lastIndexOf(" ", maxInputChars)
-                                            if (cut < maxInputChars / 2) cut = maxInputChars
-                                            chunks.add(remaining.substring(0, cut + 1).trim())
-                                            remaining = remaining.substring(cut + 1).trim()
-                                        }
-                                        if (remaining.isNotEmpty()) chunks.add(remaining)
-                                        if (chunks.isEmpty()) chunks.add(text)
-                                        val results = mutableListOf<String>()
-                                        for (chunk in chunks) {
-                                            val prompt = when (mode) {
-                                                "cleanup" -> "Fix spelling, grammar, and punctuation in this transcription. Keep the original language. Return only the corrected text:\n\n$chunk"
-                                                "translate" -> "Translate the following text to ${langName(targetLang)}. Return only the translation:\n\n$chunk"
-                                                "summarize" -> "Summarize the following text in a few sentences. Return only the summary:\n\n$chunk"
-                                                "rewrite" -> "Rewrite the following text to be clearer and more readable. Return only the rewritten text:\n\n$chunk"
-                                                else -> chunk
-                                            }
-                                            val result = GemmaLib.generateText(handle, prompt, 1024)
-                                            if (result != null && result.isNotBlank() && !result.contains('\uFFFD')) {
-                                                results.add(result.trim())
-                                            } else {
-                                                results.add(chunk)
-                                            }
-                                        }
-                                        val processedText = results.joinToString("\n\n")
-                                        ppNote = " (Gemma4 $mode${if (chunks.size > 1) ", ${chunks.size} chunks" else ""})"
-                                        try {
-                                            val tp = "Generate a short (max 6 words) title for this text. Return only the title, no quotes:\n\n${processedText.take(2000)}"
-                                            val tr = GemmaLib.generateText(handle, tp, 32)
-                                            if (tr != null && tr.isNotBlank()) {
-                                                lastTranscriptTitle = tr.trim().trim('"').take(60)
-                                            }
-                                        } catch (_: Exception) { /* ignore */ }
-                                        GemmaLib.releaseTextModel(handle)
-                                        if (processedText.isBlank()) {
-                                            ppNote = " (Gemma4 returned nothing usable)"
-                                        }
+                                        LlmClient.complete(prompt)
+                                    }
+                                    if (result != null && result.isNotBlank() && !result.contains('\uFFFD')) {
+                                        results.add(result.trim())
+                                    } else {
+                                        results.add(chunk)
                                     }
                                 }
+                                val processedText = results.joinToString("\n\n")
+                                ppNote = if (provider == "gemma" || provider == "gemini") {
+                                    " (Gemma4 $mode${if (chunks.size > 1) ", ${chunks.size} chunks" else ""})"
+                                } else {
+                                    " (${provider} $mode${if (chunks.size > 1) ", ${chunks.size} chunks" else ""})"
+                                }
+                                try {
+                                    val tp = "Generate a short (max 6 words) title for this text. Return only the title, no quotes:\n\n${processedText.take(2000)}"
+                                    val tr = if (provider == "gemma" || provider == "gemini") {
+                                        val modelPath = findGemmaModelPath()
+                                        if (modelPath == null) null
+                                        else {
+                                            val handle = GemmaLib.loadTextModel(modelPath)
+                                            if (handle == 0L) null
+                                            else {
+                                                val r = GemmaLib.generateText(handle, tp, 32)
+                                                GemmaLib.releaseTextModel(handle)
+                                                r
+                                            }
+                                        }
+                                    } else {
+                                        LlmClient.complete(tp)
+                                    }
+                                    if (tr != null && tr.isNotBlank()) {
+                                        lastTranscriptTitle = tr.trim().trim('"').take(60)
+                                    }
+                                } catch (_: Exception) { /* ignore */ }
+                                if (processedText.isBlank()) {
+                                    ppNote = " (LLM returned nothing usable)"
+                                }
+                                finalText = processedText
                             } catch (e: Exception) {
-                                ppNote = " (Gemma4 error: ${e.message})"
+                                ppNote = " (LLM error: ${e.message})"
                             }
                             transcribeProgress.visibility = android.view.View.GONE
                         }
