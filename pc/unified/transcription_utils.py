@@ -21,6 +21,15 @@ DEFAULT_MAX_CHARS_PER_CHUNK = 8000
 # Supported output formats
 SUPPORTED_FORMATS = ("txt", "md", "srt", "json")
 
+# Quality gates for an ASR result. A transcript below any of these is treated
+# as broken and worth one more decoding attempt with stronger settings.
+MIN_WORDS_PER_MINUTE = 20.0
+MIN_UNIQUE_WORD_RATIO = 0.30
+MIN_WORDS_FOR_RATIO = 40
+LOOP_GRAM_WORDS = 6
+LOOP_MIN_REPEATS = 8
+LOOP_MIN_GRAMS = 20
+
 
 def format_timestamp_srt(seconds: float) -> str:
     """Format seconds as SRT timestamp: HH:MM:SS,mmm"""
@@ -267,6 +276,70 @@ def split_text_by_sentences(
         chunks.append(current)
 
     return chunks
+
+
+def assess_transcript_quality(
+    segments: list[dict],
+    duration_s: float | None = None,
+) -> dict:
+    """Cheap, deterministic check for a broken transcription.
+
+    Catches the three failures that actually happen on quiet phone recordings:
+    nothing recognised, the voice-activity filter eating most of the speech,
+    and a decoder stuck looping on one phrase. It does not judge accuracy -
+    a merely imperfect transcript passes.
+
+    Args:
+        segments: List of dicts with 'text', 'start', 'end' keys
+        duration_s: Media duration in seconds; word rate is skipped without it
+
+    Returns:
+        Dict with 'ok', 'reasons', 'words', 'wpm' and 'unique_ratio'
+    """
+    words: list[str] = []
+    for seg in segments:
+        words.extend((seg.get("text") or "").split())
+
+    reasons: list[str] = []
+    if not words:
+        return {
+            "ok": False,
+            "reasons": ["no-speech"],
+            "words": 0,
+            "wpm": 0.0,
+            "unique_ratio": 0.0,
+        }
+
+    wpm = 0.0
+    if duration_s and float(duration_s) > 0:
+        wpm = len(words) / (float(duration_s) / 60.0)
+        if float(duration_s) >= 60.0 and wpm < MIN_WORDS_PER_MINUTE:
+            reasons.append("low-word-rate")
+
+    lowered = [word.lower().strip(".,!?;:\"'()-") for word in words]
+    lowered = [word for word in lowered if word]
+    unique_ratio = len(set(lowered)) / len(lowered) if lowered else 0.0
+    if len(lowered) >= MIN_WORDS_FOR_RATIO and unique_ratio < MIN_UNIQUE_WORD_RATIO:
+        reasons.append("repetition-loop")
+
+    if len(lowered) >= LOOP_MIN_GRAMS * LOOP_GRAM_WORDS:
+        grams = [
+            " ".join(lowered[i:i + LOOP_GRAM_WORDS])
+            for i in range(len(lowered) - LOOP_GRAM_WORDS + 1)
+        ]
+        if grams:
+            top = max(grams.count(gram) for gram in set(grams))
+            if top >= max(LOOP_MIN_REPEATS, len(grams) // 20):
+                if "repetition-loop" not in reasons:
+                    reasons.append("repetition-loop")
+
+    return {
+        "ok": not reasons,
+        "reasons": reasons,
+        "words": len(words),
+        "wpm": round(wpm, 1),
+        "unique_ratio": round(unique_ratio, 3),
+    }
 
 
 def validate_audio_file(file_path: str) -> tuple[bool, str]:

@@ -1076,3 +1076,37 @@ Android (`Android/data/<pkg>/files/output/<kind>/`):
       type safety (68) and contracts (70). The 61 "recovered, no evidence"
       review records were marked false positive after the fresh review replaced
       them.
+
+## Recording digests and self-healing ASR (2026-11-23)
+
+- [x] `unified/meeting_digest.py`: deterministic digest of a long recording —
+      speech statistics that need no diarization, long pauses (>= 25 s) as
+      topic-switch markers, and the transcript split into timestamped chunks
+      under `DEFAULT_MAX_CHARS_PER_CHUNK`, so a one-hour meeting can be read one
+      chunk at a time instead of blowing a single AI context window.
+- [x] `unified.transcription_utils.assess_transcript_quality()`: cheap
+      badness gate for an ASR result (`no-speech`, `low-word-rate`,
+      `repetition-loop`). It only flags measurable breakage; a merely imperfect
+      transcript passes.
+- [x] `pc/scripts/transcribe_recordings.py` now runs the retry ladder itself
+      (base -> beam 5 -> VAD off -> +30 dB), stops at the first attempt that
+      passes the gate, keeps every rejected attempt as `<name>.roughN.*` and
+      writes `<name>.txt|.srt|.json|.digest.md` through the existing
+      `transcribe_income.write_outputs` formatter.
+- [x] Tests: `tests/test_meeting_digest.py` (9) and five quality-gate cases in
+      `tests/test_transcription_utils.py`. Stubbed-ladder harness on a 10 min
+      fake recording: loop attempt rejected, `rough1.*` kept, `beam5` won,
+      digest rendered with one 30 s pause. Not verified: a real transcription
+      run on GPU hardware.
+- [x] Digest carries a `## Chunk index` with each chunk's time range, words,
+      characters, speech share, a `mostly silence` flag and the exact line where
+      the chunk starts, so a reader opens a bounded line range instead of the
+      whole file. A test asserts every index row points at its real chunk header.
+- [x] Nightly Cindy automation prompt rewritten from 1 403 to 996 words: it now
+      names the script, the four artifacts and the `status` values, bans reading
+      the raw `.txt`, reads digest chunks one at a time by line range, caps a run
+      at two recordings and drops the old retry ladder and env-var documentation.
+- [ ] Remaining: the automation still runs `nvidia-nemotron-3.5-bolt-e4b` through
+      LM Studio at n_ctx 32 000. The digest keeps each read bounded, but a
+      56 min meeting is still ~14 k transcript tokens, so a larger context or a
+      cloud model would be the next real headroom.

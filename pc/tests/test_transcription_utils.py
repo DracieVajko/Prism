@@ -30,3 +30,38 @@ def test_split_text_respects_max_chars_and_keeps_text():
     assert len(chunks) > 1
     assert all(len(chunk) <= 220 for chunk in chunks)
     assert "One sentence." in chunks[0]
+
+
+def test_quality_gate_passes_a_normal_transcript():
+    words = [f"word{i}" for i in range(140)]
+    segments = [{"start": 0.0, "end": 60.0, "text": " ".join(words)}]
+    quality = tu.assess_transcript_quality(segments, duration_s=60.0)
+    assert quality["ok"] is True
+    assert quality["reasons"] == []
+    assert quality["wpm"] == 140.0
+
+
+def test_quality_gate_flags_no_speech():
+    quality = tu.assess_transcript_quality([], duration_s=600.0)
+    assert quality["ok"] is False
+    assert quality["reasons"] == ["no-speech"]
+
+
+def test_quality_gate_flags_a_decoder_loop():
+    segments = [{"start": 0.0, "end": 60.0, "text": "a b c d e f " * 50}]
+    quality = tu.assess_transcript_quality(segments, duration_s=60.0)
+    assert quality["ok"] is False
+    assert "repetition-loop" in quality["reasons"]
+
+
+def test_quality_gate_flags_speech_the_vad_ate():
+    segments = [{"start": 0.0, "end": 5.0, "text": "one two three four five"}]
+    quality = tu.assess_transcript_quality(segments, duration_s=600.0)
+    assert quality["ok"] is False
+    assert "low-word-rate" in quality["reasons"]
+
+
+def test_quality_gate_ignores_word_rate_on_very_short_clips():
+    segments = [{"start": 0.0, "end": 2.0, "text": "hi"}]
+    assert tu.assess_transcript_quality(segments, duration_s=3.0)["ok"] is True
+    assert tu.assess_transcript_quality(segments)["ok"] is True
