@@ -4,7 +4,7 @@ $pcDir = Split-Path -Parent $PSScriptRoot
 Set-Location $pcDir
 $log = Join-Path $pcDir "logs\service.out.log"
 New-Item -ItemType Directory -Force -Path (Split-Path $log) | Out-Null
-# Bind all interfaces so LAN and Tailscale clients (Cindy, Odysseus, the
-# Android app) can attach. Prism has no authentication: keep 8101 on a
-# trusted LAN / tailnet, never on the public internet.
+$env:PRISM_ASR_MODEL = "turbo"
+# Bind all interfaces for LAN/Tailscale clients. Prism has no auth by default:
+# keep 8101 on a trusted LAN/tailnet, never on the public internet.
 & "C:\Python314\python.exe" -m uvicorn unified_server:app --host 0.0.0.0 --port 8101 *>> $log

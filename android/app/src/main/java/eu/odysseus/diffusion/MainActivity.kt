@@ -86,6 +86,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnPickImage: MaterialButton
     private lateinit var imageFileLabel: TextView
     private lateinit var btnUpscale: MaterialButton
+    private lateinit var btnColorize: MaterialButton
     private lateinit var btnCaption: MaterialButton
     private lateinit var btnOcr: MaterialButton
     private lateinit var ocrOut: TextView
@@ -220,6 +221,7 @@ class MainActivity : AppCompatActivity() {
         btnPickImage = findViewById(R.id.btnPickImage)
         imageFileLabel = findViewById(R.id.imageFileLabel)
         btnUpscale = findViewById(R.id.btnUpscale)
+        btnColorize = findViewById(R.id.btnColorize)
         btnCaption = findViewById(R.id.btnCaption)
         btnOcr = findViewById(R.id.btnOcr)
         visionOut = findViewById(R.id.visionOut)
@@ -1070,6 +1072,7 @@ class MainActivity : AppCompatActivity() {
         AppConfig.llmModel = prefs.getString("llm_model", "") ?: ""
         AppConfig.llmMaxContextTokens = prefs.getInt("llm_max_context", 4096)
         AppConfig.llmOutputReserve = prefs.getInt("llm_output_reserve", 1024)
+        AppConfig.hfToken = prefs.getString("hf_token", "") ?: ""
 
         fun applyTheme(mode: String) {
             val m = when (mode) {
@@ -1157,6 +1160,17 @@ class MainActivity : AppCompatActivity() {
                 layout.addView(et)
                 return et
             }
+            val tvHf = android.widget.TextView(this).apply {
+                text = "HuggingFace token (gated model downloads)"; textSize = 12f
+                setPadding(0, pad, 0, 0)
+            }
+            val etHf = android.widget.EditText(this).apply {
+                setText(AppConfig.hfToken); setHint("hf_..."); textSize = 12f
+                inputType = android.text.InputType.TYPE_CLASS_TEXT or
+                        android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+            }
+            layout.addView(tvHf)
+            layout.addView(etHf)
             val etProvider = labeledEdit("Provider (gemma/gemini/openai/mistral/custom/pc)", AppConfig.llmProvider)
             val etBase = labeledEdit("Base URL (OpenAI-compatible)", AppConfig.llmBaseUrl, "https://api.openai.com/v1")
             val etKey = labeledEdit("API key", AppConfig.llmApiKey, "sk-...")
@@ -1164,15 +1178,17 @@ class MainActivity : AppCompatActivity() {
             val etCtx = labeledEdit("Max context tokens", AppConfig.llmMaxContextTokens.toString(), "4096")
             val etReserve = labeledEdit("Output reserve tokens", AppConfig.llmOutputReserve.toString(), "1024")
             android.app.AlertDialog.Builder(this)
-                .setTitle("LLM settings")
-                .setView(layout)
+                .setTitle("API & model settings")
+                .setView(android.widget.ScrollView(this).apply { addView(layout) })
                 .setPositiveButton("Save") { _, _ ->
+                    val hf = etHf.text.toString().trim()
                     val provider = etProvider.text.toString().trim().ifEmpty { "gemma" }
                     val base = etBase.text.toString().trim()
                     val key = etKey.text.toString().trim()
                     val model = etModel.text.toString().trim()
                     val ctx = etCtx.text.toString().toIntOrNull() ?: 4096
                     val reserve = etReserve.text.toString().toIntOrNull() ?: 1024
+                    AppConfig.hfToken = hf
                     AppConfig.llmProvider = provider
                     AppConfig.llmBaseUrl = base
                     AppConfig.llmApiKey = key
@@ -1180,6 +1196,7 @@ class MainActivity : AppCompatActivity() {
                     AppConfig.llmMaxContextTokens = ctx
                     AppConfig.llmOutputReserve = reserve
                     prefs.edit()
+                        .putString("hf_token", hf)
                         .putString("llm_provider", provider)
                         .putString("llm_base_url", base)
                         .putString("llm_api_key", key)
@@ -1187,7 +1204,7 @@ class MainActivity : AppCompatActivity() {
                         .putInt("llm_max_context", ctx)
                         .putInt("llm_output_reserve", reserve)
                         .apply()
-                    toast("LLM settings saved")
+                    toast("Settings saved")
                 }
                 .setNegativeButton("Cancel", null)
                 .show()
@@ -1209,8 +1226,58 @@ class MainActivity : AppCompatActivity() {
             btnSaveTranscript.visibility = android.view.View.GONE
         }
         btnUpscale.setOnClickListener { runUpscale() }
+        btnColorize.setOnClickListener { runColorize() }
         btnCaption.setOnClickListener { runCaption() }
         btnOcr.setOnClickListener { runOcr() }
+    }
+
+    /**
+     * Colorize the picked photo with DeOldify (the default, same as the PC).
+     * The endpoint returns a PNG; the result is shown in the preview and can be
+     * saved with the existing Save button.
+     */
+    private fun runColorize() {
+        val uri = imageUri ?: run { toast("Pick an image first"); return }
+        visionOut.text = "colorizing…"
+        btnColorize.isEnabled = false
+        Thread {
+            val bytes = contentResolver.openInputStream(uri)?.use { it.readBytes() }
+            if (bytes == null) {
+                handler.post { btnColorize.isEnabled = true; visionOut.text = "error: cannot read file" }
+                return@Thread
+            }
+            val b64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+            val body = org.json.JSONObject()
+                .put("image", b64)
+                .put("model", "deoldify-artistic")
+                .toString()
+            val resp = httpPostJson("http://127.0.0.1:8101/v1/images/colorize", body)
+            handler.post {
+                btnColorize.isEnabled = true
+                if (resp == null) {
+                    visionOut.text = "error: no response"
+                    return@post
+                }
+                try {
+                    val j = org.json.JSONObject(resp)
+                    val out = j.optString("image", "")
+                    if (out.isEmpty()) {
+                        visionOut.text = "error: " + j.optString("error", resp)
+                        return@post
+                    }
+                    val outBytes = android.util.Base64.decode(out, android.util.Base64.DEFAULT)
+                    val bmp = android.graphics.BitmapFactory.decodeByteArray(outBytes, 0, outBytes.size)
+                    lastBitmap = bmp
+                    genImage.setImageBitmap(bmp)
+                    genImage.visibility = View.VISIBLE
+                    btnSaveImage.visibility = View.VISIBLE
+                    visionOut.text = "colorized (" + j.optString("engine", "?") + ", " +
+                        j.optDouble("elapsed", 0.0) + " s)"
+                } catch (e: Exception) {
+                    visionOut.text = "error: ${e.message}"
+                }
+            }
+        }.start()
     }
 
     private fun activeBaseUrl(): String {
@@ -1372,7 +1439,7 @@ class MainActivity : AppCompatActivity() {
                                             val handle = GemmaLib.loadTextModel(modelPath)
                                             if (handle == 0L) null
                                             else {
-                                                val r = GemmaLib.generateText(handle, prompt, 1024)
+                                                val r = GemmaLib.generateText(handle, prompt, AppConfig.llmOutputReserve)
                                                 GemmaLib.releaseTextModel(handle)
                                                 r
                                             }

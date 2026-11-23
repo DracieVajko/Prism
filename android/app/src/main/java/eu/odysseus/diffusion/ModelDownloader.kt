@@ -315,6 +315,11 @@ class ModelDownloader(private val ctx: Context) {
             readTimeout = 60_000
             instanceFollowRedirects = true
             setRequestProperty("User-Agent", "Odysseus/1.0 (Android)")
+            // Gated HuggingFace repos need a bearer token; empty = anonymous.
+            val hfToken = AppConfig.hfToken.trim()
+            if (hfToken.isNotEmpty() && file.url.contains("huggingface.co")) {
+                setRequestProperty("Authorization", "Bearer $hfToken")
+            }
             if (existing > 0) setRequestProperty("Range", "bytes=$existing-")
         }
 
@@ -389,6 +394,11 @@ class ModelDownloader(private val ctx: Context) {
         if (files.length() == 0) {
             throw java.io.IOException("install finished with no files in ${dir.name}")
         }
+        // Fail the install instead of reporting "downloaded" for a model the
+        // engine cannot load. Runs after extraction, before the manifest.
+        validateInstall(asset, dir)?.let { problem ->
+            throw java.io.IOException("install unusable: $problem")
+        }
         val root = JSONObject()
             .put("id", asset.id)
             .put("kind", asset.kind)
@@ -397,6 +407,56 @@ class ModelDownloader(private val ctx: Context) {
             .put("finished_at", System.currentTimeMillis())
         manifest(asset.id).writeText(root.toString(2))
         Log.i(TAG, "manifest ${asset.id}: ${files.length()} file(s)")
+    }
+
+    /**
+     * Post-download build/verification.
+     *
+     * Some models need more than "the files exist": Real-ESRGAN needs a
+     * matching .param/.bin pair, Whisper needs model.bin, ONNX engines need at
+     * least one .onnx. Without this check the UI said "installed" and the first
+     * request failed with 503.
+     *
+     * @return null when usable, otherwise a human-readable reason.
+     */
+    private fun validateInstall(asset: ModelAsset, dir: File): String? {
+        val files = dir.walkTopDown().filter { it.isFile && it.length() > 0 }.toList()
+        val has = { ext: String -> files.any { it.extension.equals(ext, true) } }
+
+        if (asset.id.startsWith("realesrgan", true) || asset.kind == "upscale") {
+            val params = files.filter { it.extension.equals("param", true) }
+            if (params.isEmpty()) return "no .param weights (ncnn needs .param + .bin)"
+            val preferred = params.firstOrNull {
+                it.name.equals("realesrgan-x4plus.param", true)
+            } ?: params.firstOrNull {
+                it.name.contains("x4plus", true) && !it.name.contains("anime", true)
+            } ?: params.first()
+            val stem = preferred.nameWithoutExtension
+            val bin = files.firstOrNull { it.name == "$stem.bin" }
+                ?: files.firstOrNull { it.extension.equals("bin", true) }
+            if (bin == null) return "no matching .bin for ${preferred.name}"
+            return null
+        }
+
+        if (asset.kind == "audio") {
+            if (files.none { it.name == "model.bin" || it.extension.equals("gguf", true) }) {
+                return "no model.bin / .gguf in the audio model"
+            }
+            return null
+        }
+
+        // Require the runtime format the catalog promised. Derived from the
+        // declared file list, not from the kind, so a LoRA-only asset is fine.
+        val declaredExts = asset.files.map { it.path.substringAfterLast('.', "").lowercase() }
+            .filter { it.isNotEmpty() }
+            .toSet()
+        if ("onnx" in declaredExts && !has("onnx")) {
+            return "no .onnx file in the model"
+        }
+        if ("gguf" in declaredExts && !has("gguf")) {
+            return "no .gguf file in the model"
+        }
+        return null
     }
 
     private fun unzipArchives(dir: File) {

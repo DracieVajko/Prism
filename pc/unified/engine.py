@@ -34,6 +34,9 @@ def init_diffusion_engine() -> bool:
         # registry is initialised through one code path (no second Namespace
         # that can drift out of sync with the CLI).
         ds.ensure_registry()
+        # NSFW safety checker is ON by default (enforced). The user can disable
+        # it via the --disable-safety-checker CLI flag or the settings page if
+        # they want unfiltered output for local testing.
         _inited = True
         return True
     except Exception as e:

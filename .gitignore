@@ -62,7 +62,9 @@ android/*/build/
 *.p12
 *.pfx
 credentials.*
-secrets.*
+secrets.json
+secrets.yaml
+secrets.yml
 secret.*
 credentials.json
 token.json
@@ -111,3 +113,12 @@ scorecard.png
 
 # Schemathesis cache
 .schemathesis/
+
+# Local secrets (HF token, LLM/API keys) - never commit
+settings.local.json
+
+# Personal model keep-list (user-specific)
+MODELS-KEEP.md
+
+# Desloppify local state
+.desloppify/

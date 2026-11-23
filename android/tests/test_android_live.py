@@ -241,7 +241,7 @@ def main():
     def upscale():
         # 4x on a 256 source -> 1024 keeps the phone responsive; 512 -> 2048 is
         # refused by the mobile cap and checked separately below.
-        src = Image.open(TD / "images" / "test_512.png").convert("RGB").resize((256, 256))
+        src = Image.open(TD / "images" / "dense_market_street.jpg").convert("RGB").resize((256, 256))
         r = c.post("/v1/images/upscale", json={"image": png_b64(src), "scale": 4})
         assert r.status_code == 200, r.text[:200]
         j = r.json()
@@ -254,7 +254,7 @@ def main():
         return f"{out.size} std={a.std():.1f} engine={r.json().get('engine')}"
 
     def upscale_cap():
-        src = Image.open(TD / "images" / "test_512.png").convert("RGB")
+        src = Image.open(TD / "images" / "dense_market_street.jpg").convert("RGB")
         r = c.post("/v1/images/upscale", json={"image": png_b64(src), "scale": 4})
         assert r.status_code == 400, f"expected the mobile cap, got {r.status_code}"
         return r.json().get("error", "")[:60]
@@ -363,7 +363,7 @@ def main():
         return f"{info['duration_s']:.1f}s {kinds}"
 
     def ff_image():
-        files = {"file": ("t.png", (TD / "images" / "test_512.png").read_bytes(), "image/png")}
+        files = {"file": ("t.png", (TD / "images" / "dense_market_street.jpg").read_bytes(), "image/png")}
         r = c.post("/v1/ffmpeg/convert-image", files=files, data={"preset": "jpg-95"})
         assert r.status_code == 200, r.text[:160]
         raw = base64.b64decode(r.json()["file"])

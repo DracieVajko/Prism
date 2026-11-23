@@ -329,19 +329,31 @@ def _dir_gb(path: Path) -> float:
                if f.is_file() and not f.name.endswith(PARTIAL_SUFFIXES)) / 1e9
 
 
-def is_task_installed(task: dict) -> bool:
-    """A model is installed if it has enough data (min_gb) or is a
-    single-file model with an existing file."""
-    if task.get("kind") == "whisper":
-        return whisper_installed(task["id"])
+def _has_bytes(task: dict) -> bool:
+    """Downloaded data present and big enough (ignores preparation)."""
     target = _target_path(task)
-    if task.get("kind") == "file":
-        f = target / task["file"]
-        return f.is_file() and f.stat().st_size / 1e9 >= task.get("min_gb", 0.0)
-    if task.get("kind") == "url":
+    if task.get("kind") in ("file", "url"):
         f = target / task["file"]
         return f.is_file() and f.stat().st_size / 1e9 >= task.get("min_gb", 0.0)
     return _dir_gb(target) >= task.get("min_gb", 0.0)
+
+
+def is_task_installed(task: dict) -> bool:
+    """A model is installed when it has enough data AND is prepared.
+
+    "Prepared" covers build steps such as the Real-ESRGAN ONNX export: the
+    download alone is not enough to serve a request, so the UI must not offer
+    the model until the hook has run.
+    """
+    if task.get("kind") == "whisper":
+        return whisper_installed(task["id"])
+    if not _has_bytes(task):
+        return False
+    try:
+        import download_models as dm
+        return dm.is_prepared(task)
+    except Exception:
+        return True
 
 
 def catalog() -> list:
@@ -394,6 +406,10 @@ def _run_install(task: dict):
             dm.download_url(task)
         else:
             dm.download_hf(task)
+        # Run the build step (if any) so the model is usable the moment the
+        # Download button finishes; a failure is reported honestly.
+        _set_state(task["id"], state="preparing", progress=100, error="")
+        dm.prepare_task(task)
         ok = is_task_installed(task)
         _set_state(task["id"], state="done" if ok else "error",
                    progress=100, error="" if ok else "download incomplete")

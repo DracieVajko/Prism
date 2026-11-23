@@ -93,17 +93,18 @@ def init(model_id: str | None = None) -> bool:
         return False
     try:
         import torch
-        from transformers import AutoModelForRNNT, AutoProcessor
+        try:
+            from transformers import Nemotron3_5AsrProcessor as _ProcessorCls
+            from transformers import Nemotron3_5AsrForRNNT as _ModelCls
+        except Exception:
+            from transformers import AutoProcessor as _ProcessorCls
+            from transformers import AutoModelForRNNT as _ModelCls
 
         d = str(_model_dir(mid))
         _device = (os.environ.get("PRISM_NEMOTRON_DEVICE") or _auto_device()).strip().lower()
-        # float32 on purpose: the predictor is an LSTM and cuDNN in bf16 made a
-        # single 11 s clip hang for minutes ("RNN module weights are not part of
-        # single contiguous chunk of memory", re-compacting on every call).
-        # 0.6B in fp32 is 2.55 GB, which fits the 6 GB card.
         dtype = torch.float32
-        _processor = AutoProcessor.from_pretrained(d)
-        _model = AutoModelForRNNT.from_pretrained(d, dtype=dtype, device_map=_device)
+        _processor = _ProcessorCls.from_pretrained(d)
+        _model = _ModelCls.from_pretrained(d, dtype=dtype, device_map=_device)
         _model.eval()
         # Flatten the LSTM weights once instead of on every forward.
         for module in _model.modules():

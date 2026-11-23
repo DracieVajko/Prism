@@ -108,6 +108,12 @@ def should_idle_unload(mm, limit: int) -> bool:
         return False
     if mm.in_flight() > 0:
         return False
+    try:
+        from unified.media_routes import _REALTIME_WS_CONNECTIONS
+        if _REALTIME_WS_CONNECTIONS > 0:
+            return False
+    except Exception:
+        pass
     return mm.idle_seconds() >= limit
 
 
@@ -199,7 +205,8 @@ async def _require_token(request, call_next):
     """
     path = request.url.path
     if (not API_TOKEN or request.method == "OPTIONS"
-            or path == "/health" or not path.startswith("/v1/")):
+            or path in ("/health", "/healthz")
+            or not path.startswith("/v1/")):
         return await call_next(request)
     if request.headers.get("authorization", "") != f"Bearer {API_TOKEN}":
         return JSONResponse(status_code=401, content={
@@ -284,6 +291,7 @@ def _engines_disabled() -> bool:
 def _raise_loading(e: ModelLoadingError):
     return JSONResponse(
         status_code=503,
+        headers={"Retry-After": str(e.retry_after)},
         content={"error": "loading model", "loading_model": e.loading_model,
                  "retry_after": e.retry_after},
     )
@@ -434,6 +442,43 @@ def root():
     return RedirectResponse(url="/webui")
 
 
+@app.get("/healthz")
+def healthz():
+    # Liveness probe: must never touch the model lock or heavy registries, so
+    # supervisors (and Cindy's 3-5s timeout) can probe during long transcriptions.
+    resident = 0
+    try:
+        from unified.media_routes import _WHISPER_CACHE
+        resident = len(_WHISPER_CACHE)
+    except Exception:
+        resident = 0
+    loaded = False
+    whisper_name = ""
+    try:
+        st = _manager.status()
+        if st.get("loaded_kind") == "audio":
+            loaded = True
+            whisper_name = st.get("loaded_id") or ""
+    except Exception:
+        loaded = False
+        whisper_name = ""
+    configured = "turbo"
+    try:
+        from unified.registry import build_registry
+        configured = build_registry().get("default_audio_model", "turbo")
+    except Exception:
+        configured = "turbo"
+    return {
+        "ok": True,
+        "status": "ok",
+        "asr_model": (whisper_name or configured),
+        "loaded_model": (whisper_name or None),
+        "loaded": bool(loaded),
+        "audio_whisper_models_resident": resident,
+        "uptime_s": round(time.time() - _START_TS, 1),
+    }
+
+
 @app.get("/health")
 def health():
     reg = _image_registry()
@@ -540,25 +585,8 @@ def list_models():
             "downloadable": bool(entry),
             "has_source": bool(entry),
         })
-    # NVIDIA Nemotron 3.5 ASR: a real alternative to faster-whisper (40
-    # languages, native punctuation). Installed state is checked on disk.
-    try:
-        from unified import nemotron_asr as _nemo
-        data.append({
-            "id": _nemo.MODEL_ID, "object": "model", "owned_by": "nvidia",
-            "kind": "audio",
-            "label": "Nemotron 3.5 ASR 0.6B (40 languages, punctuated)",
-            "engine": "nemotron-asr",
-            "installed": _nemo.is_installed(),
-            "available": _nemo.is_installed(),
-            "size_mb": 2552,
-            "install_state": "idle",
-            "install_progress": 0,
-            "downloadable": True,
-            "has_source": _nemo.is_installed(),
-        })
-    except Exception:
-        pass
+    # Nemotron ASR is intentionally not advertised: the 0.6B RNNT path is broken
+    # in transformers 5.x. Keep the module importable for tests only.
 
     # TTS: Supertonic 3 (multilingual, on-device on PC).
     try:
@@ -1007,7 +1035,6 @@ def harmonize(req: HarmonizeRequest):
 
 @app.post("/v1/images/upscale")
 def upscale(req: UpscaleRequest):
-    logger.error("DEBUG upscale globals _store_b64: %s", "_store_b64" in globals())
     rid = req.request_id or f"req-{uuid.uuid4().hex[:8]}"
     model_id = (req.model or "RealESRGAN_x4v3").strip()
     try:
@@ -1260,12 +1287,18 @@ InstallRequest = InstallRequest
 
 
 @app.on_event("startup")
-def _debug_store_b64():
-    logger.error("DEBUG startup _store_b64 in globals: %s", "_store_b64" in globals())
-    logger.error("DEBUG startup upscale globals: %s", "_store_b64" in upscale.__globals__)
-    logger.error("DEBUG startup upscale func id: %s", id(upscale))
+def _load_local_settings():
+    """Apply settings.local.json (HF token, LLM provider) before any request."""
+    try:
+        from unified import secrets
+        secrets.load_and_apply()
+        if secrets.hf_token():
+            logger.info("HF token loaded from settings (value redacted)")
+    except Exception as e:
+        logger.warning("Could not load settings.local.json: %s", e)
 
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("unified_server:app", host="127.0.0.1", port=8101, workers=1)
+    uvicorn.run("unified_server:app", host=os.getenv("HOST", "127.0.0.1"), port=int(os.getenv("PORT", "8101")), workers=1)
+

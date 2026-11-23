@@ -66,7 +66,7 @@ if r is not None and r.status_code == 200:
            f"requested_size={j.get('requested_size')}")
 
 print("\n=== EDITS / INPAINT / HARMONIZE ===")
-img_bytes = (TD / "images" / "test_512.png").read_bytes()
+img_bytes = (TD / "images" / "dense_market_street.jpg").read_bytes()
 img_b64 = base64.b64encode(img_bytes).decode()
 mask_b64 = base64.b64encode((TD / "images" / "mask_512.png").read_bytes()).decode()
 

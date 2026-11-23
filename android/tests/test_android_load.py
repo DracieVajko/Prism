@@ -11,7 +11,7 @@ ADB = os.path.join(os.environ["LOCALAPPDATA"], "Android", "Sdk", "platform-tools
 TD = Path(__file__).resolve().parents[2] / "testdata"
 
 c = httpx.Client(base_url=BASE, timeout=1200.0)
-img_b64 = base64.b64encode((TD / "images" / "test_512.png").read_bytes()).decode()
+img_b64 = base64.b64encode((TD / "images" / "dense_market_street.jpg").read_bytes()).decode()
 mask_b64 = base64.b64encode((TD / "images" / "mask_512.png").read_bytes()).decode()
 
 

@@ -102,6 +102,7 @@ class EngineConfig:
     negative_prompt: str = ""
     single_file_config: str = ""
     pipeline: str = ""
+    prediction_type: str = ""  # "" = auto (epsilon), "v_prediction" for v-pred models
     width: int = 1024
     height: int = 1024
     cpu_offload: bool = False
@@ -714,16 +715,26 @@ def _discover_models() -> dict:
     found = {}
 # Directories that are not diffusion weights (VLM, upscale) — auto-discovery ignores them.
     NON_DIFFUSION_DIRS = {
+        # Every non-StableDiffusion snapshot: OCR/VLM, ASR, TTS, upscale,
+        # colorize and the FLUX/Z-Image pipelines. Anything listed here is
+        # skipped by auto-discovery, which otherwise registers a 14 GB
+        # transformer as a "guessed StableDiffusionPipeline".
         "AbsoluteReality_1.8", "AnimagineXL_3.1", "DreamShaper_8",
-        "JuggernautXL_v9", "LCM_Dreamshaper_ONNX", "SDXL_Turbo",
-        "ddcolor-full", "ddcolor-tiny", "falcon-ocr", "faster-whisper-large",
-        "faster-whisper-turbo", "flux-kontext-dev", "gfpgan-v1.4", "glm-ocr",
-        "granite-docling-258m", "granite-speech-470m", "instruct-pix2pix",
-        "lightonocr-2-1b", "nemotron-asr-0.6b", "nemotron-ocr-0",
-        "nemotron-transcribe-30b-a4b-nvfp4", "ovis-ocr2", "paddleocr-vl-1.6",
-        "qianfan-ocr", "qwen3-asr-0.6b", "qwen3-vl-2b", "RealESRGAN_x4v3",
-        "supertonic-3-tts-int8", "swinir-realsr-x4", "Vision", "Upscale",
-        "VLM", "z-image-turbo",
+        "JuggernautXL_v9", "NoobAI-XL-Vpred", "SDXL_Turbo", "amazing-logos-v3",
+        "LCM_Dreamshaper_ONNX",
+        "ddcolor-full", "ddcolor-artistic", "ddcolor-tiny",
+        "deoldify-artistic",
+        "falcon-ocr", "glm-ocr", "granite-docling-258m", "lightonocr-2-1b",
+        "nemotron-ocr-0", "ovis-ocr2", "paddleocr-vl-1.6", "qianfan-ocr",
+        "qwen3-vl-2b", "Vision", "VLM",
+        "faster-whisper-large", "faster-whisper-turbo", "granite-speech-470m",
+        "nemotron-transcribe-30b-a4b-nvfp4", "qwen3-asr-0.6b",
+        "supertonic-3-tts-int8",
+        "RealESRGAN_x4v3", "swinir-realsr-x4", "Upscale",
+        "z-image-turbo", "z-image-turbo-fp8",
+        "flux-kontext-dev", "flux-kontext-dev-fp8",
+        # Removed models: listed so a leftover directory never gets guessed.
+        "gfpgan-v1.4", "instruct-pix2pix",
     }
     try:
         models_dir = Path(__file__).resolve().parent / "models"
@@ -893,6 +904,7 @@ def _apply_profile(model_id: str):
     _args.negative_prompt = neg
     _args.attention_slicing = bool(prof.get("attention_slicing", True))
     _args.vae_slicing = bool(prof.get("vae_slicing", True))
+    _args.prediction_type = str(prof.get("prediction_type", "") or "")
     _args.cpu_offload = bool(prof.get("cpu_offload", False))
     try:
         # Preset low: force CPU offload for heavy (>4 GB) weights so tight
@@ -1524,6 +1536,18 @@ def load_model(device: str | None = None, dtype: str | None = None):
 
     if not loaded:
         raise RuntimeError(f"Could not load model from {model_path}. Check diffusers version and model format.")
+
+    # Apply v-prediction scheduler if the model requires it (e.g. NoobAI-XL Vpred).
+    # The base SDXL scheduler uses epsilon prediction; v-pred models need v_prediction.
+    if getattr(_args, "prediction_type", ""):
+        try:
+            from diffusers import EulerDiscreteScheduler
+            _pipe.scheduler = EulerDiscreteScheduler.from_config(
+                _pipe.scheduler.config, prediction_type=_args.prediction_type)
+            logger.info("Scheduler set to %s (prediction_type=%s)",
+                        type(_pipe.scheduler).__name__, _args.prediction_type)
+        except Exception as e:
+            logger.warning("Could not set prediction_type: %s", e)
 
     # Memory optimizations
     if _args.attention_slicing:

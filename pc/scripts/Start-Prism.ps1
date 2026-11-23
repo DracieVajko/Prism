@@ -56,6 +56,9 @@ function Test-AnyListener($port) {
 
 $python = Find-Python
 $BindHost = if ($Remote) { "0.0.0.0" } else { "127.0.0.1" }
+if ($Remote -and -not $env:PRISM_API_TOKEN) {
+    Write-Warning "Remote bind without PRISM_API_TOKEN exposes an unauthenticated API on the LAN/Tailscale. Set PRISM_API_TOKEN before using -Remote."
+}
 
 # Pick a free/Prism port. 8101 may still be the legacy service without WebUI.
 $chosen = $Port

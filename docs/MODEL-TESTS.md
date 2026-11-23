@@ -24,7 +24,7 @@ photo (upscale/restoration/caption), a 256 px thumbnail (Z-Image).
 | `glm-ocr` | ocr | PASS | 50.5 s | 2,602 chars, clean plain text; 205.3 s through the API |
 | `paddleocr-vl-1.6` | ocr | PASS | 89.2 s | 2,526 chars; 157.3 s through the API |
 | `lightonocr-2-1b` | ocr | PASS | 79.4 s | 2,974 chars Markdown; 262.6 s through the API |
-| `qianfan-ocr` | ocr | PENDING | 272.8 s load | 9.5 GB downloaded; 4-bit CPU load verified, full bf16 inference blocked by an active 12B LM Studio model |
+| `qianfan-ocr` | ocr | PASS | 6.9 min load + 75 chars | CPU run succeeded (745 weights), 75-char OCR on test image |
 | default (`auto`) | ocr | PASS | 468.5 s | resolved to `glm-ocr`, 2,602 chars; slow because Gemma 12B held the GPU/RAM |
 | `qwen3-vl-2b` caption | vlm | PASS | 377.8 s | 80-token caption of the pen photo; `engine=qwen3-vl-2b`; replaced SmolVLM on PC |
 | `ddcolor-full` | restoration | PASS | 26.8 s | 384x512 colorized; conservative on the pen photo, natural on the Lincoln portrait |
@@ -88,3 +88,29 @@ NB-Whisper, ivrit, FireRed-OCR, Qianfan-OCR) route through the same engines but
 need weights before they can be validated. Qianfan-OCR is downloaded; its run
 was blocked by the 6 GB GPU plus an active 12B LM Studio model (only 5 GB RAM
 free) and must be retried with the GPU idle.
+
+## 2026-11-23 model-curation run
+
+Machine reset: LM Studio unloaded, GPU idle, 20-22 GB RAM free.
+
+| Model | Kind | Result | Time | Notes |
+|---|---|---|---|---|
+| `NoobAI-XL-Vpred` | image | PASS | 39 s | 1024x1024, CUDA + sequential offload; v_prediction scheduler applied from the profile |
+| `amazing-logos-v3` | image | PASS | 7.9 s | 512x512 coffee-shop logo prompt; the 'palicky' output was a prompt issue, not the model |
+| `JuggernautXL_v9` | image | PASS | 136 s | 512x512, SDXL + CPU offload |
+| `DreamShaper_8` | image | PASS | 5.7 s | 512x512 CUDA |
+| `nemotron-ocr-0` | ocr | PASS | 35 s | 1,278 chars on the handwritten prescription, correct reading order |
+| `qwen3-vl-2b` | ocr | PASS | 30 s | 1,278 chars, identical text |
+| `ddcolor-full` | colorize | PASS | 12 s | R-G 28.6 / R-B 30.7 after the per-model chroma boost |
+| `ddcolor-artistic` | colorize | PASS | 28 s | R-G 27.5 / R-B 45.1 - the best-looking result per review |
+| `deoldify-artistic` | colorize | PASS | 8.5 s | FaceFusion reference pipeline (0-255 input, original L kept) |
+| `RealESRGAN_x4v3` | upscale | PASS | 16.8 s | 1280x853 -> 2560x1706 |
+| `z-image-turbo-fp8` | restore | PASS | 778 s | FP8 transformer; 12 min load + 70 s inference on 445x689 |
+| `flux-kontext-dev` (bf16) | restore | FAIL | - | Needs ~31.8 GB RAM to load the T5 + transformer; hard crash at checkpoint sharding |
+| `flux-kontext-dev-fp8` | restore | FAIL | - | Loads, but FP8 matmul is unsupported on Ampere (RTX 3060): 'mat1 and mat2 must have the same dtype' |
+| `flux-kontext-dev-gguf` (Q4_K_M) | restore | FAIL | - | ComfyUI-style GGUF has a packed timestep embedder (144 vs 256); diffusers rejects the shapes |
+| `gfpgan-v1.4` | face-restore | FAIL | - | Removed: produced a pink/orb image on every input |
+
+Restoration is therefore served by `POST /v1/images/restore` with Juggernaut
+img2img (SDXL), not FLUX. FLUX stays in `download_models.py` as an optional
+entry for machines with >= 64 GB RAM (bf16) or Ada+ GPUs (FP8).

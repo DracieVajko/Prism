@@ -9,7 +9,7 @@ from PIL import Image
 BASE = "http://127.0.0.1:8199"
 TD = Path(__file__).resolve().parents[2] / "testdata"
 c = httpx.Client(base_url=BASE, timeout=1200.0)
-src_bytes = (TD / "images" / "test_512.png").read_bytes()
+src_bytes = (TD / "images" / "dense_market_street.jpg").read_bytes()
 src_b64 = base64.b64encode(src_bytes).decode()
 src = np.asarray(Image.open(io.BytesIO(src_bytes)).convert("RGB")).astype(np.int16)
 

@@ -25,7 +25,22 @@ from PIL import Image
 logger = logging.getLogger(__name__)
 
 MODEL_ID = "flux-kontext-dev"
-MODEL_DIR = Path(__file__).resolve().parent.parent / "models" / "flux-kontext-dev"
+# Full bf16 snapshot first, then the FP8 build. Both are FluxKontextPipeline;
+# FP8 is ~21.8 GB on disk and loads on machines where bf16 (~31.8 GB) will not.
+MODEL_DIRS = [
+    Path(__file__).resolve().parent.parent / "models" / "flux-kontext-dev",
+    Path(__file__).resolve().parent.parent / "models" / "flux-kontext-dev-fp8",
+]
+
+
+def _model_dir() -> Path:
+    for d in MODEL_DIRS:
+        if (d / "model_index.json").is_file():
+            return d
+    return MODEL_DIRS[0]
+
+
+MODEL_DIR = _model_dir()
 
 _PIPELINE = None
 
@@ -34,18 +49,25 @@ def _ensure_pipeline() -> object | None:
     global _PIPELINE
     if _PIPELINE is not None:
         return _PIPELINE
-    if not (MODEL_DIR / "model_index.json").exists():
-        logger.warning("FLUX.1-Kontext-dev model not found: %s", MODEL_DIR)
+    model_dir = _model_dir()
+    if not (model_dir / "model_index.json").exists():
+        logger.warning("FLUX.1-Kontext-dev model not found: %s", model_dir)
         return None
     try:
         import torch
         from diffusers import FluxKontextPipeline
+        logger.info("FLUX.1-Kontext-dev loading from %s", model_dir)
         _PIPELINE = FluxKontextPipeline.from_pretrained(
-            str(MODEL_DIR), torch_dtype=torch.bfloat16
+            str(model_dir), torch_dtype=torch.bfloat16, low_cpu_mem_usage=True,
         )
-        # Enable CPU offload for large models on limited VRAM
-        _PIPELINE.enable_model_cpu_offload()
-        logger.info("FLUX.1-Kontext-dev loaded with CPU offload")
+        # Sequential offload streams layer by layer: required on 32 GB RAM
+        # hosts where the whole pipeline does not fit at once.
+        try:
+            _PIPELINE.enable_sequential_cpu_offload()
+            logger.info("FLUX.1-Kontext-dev loaded with sequential CPU offload")
+        except Exception:
+            _PIPELINE.enable_model_cpu_offload()
+            logger.info("FLUX.1-Kontext-dev loaded with CPU offload")
         return _PIPELINE
     except Exception as e:
         logger.error("FLUX.1-Kontext-dev load failed: %s", e)

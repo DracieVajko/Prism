@@ -17,6 +17,7 @@
     <string name="btn_generate">Generate</string>
     <string name="btn_transcribe">Transcribe</string>
     <string name="btn_upscale">Upscale 2x</string>
+    <string name="btn_colorize">Colorize (DeOldify)</string>
     <string name="btn_caption">Caption</string>
     <string name="btn_ocr">OCR (Xiaomi-OCR-0)</string>
     <string name="btn_inpaint">Run inpaint</string>

@@ -165,7 +165,14 @@ def test_restore_b64_empty_raises():
 
 
 def test_restore_api_contract(monkeypatch):
-    """The endpoint keeps its contract: 400 bad input, 503 model unavailable."""
+    """The endpoint keeps its contract.
+
+    - 400 when the image is missing
+    - otherwise either 200 with an image, or 503 "will not load" when no
+      restoration engine is installed. It must never answer 500 for a valid
+      request: the endpoint has two engines (Z-Image first, SDXL img2img as the
+      fallback) and both are optional.
+    """
     import unified_server as us
     from fastapi.testclient import TestClient
 
@@ -175,7 +182,13 @@ def test_restore_api_contract(monkeypatch):
     assert r.status_code == 400, r.text[:200]
     assert r.json()["error"] == "missing image b64"
 
+    # Force all engines "unavailable" so the contract path is deterministic:
+    # Z-Image off, and an empty diffusion registry so no SD checkpoint exists.
     monkeypatch.setattr(rs, "_ensure_pipeline", lambda: None)
+    import unified.zimage as _zimage
+    monkeypatch.setattr(_zimage, "is_installed", lambda: False)
+    import diffusion_server as _ds
+    monkeypatch.setattr(_ds, "ensure_registry", lambda: {})
     r = client.post("/v1/images/restore", json={"image": _image_b64((16, 16))})
     assert r.status_code == 503, r.text[:200]
     assert r.json()["error"] == "will not load"

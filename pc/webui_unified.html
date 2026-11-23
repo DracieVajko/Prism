@@ -277,6 +277,39 @@ canvas#maskpad { width: 100%; border-radius: 6px; border: 1px solid var(--border
 <div id="formSettings" style="display:none">
 <label>Server</label>
 <div id="settingsBox" style="font-size:12px;background:var(--input);border:1px solid var(--border);border-radius:6px;padding:10px;white-space:pre-wrap">loading…</div>
+
+<label style="margin-top:14px">HuggingFace token</label>
+<input id="hfToken" type="password" placeholder="hf_..." autocomplete="off">
+<div style="display:flex;gap:8px;margin-top:4px">
+<button class="secondary" onclick="saveSecrets();return false">Save</button>
+<button class="secondary" onclick="testHfToken();return false">Test token</button>
+<span id="hfTokenState" style="font-size:11px;color:#7d8590;align-self:center"></span>
+</div>
+
+<label style="margin-top:14px">LLM provider (post-processing, meeting notes)</label>
+<select id="llmProvider">
+  <option value="none">none</option>
+  <option value="ollama">ollama</option>
+  <option value="lmstudio">lmstudio</option>
+  <option value="openai">openai</option>
+  <option value="anthropic">anthropic</option>
+  <option value="mistral">mistral</option>
+  <option value="gemini">gemini</option>
+  <option value="llamacpp">llamacpp</option>
+  <option value="custom">custom (OpenAI-compatible)</option>
+</select>
+<label style="margin-top:8px">Base URL</label>
+<input id="llmBaseUrl" type="text" placeholder="http://127.0.0.1:1234/v1" autocomplete="off">
+<label style="margin-top:8px">Model</label>
+<input id="llmModel" type="text" placeholder="qwen3.5-9b" autocomplete="off">
+<label style="margin-top:8px">API key</label>
+<input id="llmApiKey" type="password" placeholder="sk-..." autocomplete="off">
+<div style="display:flex;gap:8px;margin-top:6px">
+<button class="secondary" onclick="saveSecrets();return false">Save</button>
+<button class="secondary" onclick="testLlm();return false">Test LLM</button>
+<span id="llmState" style="font-size:11px;color:#7d8590;align-self:center"></span>
+</div>
+<div style="font-size:11px;color:#7d8590;margin-top:8px">Stored locally in <code>pc/settings.local.json</code> (git-ignored). Secrets are never returned by the API.</div>
 </div>
 
 <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px">
@@ -377,7 +410,11 @@ function syncDownloads(){
     const m = modelById(sel.value);
     if (!m) { btn.style.display='none'; hint.textContent=''; continue; }
     const size = sizeLabel(m);
-    if (m.install_state === 'downloading') {
+    if (m.install_state === 'preparing') {
+      btn.style.display='inline-block'; btn.disabled = true;
+      btn.textContent = 'Preparing…';
+      hint.textContent = m.id+' downloaded; building the runtime files now (no action needed).';
+    } else if (m.install_state === 'downloading') {
       btn.style.display='inline-block'; btn.disabled = true;
       btn.textContent = (m.install_progress||0)+'%';
       hint.textContent = 'Downloading '+m.id+'… '+(m.install_progress||0)+'%'+(size?' of '+size:'');
@@ -418,7 +455,7 @@ function pollModels(){
   refresh();
   clearTimeout(modelTimer);
   modelTimer = setTimeout(() => {
-    if (MODELS.some(m => m.install_state === 'downloading')) pollModels();
+    if (MODELS.some(m => m.install_state === 'downloading' || m.install_state === 'preparing')) pollModels();
   }, 2500);
 }
 async function refresh(){
@@ -1083,10 +1120,12 @@ function catalogRow(m){
     + (m.installed ? 'background:#da3633' : 'background:#238636');
   const noSource = m.has_source === false;
   const downloading = m.install_state === 'downloading';
-  btn.textContent = downloading ? 'Stop'
+  const preparing = m.install_state === 'preparing';
+  btn.textContent = preparing ? 'Preparing…' : downloading ? 'Stop'
     : (m.installed ? 'Uninstall' : (noSource ? 'No source' : 'Install'));
   btn.disabled = !downloading && (!m.installed && noSource);
-  btn.onclick = () => downloading ? cancelModel(m.id)
+  btn.onclick = () => preparing ? null
+    : downloading ? cancelModel(m.id)
     : (m.installed ? uninstallModel(m.id) : installModel(m.id));
 
   line.appendChild(info);
@@ -1256,7 +1295,7 @@ function pollCatalog(){
   refresh();
   clearTimeout(catalogTimer);
   catalogTimer = setTimeout(() => {
-    if (CATALOG.some(m => m.install_state === 'downloading')) pollCatalog();
+    if (CATALOG.some(m => m.install_state === 'downloading' || m.install_state === 'preparing')) pollCatalog();
   }, 3000);
 }
 
@@ -1284,6 +1323,70 @@ async function loadSettings(){
   } catch(e){
     document.getElementById('settingsBox').textContent = 'settings error: '+e;
   }
+  loadSecrets();
+}
+
+// ---------- secrets (HF token, LLM provider) ----------
+async function loadSecrets(){
+  try {
+    const r = await fetch('/v1/settings/secrets');
+    const j = await r.json();
+    const conf = j._configured || {};
+    const llm = j.llm || {};
+    const hf = document.getElementById('hfToken');
+    if (hf) { hf.value = ''; hf.placeholder = conf.hf_token ? ('saved: '+(j.hf_token||'****')) : 'hf_...'; }
+    const prov = document.getElementById('llmProvider');
+    if (prov) prov.value = llm.provider || 'none';
+    const bu = document.getElementById('llmBaseUrl'); if (bu) bu.value = llm.base_url || '';
+    const mdl = document.getElementById('llmModel'); if (mdl) mdl.value = llm.model || '';
+    const key = document.getElementById('llmApiKey');
+    if (key) { key.value = ''; key.placeholder = conf.llm_api_key ? ('saved: '+(llm.api_key||'****')) : 'sk-...'; }
+    const st = document.getElementById('hfTokenState');
+    if (st) st.textContent = conf.hf_token ? 'configured' : 'not set';
+    const ls = document.getElementById('llmState');
+    if (ls) ls.textContent = (llm.provider && llm.provider !== 'none') ? ('provider: '+llm.provider) : 'not configured';
+  } catch(e){}
+}
+
+async function saveSecrets(){
+  const body = {
+    llm: {
+      provider: document.getElementById('llmProvider').value,
+      base_url: document.getElementById('llmBaseUrl').value.trim(),
+      model: document.getElementById('llmModel').value.trim(),
+      api_key: document.getElementById('llmApiKey').value,
+    }
+  };
+  const hfEl = document.getElementById('hfToken');
+  if (hfEl && hfEl.value.trim()) body.hf_token = hfEl.value.trim();
+  try {
+    const r = await fetch('/v1/settings/secrets', {
+      method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body)
+    });
+    if (!r.ok) throw new Error('HTTP '+r.status);
+    log('settings saved');
+    loadSecrets();
+  } catch(e){ log('settings save failed: '+e); }
+}
+
+async function testHfToken(){
+  const el = document.getElementById('hfTokenState');
+  if (el) el.textContent = 'testing…';
+  try {
+    const r = await fetch('/v1/settings/secrets/test/hf', {method:'POST'});
+    const j = await r.json();
+    if (el) el.textContent = (j.ok ? 'OK: ' : 'FAIL: ') + (j.detail||'');
+  } catch(e){ if (el) el.textContent = 'test failed: '+e; }
+}
+
+async function testLlm(){
+  const el = document.getElementById('llmState');
+  if (el) el.textContent = 'testing…';
+  try {
+    const r = await fetch('/v1/settings/secrets/test/llm', {method:'POST'});
+    const j = await r.json();
+    if (el) el.textContent = (j.ok ? 'OK: ' : 'FAIL: ') + (j.detail||'');
+  } catch(e){ if (el) el.textContent = 'test failed: '+e; }
 }
 
 refresh();

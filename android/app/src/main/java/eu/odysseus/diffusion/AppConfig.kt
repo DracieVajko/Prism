@@ -42,4 +42,8 @@ object AppConfig {
 
     /** Output token reserve for chunking. */
     @Volatile var llmOutputReserve: Int = 1024
+
+    /** HuggingFace token for gated downloads (e.g. FLUX.1 dev, Cohere Transcribe).
+     *  Empty = anonymous downloads only. Stored in SharedPreferences (private). */
+    @Volatile var hfToken: String = ""
 }

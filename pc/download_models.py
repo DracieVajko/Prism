@@ -13,6 +13,7 @@ Usage:
   python download_models.py --civitai 12345 --target models/MyModel --name model.safetensors --civitai-token ABC
 """
 import argparse
+import json
 import os
 import sys
 import time
@@ -57,16 +58,38 @@ TASKS = [
      "single_file_config": "stabilityai/sdxl-turbo",
      "pipeline": "StableDiffusionXLPipeline",
      "license": "OpenRAIL++-M (see repo card)"},
+    {"id": "NoobAI-XL-Vpred", "kind": "file", "repo": "Laxhar/noobai-XL-Vpred-1.0",
+     "file": "NoobAI-XL-Vpred-v1.0.safetensors",
+     "target": "NoobAI-XL-Vpred", "min_gb": 6.5,
+     "single_file_config": "stabilityai/stable-diffusion-xl-base-1.0",
+     "pipeline": "StableDiffusionXLPipeline",
+     "license": "Fair AI Public License 1.0-SD (see repo card)"},
+    {"id": "amazing-logos-v3", "kind": "snapshot", "repo": "iamkaikai/amazing-logos-v3",
+     "target": "amazing-logos-v3", "min_gb": 2.0,
+     "allow": ["model_index.json", "unet/config.json", "unet/diffusion_pytorch_model.bin",
+               "vae/config.json", "vae/diffusion_pytorch_model.bin",
+               "text_encoder/config.json", "text_encoder/pytorch_model.bin",
+               "tokenizer/*", "scheduler/scheduler_config.json",
+               "feature_extractor/preprocessor_config.json",
+               "safety_checker/config.json", "safety_checker/pytorch_model.bin"],
+     "note": "SD1.5 fine-tuned on 200k logos, 512px, prompt format: 'Simple elegant logo for X'",
+     "license": "CreativeML Open RAIL-M (see repo card)"},
 ]
 
 PRESETS = {
     "odysseus-default": [t["id"] for t in TASKS],
     "sd15": ["DreamShaper_8", "AbsoluteReality_1.8"],
     "sdxl": ["AnimagineXL_3.1", "JuggernautXL_v9"],
+    "anime": ["AnimagineXL_3.1", "NoobAI-XL-Vpred"],
+    "logo": ["amazing-logos-v3"],
     "sdxl-turbo": ["SDXL_Turbo"],
     "upscale": ["RealESRGAN_x4v3"],
     "swinir": ["swinir-realsr-x4-upscale"],
     "zimage": ["z-image-turbo"],
+    "zimage-fp8": ["z-image-turbo-fp8"],
+    "colorize": ["ddcolor-full", "ddcolor-artistic", "deoldify-artistic"],
+    "flux-kontext": ["flux-kontext-dev"],
+    "flux-kontext-fp8": ["flux-kontext-dev-fp8"],
     "ocr": ["nemotron-ocr-0", "granite-docling-258m", "qwen3-vl-2b"],
     "vlm": ["qwen3-vl-2b"],
 }
@@ -129,12 +152,6 @@ OCR_TASKS = [
                "processor_config.json"],
      "license": "Apache-2.0",
      "note": "Qianfan-OCR 4.7B (192 languages, KIE, layout). ~9.5 GB; needs offload."},
-    {"id": "firered-ocr", "kind": "snapshot",
-     "repo": "FireRedTeam/FireRed-OCR", "target": "firered-ocr", "min_gb": 4.0,
-     "allow": ["*.json", "*.safetensors", "*.txt", "*.model",
-               "tokenizer/*", "chat_template*", "preprocessor_config.json"],
-     "license": "Apache-2.0",
-     "note": "FireRed-OCR: Qwen3-VL-2B fine-tuned for document parsing."},
     {"id": "qwen3-vl-2b", "kind": "snapshot",
      "repo": "Qwen/Qwen3-VL-2B-Instruct",
      "target": "qwen3-vl-2b", "min_gb": 4.0,
@@ -212,7 +229,6 @@ AUDIO_TASKS = [
 
 # Restoration / colorization (ONNX, CPU or GPU via onnxruntime).
 # DDColor: state-of-the-art B&W photo colorization (ICCV 2023, Apache-2.0).
-# GFPGAN: face restoration (CVPR 2021, Apache-2.0).
 # SwinIR: super-resolution / restoration (ICCV 2021, Apache-2.0).
 RESTORATION_TASKS = [
     {"id": "ddcolor-full", "kind": "file",
@@ -223,20 +239,20 @@ RESTORATION_TASKS = [
      "note": "DDColor full (convnext-l) colorization, ~435 MB fp16, 512x512. "
              "Uses the same ab contract as tiny; better chroma, no green cast "
              "on the test slide."},
-    {"id": "ddcolor-tiny", "kind": "file",
-     "repo": "edgetools/ddcolor",
-     "file": "ddcolor-tiny-fp16.onnx",
-     "target": "ddcolor-tiny", "min_gb": 0.12,
-     "license": "Apache-2.0 (see piddnad/DDColor)",
-     "note": "DDColor-tiny colorization (ICCV 2023, ~130 MB fp16, 512x512). "
-             "Fast fallback; weak on modern colour photos. Apache-2.0."},
-    {"id": "gfpgan-v1.4", "kind": "file",
-     "repo": "sidkonduru/gfpgan-v1.4-onnx",
-     "file": "gfpgan14-fp16.onnx",
-     "target": "gfpgan-v1.4", "min_gb": 0.15,
-     "license": "Apache-2.0 (see TencentARC/GFPGAN)",
-     "note": "GFPGAN v1.4 face restoration (CVPR 2021, ~170 MB fp16, 512x512). "
-             "ONNX, runs on CPU/CUDA via onnxruntime. Apache-2.0."},
+    {"id": "ddcolor-artistic", "kind": "file",
+     "repo": "facefusion/models-3.0.0",
+     "file": "ddcolor_artistic.onnx",
+     "target": "ddcolor-artistic", "min_gb": 0.85,
+     "license": "Apache-2.0 (DDColor artistic checkpoint, FaceFusion repack)",
+     "note": "DDColor artistic (~980 MB ONNX): richer, less literal chroma than "
+             "ddcolor-full. Best-looking result on the B&W street test."},
+    {"id": "deoldify-artistic", "kind": "file",
+     "repo": "facefusion/models-3.0.0",
+     "file": "deoldify_artistic.onnx",
+     "target": "deoldify-artistic", "min_gb": 0.2,
+     "license": "MIT (DeOldify, FaceFusion ONNX repack)",
+     "note": "DeOldify Artistic (~250 MB ONNX): strongest saturation, keeps the "
+             "original luminance. Fastest of the three colorizers."},
     {"id": "swinir-realsr-x4", "kind": "file",
      "repo": "Heliosoph/swinir-onnx",
      "file": "swinir_realsr_x4.onnx",
@@ -245,15 +261,29 @@ RESTORATION_TASKS = [
      "note": "SwinIR real-world super-resolution x4 (ICCV 2021, ~122 MB, "
              "64x64->256x256). ONNX, runs on CPU/CUDA via onnxruntime. "
              "Apache-2.0."},
-    {"id": "instruct-pix2pix", "kind": "snapshot",
-     "repo": "timbrooks/instruct-pix2pix",
-     "target": "instruct-pix2pix", "min_gb": 3.0,
-     "allow": ["*.safetensors", "*.json", "tokenizer/*", "scheduler/*",
-               "feature_extractor/*", "model_index.json", "*.txt"],
-     "license": "MIT (see timbrooks/instruct-pix2pix)",
-     "note": "InstructPix2Pix (SD 1.5 based, ~5.8 GB, MIT). Instruction-based "
-             "image restoration: restore, repair, colorize, reconstruct. "
-             "Requires torch + diffusers on PC."},
+    # FLUX.1-Kontext-dev: instruction-based restoration/editing. Grouped with
+    # restoration (not upscale) so it never appears in the upscale dropdown.
+    # Gated repo: set the HF token in Settings first. Needs >= 64 GB RAM.
+    {"id": "flux-kontext-dev", "kind": "snapshot",
+     "repo": "black-forest-labs/FLUX.1-Kontext-dev",
+     "target": "flux-kontext-dev", "min_gb": 28.0,
+     "allow": ["*.json", "*.safetensors", "*.txt", "tokenizer/*",
+               "scheduler/*", "text_encoder/*", "text_encoder_2/*",
+               "transformer/*", "vae/*"],
+     "license": "FLUX.1 [dev] Non-Commercial License (gated)",
+     "note": "FLUX.1-Kontext-dev bf16 (~31.8 GB) restoration/editing. Gated: set "
+             "the HF token in Settings first. Needs >= 64 GB RAM to load."},
+    # Ungated FP8 mirror: same FluxKontextPipeline, ~21.8 GB. Still needs an
+    # Ada+ GPU for FP8 matmul; on Ampere torch raises a dtype error.
+    {"id": "flux-kontext-dev-fp8", "kind": "snapshot",
+     "repo": "AlekseyCalvin/Flux_Kontext_Dev_fp8_scaled_diffusers",
+     "target": "flux-kontext-dev-fp8", "min_gb": 18.0,
+     "allow": ["*.json", "*.safetensors", "*.txt", "tokenizer/*",
+               "scheduler/*", "text_encoder/*", "text_encoder_2/*",
+               "transformer/*", "vae/*"],
+     "license": "FLUX.1 [dev] Non-Commercial License",
+     "note": "FLUX.1-Kontext-dev FP8 scaled (~21.8 GB) restoration/editing. "
+             "Same pipeline as bf16; requires FP8-capable GPU."},
 ]
 
 # Upscale weights (small, also downloaded to the mobile package via ModelDownloader).
@@ -283,9 +313,162 @@ UPSCALE_TASKS = [
      "license": "Apache-2.0 (Tongyi-MAI, commercial use allowed)",
      "note": "Z-Image Turbo 6B + Qwen3-4B encoder + FLUX VAE (~33 GB). "
              "Generative img2img refine; runs on 6 GB VRAM with CPU offload."},
+    # FP8 quantized Z-Image Turbo: same diffusers ZImagePipeline, ~40% smaller.
+    # Near-bf16 quality; fits smaller RAM. Transformer 6.15 GB instead of 12 GB.
+    {"id": "z-image-turbo-fp8", "kind": "snapshot",
+     "repo": "ykarout/Z-Image-Turbo-FP8-Full",
+     "target": "z-image-turbo-fp8", "min_gb": 14.0,
+     # E4M3FN only (skip the alternate e5m2 transformer, same 6 GB again).
+     "allow": ["*.json", "*.txt", "tokenizer/*", "scheduler/*",
+               "text_encoder/*", "transformer/config.json",
+               "transformer/diffusion_pytorch_model.safetensors", "vae/*"],
+     "license": "Apache-2.0 (quantization of Tongyi-MAI/Z-Image-Turbo)",
+     "note": "Z-Image Turbo FP8 (E4M3FN transformer, 6.15 GB) + Qwen3-4B "
+             "encoder + VAE (~20.5 GB). Same ZImagePipeline; loads on less RAM."},
 ]
 
 FAILED = []
+
+
+# ---------------------------------------------------------------------------
+# Post-download preparation
+#
+# A downloaded file is not necessarily a *usable* model. Some entries need a
+# build step (for example Real-ESRGAN ships a .pth that the ONNX engine needs
+# as .onnx). `prepare_task` runs that step automatically after the download, so
+# "press Download" is enough for the model to work immediately.
+#
+# When the preparation succeeds a `.READY` manifest is written next to the
+# weights. `is_task_installed` treats a missing `.READY` as "not ready" only
+# when the task declares a prepare hook, so existing installs keep working
+# until they are re-prepared.
+# ---------------------------------------------------------------------------
+
+READY_FILE = ".READY"
+
+
+def _torch_available() -> bool:
+    try:
+        import torch  # noqa: F401
+        return True
+    except Exception:
+        return False
+
+
+def _prepare_realesrgan(task) -> str:
+    """Make the weights usable by the engine that will actually serve them.
+
+    With torch installed the .pth is enough (`realesrgan-torch`). Without torch
+    the ONNX file is required, so it is built here from the same .pth - the
+    download alone would leave the model unusable.
+    """
+    target = BASE / task["target"]
+    pth = target / "RealESRGAN_x4plus.pth"
+    onnx = target / "RealESRGAN_x4plus.onnx"
+    if not pth.is_file():
+        raise RuntimeError("RealESRGAN .pth missing after download")
+    if onnx.is_file() and onnx.stat().st_size > 10 * 1024 ** 2:
+        return "pth + onnx present"
+    if _torch_available():
+        return "pth only (torch engine)"
+    script = Path(__file__).resolve().parent / "tools" / "convert_esrgan_onnx.py"
+    if not script.is_file():
+        raise RuntimeError(f"converter not found: {script}")
+    print(f"[{task['id']}] torch missing: building ONNX from .pth...", flush=True)
+    import subprocess
+    proc = subprocess.run([sys.executable, str(script)],
+                          cwd=str(Path(__file__).resolve().parent),
+                          capture_output=True, text=True)
+    if proc.returncode != 0 or not onnx.is_file():
+        tail = (proc.stderr or proc.stdout or "")[-400:]
+        raise RuntimeError(f"ONNX build failed: {tail}")
+    print(f"[{task['id']}] ONNX built ({onnx.stat().st_size / 1e6:.0f} MB)", flush=True)
+    return "onnx built"
+
+
+PREPARE = {
+    "RealESRGAN_x4v3": _prepare_realesrgan,
+}
+
+
+def _verify_task(task) -> None:
+    """Fail loudly when the freshly downloaded files cannot serve requests."""
+    target = BASE / task["target"]
+    kind = task.get("kind")
+    if kind in ("file", "url"):
+        f = target / task["file"]
+        if not f.is_file():
+            raise RuntimeError(f"expected {f} after download")
+        if f.stat().st_size / 1e9 < task.get("min_gb", 0.0):
+            raise RuntimeError(
+                f"{f.name} is {f.stat().st_size / 1e9:.2f} GB, "
+                f"expected >= {task['min_gb']} GB")
+        return
+    size = dir_size_gb(target)
+    if size < task.get("min_gb", 0.0):
+        raise RuntimeError(f"downloaded only {size:.2f} GB, "
+                           f"expected >= {task['min_gb']} GB")
+
+
+def _write_ready(task) -> None:
+    target = BASE / task["target"]
+    target.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "id": task["id"],
+        "prepared_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "kind": task.get("kind", ""),
+        "min_gb": task.get("min_gb", 0.0),
+        "size_gb": round(dir_size_gb(target), 2),
+    }
+    (target / READY_FILE).write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+
+def prepare_task(task) -> str:
+    """Verify a downloaded model and run its build hook, then mark it READY.
+
+    Returns the hook result ("" when the task has no hook). Raises on any
+    failure so the caller can report the model as unusable instead of pretending
+    the install succeeded.
+    """
+    _verify_task(task)
+    hook = PREPARE.get(task["id"])
+    detail = hook(task) if hook else ""
+    _write_ready(task)
+    if detail:
+        print(f"[{task['id']}] prepared: {detail}", flush=True)
+    return detail
+
+
+def _ready_realesrgan(task) -> bool:
+    target = BASE / task["target"]
+    pth = target / "RealESRGAN_x4plus.pth"
+    onnx = target / "RealESRGAN_x4plus.onnx"
+    has_pth = pth.is_file() and pth.stat().st_size > 20 * 1024 ** 2
+    has_onnx = onnx.is_file() and onnx.stat().st_size > 10 * 1024 ** 2
+    if _torch_available():
+        return has_pth
+    return has_onnx
+
+
+# Artifact-level readiness. Preferred over the .READY manifest so an install
+# made before the prepare hooks existed is still recognised as usable.
+READY_CHECKS = {
+    "RealESRGAN_x4v3": _ready_realesrgan,
+}
+
+
+def is_prepared(task) -> bool:
+    """True when the model can serve requests right now."""
+    if task["id"] not in PREPARE:
+        return True
+    check = READY_CHECKS.get(task["id"])
+    if check is not None:
+        try:
+            if check(task):
+                return True
+        except Exception:
+            pass
+    return (BASE / task["target"] / READY_FILE).is_file()
 
 
 def run_with_retries(fn, label, tries=5):
@@ -422,6 +605,14 @@ def main():
                     help="Civitai API token (or CIVITAI_TOKEN env)")
     args = ap.parse_args()
 
+    # Pick up HF_TOKEN / PRISM_LLM_* saved from the WebUI Settings tab so a
+    # gated repo works from the CLI without exporting anything manually.
+    try:
+        from unified import secrets as _secrets
+        _secrets.load_and_apply()
+    except Exception:
+        pass
+
     if args.list:
         print("Models:", flush=True)
         for t in (TASKS + UPSCALE_TASKS + VLM_TASKS + OCR_TASKS +
@@ -459,6 +650,8 @@ def main():
                 download_url(t)
             else:
                 download_hf(t)
+            # Build whatever the runtime needs (e.g. ONNX export) and mark ready.
+            prepare_task(t)
         except Exception as e:  # noqa: BLE001
             print(f"[{t['id']}] FAILED: {e}", flush=True)
             FAILED.append(t["id"])

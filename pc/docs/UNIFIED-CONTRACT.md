@@ -22,13 +22,19 @@ Legacy: the old `WhisperApi :4444/v1/audio/*` remains as a shim to `:8101/v1/aud
 | POST | `/v1/images/harmonize` | JSON `{image b64, prompt, strength, model, request_id}` | `{image b64, elapsed, request_id}` |
 | POST | `/v1/images/upscale` | JSON `{image b64, scale 2/3/4, model, prompt?, strength?, request_id}` | `{image b64, elapsed, model, scale, engine, request_id}` |
 | POST | `/v1/videos/upscale` | multipart `file + scale, model, fps, prompt, strength` | `{request_id, frames, fps, scale, model, engine, elapsed, url, outputs}` |
-| POST | `/v1/images/colorize` | JSON `{image b64, model, request_id}` | `{image b64, elapsed, engine, request_id}` | DDColor full (tiny fallback), 512x512, preserves resolution |
-| POST | `/v1/images/restore` | JSON `{image b64, prompt?, strength?, steps?, guidance?, image_guidance?, request_id?}` | `{image b64, elapsed, engine, request_id}` | InstructPix2Pix, full image restoration |
+| POST | `/v1/images/colorize` | JSON `{image b64, model, request_id}` | `{image b64, elapsed, engine, request_id}` | `model` = `deoldify-artistic` (default, most chroma) \| `ddcolor-full` \| `ddcolor-artistic`. Preserves the source resolution and luminance. |
+| POST | `/v1/images/restore` | JSON `{image b64, prompt?, strength?, steps?, guidance?, image_guidance?, request_id?}` | `{image b64, elapsed, engine, request_id}` | Z-Image Turbo first (engine `zimage-turbo`), SDXL img2img as fallback with `strength` clamped to <=0.35. 503 `will not load` when neither engine is installed. |
 | POST | `/v1/images/caption` | JSON `{image b64, prompt, max_tokens, request_id}` | `{text, elapsed, engine, request_id}` (V2, Qwen3-VL-2B) |
 | POST | `/v1/images/ocr` | multipart `file + model, language, task` | `{text, model, language, task}` |
 | POST | `/v1/chat/completions` | OpenAI vision subset `{model, messages:[{role, content:str\|[{type:text\|image_url}]}]}` | `{choices:[{message:{content}}]}` (V2, 503 without weights) |
+| GET | `/v1/settings/secrets` | - | `{hf_token, llm:{provider,base_url,model,api_key}, _configured}` - secrets masked as `****abcd` |
+| PUT | `/v1/settings/secrets` | `{hf_token?, llm?}` | same masked view; masked values are ignored, empty clears |
+| POST | `/v1/settings/secrets/test/hf` | - | `{ok, detail}` HuggingFace token check |
+| POST | `/v1/settings/secrets/test/llm` | - | `{ok, detail}` provider round-trip |
+| GET | `/v1/update/check` | - | `{current_sha, latest_sha, update_available, commits_behind, changelog}` |
+| POST | `/v1/update/apply` | - | `{success, message, new_sha?}` (git pull; restart required) |
 | GET | `/v1/models/catalog` | — | `{models:[{id, kind, label, size_gb, installed, installed_gb, install_state, install_progress, install_error}]}` |
-| POST | `/v1/models/install` | JSON `{id}` | `{id, state}` (download in the background; progress in the catalog) |
+| POST | `/v1/models/install` | JSON `{id}` | `{id, state}` (download in the background; progress in the catalog). After the download the server runs the model's preparation hook and only then writes `.READY`; states are `idle -> downloading -> preparing -> done` (or `error`). |
 | POST | `/v1/models/uninstall` | JSON `{id}` | `{id, removed}` (path guard: only `models/`) |
 | GET | `/v1/settings` | — | `{version, port, whisper_url, models_dir, default_image_model, audio_models, engines:{torch,cuda,ffmpeg,ffprobe,ytdlp}}` |
 | GET | `/v1/ffmpeg/presets` | — | `{video:{...}, audio:{...}, resize:{...}}` |

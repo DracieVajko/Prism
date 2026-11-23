@@ -17,11 +17,15 @@ import threading
 import time
 import uuid
 
+import numpy as np
+
 logger = logging.getLogger(__name__)
 from pathlib import Path
+from unified.audio_splitter import get_audio_duration
+from pathlib import Path
 
-from fastapi import APIRouter, File, Form, UploadFile, WebSocket
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi import APIRouter, File, Form, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from pydantic import BaseModel, Field
 
 
@@ -37,7 +41,7 @@ class UpscaleRequest(BaseModel):
 
 class ColorizeRequest(BaseModel):
     image: str = ""
-    model: str | None = "ddcolor-full"
+    model: str | None = "deoldify-artistic"
     request_id: str | None = ""
 
 
@@ -76,6 +80,9 @@ from unified.ffmpeg_tools import (
     trim_media,
 )
 from unified.action_extractor import ActionType
+from unified.asr import resolve_engine
+from unified.audio_proxy import transcribe_via_service
+from unified.transcription_utils import format_transcription
 from unified.upscale import upscale_image_b64
 from unified.vlm import MODEL_ID as VLM_ID
 from unified.vlm import EngineMissing, caption_image_b64
@@ -113,6 +120,20 @@ def _output_path(rel: str) -> Path:
     return target
 
 
+
+def _rate_to_float(value: str) -> float:
+    try:
+        if "/" in value:
+            num, den = value.split("/", 1)
+            return float(num) / float(den or 1)
+        return float(value)
+    except (TypeError, ValueError, ZeroDivisionError):
+        return 0.0
+
+
+VIDEO_MAX_FRAMES_DEFAULT = 900
+VIDEO_MAX_FRAMES = {"z-image-turbo": 24, "zimage": 24, "z-image": 24,
+                    "zimage-turbo": 24}
 
 def _probe_video(path: Path) -> dict:
     proc = subprocess.run(
@@ -233,7 +254,7 @@ async def video_upscale(
             capture_output=True, text=True)
         if mux.returncode != 0:
             raise RuntimeError((mux.stderr or "remux failed")[:300])
-        meta = _us()._store_output("video", ".mp4", out_path.read_bytes(), rid)
+        meta = _store_output("video", ".mp4", out_path.read_bytes(), rid)
         return {
             "request_id": rid,
             "frames": len(frames),
@@ -260,11 +281,11 @@ def colorize(req: ColorizeRequest):
         return JSONResponse(status_code=400, content={"error": "missing image b64"})
     try:
         from unified.colorize import colorize_b64
-        out = colorize_b64(req.image)
+        out = colorize_b64(req.image, model_id=req.model or "deoldify-artistic")
     except FileNotFoundError:
         return JSONResponse(status_code=503, content={
             "error": "will not load", "detail": "DDColor model not installed",
-            "hint": "Run: python download_models.py ddcolor-full"})
+            "hint": "Run: python download_models.py deoldify-artistic"})
     except Exception as e:
         logger.warning(f"colorize failed: {str(e)[:200]}")
         return JSONResponse(status_code=500, content={"error": str(e)[:200]})
@@ -275,12 +296,11 @@ def colorize(req: ColorizeRequest):
 
 
 @router.post("/v1/images/restore")
-def restore(req: RestoreRequest):
+async def restore(req: RestoreRequest):
     rid = req.request_id or f"req-{uuid.uuid4().hex[:8]}"
     if not req.image:
         return JSONResponse(status_code=400, content={"error": "missing image b64"})
-    # InstructPix2Pix needs ~2.6 GB on top of whatever is resident; drop the
-    # other heavy engines first (a 4.3 GB OCR model made the load fail).
+    # Restore uses img2img with a restoration prompt through any available SD model.
     _us()._release_sd_best_effort()
     _us()._release_vlm_best_effort()
     try:
@@ -288,27 +308,77 @@ def restore(req: RestoreRequest):
         reset_ocr_engine()
     except Exception:
         pass
+    prompt = req.prompt or (
+        "restore this old damaged photo, remove scratches, stains and fading, "
+        "keep the original faces, clothing and composition, natural colors, "
+        "sharp real detail")
+    engine_pref = (os.environ.get("PRISM_RESTORE_ENGINE") or "").strip().lower()
+
+    # Z-Image Turbo keeps the source composition better than SDXL img2img on
+    # old prints, so it is the preferred engine when installed. `strength` is
+    # kept low: this is a repair, not a redraw.
+    zimage_first = engine_pref != "sd"
+    if zimage_first:
+        try:
+            from unified.zimage import is_installed as zimage_installed
+            from unified.zimage import refine_b64 as zimage_refine
+            if zimage_installed():
+                import time as _t
+                t0 = _t.time()
+                # Turbo is distilled for 8-9 steps; more only adds time.
+                z_steps = min(max(int(req.steps or 9), 4), 12)
+                out = zimage_refine(req.image, prompt=prompt,
+                                    strength=min(max(float(req.strength or 0.45), 0.05), 0.6),
+                                    steps=z_steps)
+                b64 = out.get("image", "")
+                if b64:
+                    meta = _store_b64("image", ".png", b64, rid)
+                    return {"image": b64, "elapsed": round(_t.time() - t0, 1),
+                            "engine": "zimage-turbo", "request_id": rid,
+                            "outputs": [meta] if meta else []}
+                logger.warning("zimage restore returned no image; falling back to SD")
+        except Exception as e:
+            logger.warning("zimage restore failed (%s); falling back to SD", str(e)[:200])
+
     try:
-        from unified.zimage import release as release_zimage
-        release_zimage()
-    except Exception:
-        pass
-    try:
-        from unified.restore import restore_b64
-        out = restore_b64(req.image, prompt=req.prompt or "restore and colorize this old photo",
-                          strength=req.strength, steps=req.steps,
-                          guidance=req.guidance, image_guidance=req.image_guidance)
-    except RuntimeError as e:
-        return JSONResponse(status_code=503, content={
-            "error": "will not load", "detail": str(e)[:200],
-            "hint": "Run: python download_models.py instruct-pix2pix"})
+        import base64 as _b64
+        import diffusion_server as ds
+        ds.ensure_registry()
+        ds._args.disable_safety_checker = True
+        _us()._release_sd_best_effort()
+        _us()._release_vlm_best_effort()
+        # SD fallback: SDXL photorealistic (Juggernaut) preserves faces better
+        # than SD 1.5. Override with PRISM_RESTORE_MODEL.
+        restore_model = (os.environ.get("PRISM_RESTORE_MODEL") or "JuggernautXL_v9").strip()
+        reg = ds.ensure_registry()
+        if restore_model not in reg or reg[restore_model].get("missing"):
+            restore_model = "DreamShaper_8"
+        if restore_model not in reg or reg[restore_model].get("missing"):
+            # Neither engine is installed: honest 503, not a 500.
+            return JSONResponse(status_code=503, content={
+                "error": "will not load",
+                "detail": "no restoration engine installed "
+                          "(Z-Image Turbo FP8 or an SD/SDXL checkpoint)",
+                "hint": "Run: python download_models.py z-image-turbo-fp8 "
+                        "or --preset sd15",
+            })
+        ds._apply_profile(restore_model)
+        plan = ds._plan_device(restore_model, 768*768)
+        ds.load_model(device=plan["device"], dtype=plan["dtype"])
+        raw = _b64.b64decode(req.image)
+        edit_size = "768x768" if restore_model != "DreamShaper_8" else "512x512"
+        # A low strength keeps the subject/composition; 0.5 redrew the scene.
+        sd_strength = min(float(req.strength or 0.28), 0.35)
+        out = await ds._run_edit(prompt, raw, 1, edit_size, "medium",
+                                sd_strength, "b64_json", rid)
+        b64 = (out.get("data") or [{}])[0].get("b64_json", "")
+        if not b64:
+            raise RuntimeError(out.get("error", "restore produced no image"))
+        return {"image": b64, "elapsed": 0, "engine": out.get("engine", "diffusers"),
+                "request_id": rid, "outputs": out.get("outputs", [])}
     except Exception as e:
         logger.warning(f"restore failed: {str(e)[:200]}")
         return JSONResponse(status_code=500, content={"error": str(e)[:200]})
-    out["request_id"] = rid
-    meta = _store_b64("image", ".png", out.get("image", ""), rid)
-    out["outputs"] = [meta] if meta else []
-    return out
 
 
 @router.post("/v1/images/face-restore")
@@ -316,21 +386,62 @@ def face_restore(req: FaceRestoreRequest):
     rid = req.request_id or f"req-{uuid.uuid4().hex[:8]}"
     if not req.image:
         return JSONResponse(status_code=400, content={"error": "missing image b64"})
-    try:
-        from unified.gfpgan import restore_face_b64
-        out = restore_face_b64(req.image)
-    except RuntimeError as e:
-        return JSONResponse(status_code=503, content={
-            "error": "will not load", "detail": str(e)[:200],
-            "hint": "Run: python download_models.py gfpgan-v1.4"})
-    except Exception as e:
-        logger.warning(f"face-restore failed: {str(e)[:200]}")
-        return JSONResponse(status_code=500, content={"error": str(e)[:200]})
+    # GFPGAN v1.4 was removed: the ONNX export produced an invalid (pink/orb)
+    # image on every test input. Use /v1/images/restore (Juggernaut img2img)
+    # or /v1/images/colorize instead of a face-only model that does not work.
+    return JSONResponse(status_code=503, content={
+        "error": "will not load",
+        "detail": "GFPGAN v1.4 was removed after producing invalid output.",
+        "hint": "Use POST /v1/images/restore (restoration) or /v1/images/colorize."})
     out["request_id"] = rid
     meta = _store_b64("image", ".png", out.get("image", ""), rid)
     out["outputs"] = [meta] if meta else []
     return out
 
+
+class SecretsRequest(BaseModel):
+    hf_token: str | None = None
+    llm: dict | None = None
+
+
+@router.get("/v1/settings/secrets")
+def get_secrets():
+    from unified import secrets
+    return secrets.public_view()
+
+
+@router.put("/v1/settings/secrets")
+def put_secrets(req: SecretsRequest):
+    from unified import secrets
+    payload = {}
+    if req.hf_token is not None:
+        payload["hf_token"] = req.hf_token
+    if req.llm is not None:
+        payload["llm"] = req.llm
+    return secrets.save(payload)
+
+
+@router.post("/v1/settings/secrets/test/hf")
+def test_hf():
+    from unified import secrets
+    return secrets.test_hf_token()
+
+
+@router.post("/v1/settings/secrets/test/llm")
+def test_llm():
+    from unified import secrets
+    return secrets.test_llm()
+
+
+@router.get("/v1/update/check")
+def check_update():
+    from unified.update_checker import check_update as _check
+    return _check()
+
+@router.post("/v1/update/apply")
+def apply_update():
+    from unified.update_checker import apply_update as _apply
+    return _apply()
 
 @router.post("/v1/images/restore-upscale")
 def restore_upscale(req: SwinIRRequest):
@@ -364,7 +475,7 @@ def caption(req: CaptionRequest):
     try:
         _us()._manager.ensure("vlm", VLM_ID)
     except ModelLoadingError as e:
-        return _raise_loading(e)
+        return _us()._raise_loading(e)
     if not req.image:
         return JSONResponse(status_code=400, content={"error": "missing image b64"})
     _us()._release_sd_best_effort()
@@ -378,7 +489,7 @@ def caption(req: CaptionRequest):
                             content={"error": "will not load", "detail": str(e)[:200]})
     out["request_id"] = rid
     try:
-        meta = _us()._store_output("text", ".txt", str(out.get("caption", "")).encode("utf-8"), rid)
+        meta = _store_output("text", ".txt", str(out.get("caption", "")).encode("utf-8"), rid)
         out["outputs"] = [meta]
     except Exception:
         out["outputs"] = []
@@ -423,7 +534,7 @@ def chat_completions(body: dict):
     try:
         _us()._manager.ensure("vlm", VLM_ID)
     except ModelLoadingError as e:
-        return _raise_loading(e)
+        return _us()._raise_loading(e)
     text, image = _chat_vision_parts(messages)
     # Text-only path: route to an external LLM provider (Ollama, LM Studio,
     # llama.cpp, OpenAI, Mistral, Gemini, ...). Vision path uses SmolVLM.
@@ -570,7 +681,7 @@ def _run_batch(bid: str, jobs: list, stop_on_error: bool) -> None:
                         wanted = "turbo"
                     text, lang, segs = _transcribe_with_whisper(
                         job.get("_path", ""), wanted, job.get("language") or "sk")
-                    meta = _us()._store_output("text", ".txt", text.encode("utf-8"), bid)
+                    meta = _store_output("text", ".txt", text.encode("utf-8"), bid)
                     results.append({"index": i, "type": "transcribe", "ok": True,
                                     "text": text, "language": lang,
                                     "segments": len(segs), "outputs": [meta]})
@@ -578,7 +689,7 @@ def _run_batch(bid: str, jobs: list, stop_on_error: bool) -> None:
                     # image bytes passed as base64 under job["image_b64"]
                     import base64 as _b64
                     import tempfile as _tf
-                    from pathlib import Path as _P
+                    from pathlib import Path
                     raw = _b64.b64decode(job.get("image_b64", ""))
                     suffix = _P(job.get("filename", "image.png")).suffix or ".png"
                     with _tf.NamedTemporaryFile(delete=False, suffix=suffix) as t:
@@ -588,7 +699,7 @@ def _run_batch(bid: str, jobs: list, stop_on_error: bool) -> None:
                         out_path, _info = convert_image(_P(tmp), preset=job.get("preset", "jpg-95"))
                         out_data = _P(out_path).read_bytes()
                         out_b64 = base64.b64encode(out_data).decode()
-                        meta = _us()._store_output("image", _P(out_path).suffix.lower() or ".jpg",
+                        meta = _store_output("image", _P(out_path).suffix.lower() or ".jpg",
                                              out_data, bid)
                         results.append({"index": i, "type": "convert-image", "ok": True,
                                         "file": out_b64, "outputs": [meta]})
@@ -775,6 +886,10 @@ CUSTOM_WHISPER_DIRS = {"ivrit-whisper-turbo": "ivrit-whisper-turbo"}
 
 _WHISPER_CACHE = {}
 
+# OpenAI realtime transcription WebSocket clients. Tracked separately from
+# inference so an idle client does not keep the resident model loaded.
+_REALTIME_WS_CONNECTIONS = 0
+
 
 _AV_PATCHED = False
 
@@ -834,7 +949,7 @@ def _transcribe_with_whisper(tmp_path: str, wanted: str, language, rid: str = ""
     # whisper_installed() checks the exact expected size + a valid config.json,
     # so a half-finished download is never loaded as if it were complete.
     folder = CUSTOM_WHISPER_DIRS.get(wanted) or f"faster-whisper-{wanted}"
-    local = Path(__file__).resolve().parent / "models" / folder
+    local = Path(__file__).resolve().parent.parent / "models" / folder
     local_bin = local / "model.bin"
     if wanted in CUSTOM_WHISPER_DIRS:
         use_local = local_bin.is_file() and local_bin.stat().st_size > 50 * 1024 * 1024
@@ -937,7 +1052,7 @@ def _transcribe_pcm(raw: bytes, rate: int, wanted: str, language):
         device = "cpu"
     compute = "float16" if device == "cuda" else "int8"
     folder = CUSTOM_WHISPER_DIRS.get(wanted) or f"faster-whisper-{wanted}"
-    local = Path(__file__).resolve().parent / "models" / folder
+    local = Path(__file__).resolve().parent.parent / "models" / folder
     try:
         from unified.model_catalog import whisper_installed
         use_local = (wanted in CUSTOM_WHISPER_DIRS
@@ -1141,7 +1256,7 @@ async def transcriptions(
     try:
         _us()._manager.ensure("audio", wanted)
     except ModelLoadingError as e:
-        return _raise_loading(e)
+        return _us()._raise_loading(e)
     _job_start(rid, "transcribe", 0.0, f"model={wanted}")
     logger.info(f"transcribe: {len(content)} bytes, model={wanted}, lang={language}, format={response_format}, output_format={output_format}")
     import tempfile
@@ -1214,9 +1329,9 @@ async def transcriptions(
                 raise
             except Exception as e:
                 logger.warning("local whisper missing (%s), proxy %s",
-                                 str(e)[:120], WHISPER_SERVICE_URL)
+                                 str(e)[:120], _us().WHISPER_SERVICE_URL)
                 proxied = transcribe_via_service(
-                    WHISPER_SERVICE_URL, content, up.filename or "audio.wav",
+                    _us().WHISPER_SERVICE_URL, content, up.filename or "audio.wav",
                     wanted, language)
                 if proxied is not None:
                     text, lang = proxied
@@ -1265,8 +1380,15 @@ async def transcriptions(
         _job_finish(rid, "done")
         fmt = (response_format or "json").strip().lower()
         output_format_param = (output_format or "txt").strip().lower()
-        if output_format_param not in SUPPORTED_FORMATS:
+        if output_format_param not in ("txt", "md", "srt", "json"):
             output_format_param = "txt"
+        # OpenAI-compatible clients send response_format=json/text; honour it
+        # when the Prism-specific output_format was left at its default.
+        if (output_format or "txt").strip().lower() == "txt":
+            if fmt in ("json", "verbose_json"):
+                output_format_param = "json"
+            elif fmt == "text":
+                output_format_param = "txt"
         # Build segments list from text if no segments (e.g., whisper-service)
         if not segments and text:
             segments = [{"text": text, "start": 0.0, "end": duration_hint or 0.0}]
@@ -1282,12 +1404,12 @@ async def transcriptions(
                 "actions": [a.to_dict() for a in action_results] if action_results else [],
             }
             if fmt == "verbose_json":
-                meta = _us()._store_output("text", f".{output_format_param}", text.encode("utf-8"), rid)
+                meta = _store_output("text", f".{output_format_param}", text.encode("utf-8"), rid)
                 resp_data["outputs"] = [meta]
             return resp_data
         elif output_format_param == "txt":
             formatted = format_transcription(segments, "txt", language or "unknown")
-            meta = _us()._store_output("text", ".txt", formatted.encode("utf-8"), rid)
+            meta = _store_output("text", ".txt", formatted.encode("utf-8"), rid)
             from fastapi.responses import PlainTextResponse
             resp = PlainTextResponse(formatted)
             resp.headers["X-Output-Path"] = meta["path"]
@@ -1296,7 +1418,7 @@ async def transcriptions(
             return resp
         elif output_format_param == "md":
             formatted = format_transcription(segments, "md", language or "unknown")
-            meta = _us()._store_output("text", ".md", formatted.encode("utf-8"), rid)
+            meta = _store_output("text", ".md", formatted.encode("utf-8"), rid)
             from fastapi.responses import PlainTextResponse
             resp = PlainTextResponse(formatted)
             resp.headers["X-Output-Path"] = meta["path"]
@@ -1305,7 +1427,7 @@ async def transcriptions(
             return resp
         elif output_format_param == "srt":
             formatted = format_transcription(segments, "srt", language or "unknown")
-            meta = _us()._store_output("text", ".srt", formatted.encode("utf-8"), rid)
+            meta = _store_output("text", ".srt", formatted.encode("utf-8"), rid)
             from fastapi.responses import PlainTextResponse
             resp = PlainTextResponse(formatted)
             resp.headers["X-Output-Path"] = meta["path"]
@@ -1323,7 +1445,7 @@ async def transcriptions(
                 "actions": [a.to_dict() for a in action_results] if action_results else [],
             }
             if fmt == "verbose_json":
-                meta = _us()._store_output("text", ".json", text.encode("utf-8"), rid)
+                meta = _store_output("text", ".json", text.encode("utf-8"), rid)
                 resp_data["outputs"] = [meta]
             return resp_data
     except JobCancelled:
@@ -1562,7 +1684,8 @@ async def realtime_asr(ws: WebSocket):
     Cindy accepts a final transcript per commit.
     """
     await ws.accept()
-    _us()._manager.begin()
+    global _REALTIME_WS_CONNECTIONS
+    _REALTIME_WS_CONNECTIONS += 1
     buf = bytearray()
     rate = 24000
     model_name = "turbo"
@@ -1610,6 +1733,7 @@ async def realtime_asr(ws: WebSocket):
                 if wanted not in ALLOWED_WHISPER:
                     wanted = "turbo"
                 try:
+                    _us()._manager.begin()
                     _us()._manager.ensure("audio", wanted)
                     text, _lang = await asyncio.to_thread(
                         _transcribe_pcm, raw, rate, wanted, language)
@@ -1629,6 +1753,8 @@ async def realtime_asr(ws: WebSocket):
                         "error": {"type": "server_error",
                                   "message": str(e)[:300]},
                     })
+                finally:
+                    _us()._manager.end()
             elif typ in ("session.finish", "session.close"):
                 await ws.send_json({"type": "session.finished"})
                 break
@@ -1643,7 +1769,7 @@ async def realtime_asr(ws: WebSocket):
         except Exception:
             pass
     finally:
-        _us()._manager.end()
+        _REALTIME_WS_CONNECTIONS = max(0, _REALTIME_WS_CONNECTIONS - 1)
 
 
 @router.post("/v1/audio/translations")
@@ -1693,7 +1819,8 @@ async def ocr_endpoint(
             "detail": f"Download {engine.model_id} from the Models tab, or run "
                       f"python pc/download_models.py {engine.model_id}"})
 
-    if not engine.init():
+    loaded = await asyncio.to_thread(engine.init)
+    if not loaded:
         return JSONResponse(status_code=503, content={
             "error": "OCR model failed to load"})
 
@@ -1707,7 +1834,7 @@ async def ocr_endpoint(
         tmp.close()
 
         try:
-            text = engine.transcribe(tmp.name, language=language, task=task)
+            text = await asyncio.to_thread(engine.transcribe, tmp.name, language=language, task=task)
         finally:
             Path(tmp.name).unlink(missing_ok=True)
 
@@ -1825,7 +1952,21 @@ class SpeechRequest(BaseModel):
 async def audio_speech(req: SpeechRequest):
     if not (req.input or "").strip():
         return JSONResponse(status_code=400, content={"error": "missing input"})
+    model = (req.model or "supertonic-3").strip().lower()
     try:
+        if model.startswith("kitten"):
+            from unified import kitten_tts as _kt
+            if not _kt.is_installed():
+                raise RuntimeError("kitten-tts not installed: pip install kittenml")
+            data = _kt.synthesize_bytes(
+                req.input, voice=req.voice or "Jasper",
+                speed=req.speed or 1.0,
+                fmt=req.response_format or "wav",
+            )
+            ctype = "audio/wav" if (req.response_format or "wav").lower() in ("wav", "wave") else "audio/mpeg"
+            return Response(content=data, media_type=ctype,
+                           headers={"Content-Disposition": 'attachment; filename="speech.' +
+                                   (req.response_format or "wav").lower().lstrip(".") + '"'})
         from unified import tts_engine as _tts
         data, ctype = _tts.synthesize_bytes(
             req.input, voice=req.voice or "0",
@@ -1850,11 +1991,20 @@ async def audio_speech(req: SpeechRequest):
 def audio_voices():
     try:
         from unified import tts_engine as _tts
-        return {"voices": _tts.voices(), "engine": "supertonic-3",
-                "installed": _tts.is_installed()}
-    except Exception as e:
-        return {"voices": [], "engine": "supertonic-3", "installed": False,
-                "error": str(e)[:200]}
+        voices = _tts.voices()
+        engine = "supertonic-3"
+        installed = _tts.is_installed()
+    except Exception:
+        voices, engine, installed = [], "supertonic-3", False
+    try:
+        from unified import kitten_tts as _kt
+        if _kt.is_installed():
+            voices = voices + _kt.voices()
+            engine = engine + "+kitten-tts"
+            installed = True
+    except Exception:
+        pass
+    return {"voices": voices, "engine": engine, "installed": installed}
 
 
 # ---------- webui ----------
@@ -1938,7 +2088,7 @@ async def convert_video_endpoint(
         _kind = ("image" if _ext in (".jpg", ".jpeg", ".png", ".webp", ".avif") else
                  "audio" if _ext in (".mp3", ".m4a", ".aac", ".wav", ".opus", ".flac") else
                  "video")
-        out_meta = _us()._store_output(_kind, _ext, out_data, rid)
+        out_meta = _store_output(_kind, _ext, out_data, rid)
 
         try:
             Path(out_path).unlink(missing_ok=True)
@@ -2003,7 +2153,7 @@ async def convert_audio_endpoint(
         _kind = ("image" if _ext in (".jpg", ".jpeg", ".png", ".webp", ".avif") else
                  "audio" if _ext in (".mp3", ".m4a", ".aac", ".wav", ".opus", ".flac") else
                  "video")
-        out_meta = _us()._store_output(_kind, _ext, out_data, rid)
+        out_meta = _store_output(_kind, _ext, out_data, rid)
 
         try:
             Path(out_path).unlink(missing_ok=True)
@@ -2053,7 +2203,7 @@ async def convert_image_endpoint(
         _raw = Path(out_path).read_bytes()
         out_b64 = base64.b64encode(_raw).decode()
         _ext = Path(out_path).suffix.lower() or ".jpg"
-        out_meta = _us()._store_output("image", _ext, _raw, rid)
+        out_meta = _store_output("image", _ext, _raw, rid)
         try:
             Path(out_path).unlink(missing_ok=True)
         except Exception:
@@ -2114,7 +2264,7 @@ async def _run_media_transform(file: UploadFile, rid: str, default_name: str,
         out_data = Path(out_path).read_bytes()
         out_b64 = base64.b64encode(out_data).decode()
         ext = Path(out_path).suffix.lower() or ".bin"
-        out_meta = _us()._store_output(_media_output_kind(ext), ext, out_data, rid)
+        out_meta = _store_output(_media_output_kind(ext), ext, out_data, rid)
 
         try:
             Path(out_path).unlink(missing_ok=True)
@@ -2256,7 +2406,7 @@ async def ffmpeg_run_endpoint(
         _kind = ("image" if _ext in (".jpg", ".jpeg", ".png", ".webp", ".avif") else
                  "audio" if _ext in (".mp3", ".m4a", ".aac", ".wav", ".opus", ".flac") else
                  "video")
-        out_meta = _us()._store_output(_kind, _ext, out_data, rid)
+        out_meta = _store_output(_kind, _ext, out_data, rid)
 
         return {
             "file": out_b64,

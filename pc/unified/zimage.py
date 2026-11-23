@@ -28,7 +28,26 @@ from PIL import Image
 
 logger = logging.getLogger(__name__)
 
-MODEL_DIR = Path(__file__).resolve().parent.parent / "models" / "z-image-turbo"
+# Resolution order: the full bf16 snapshot first, then the FP8 build. Both
+# load through the same ZImageImg2ImgPipeline; only the stored dtype differs.
+MODEL_DIRS = [
+    Path(__file__).resolve().parent.parent / "models" / "z-image-turbo",
+    Path(__file__).resolve().parent.parent / "models" / "z-image-turbo-fp8",
+]
+
+
+def _model_dir() -> Path:
+    """First complete snapshot (bf16 or FP8)."""
+    for d in MODEL_DIRS:
+        if (d / "model_index.json").is_file():
+            tdir = d / "transformer"
+            if tdir.is_dir() and sum(
+                    f.stat().st_size for f in tdir.glob("*.safetensors")) > 4 * 1024 ** 3:
+                return d
+    return MODEL_DIRS[0]
+
+
+MODEL_DIR = _model_dir()
 DEFAULT_PROMPT = "high quality, sharp natural detail, clean edges"
 DEFAULT_STRENGTH = 0.33
 DEFAULT_STEPS = 9
@@ -46,13 +65,15 @@ def is_installed() -> bool:
     The size guard matters during a download: model_index.json and the
     transformer folder appear long before the 12 GB of weights are complete.
     """
-    if not (MODEL_DIR / "model_index.json").is_file():
+    d = _model_dir()
+    if not (d / "model_index.json").is_file():
         return False
-    tdir = MODEL_DIR / "transformer"
+    tdir = d / "transformer"
     if not tdir.is_dir():
         return False
     total = sum(f.stat().st_size for f in tdir.glob("*.safetensors"))
-    return total > 8 * 1024 ** 3
+    # bf16 transformer is ~12.3 GB, the FP8 build ~6.2 GB.
+    return total > 4 * 1024 ** 3
 
 
 def _load():
@@ -67,8 +88,10 @@ def _load():
     from diffusers import ZImageImg2ImgPipeline
 
     vram_gb = torch.cuda.get_device_properties(0).total_memory / 1e9
+    model_dir = _model_dir()
+    logger.info("Z-Image loading from %s", model_dir)
     pipe = ZImageImg2ImgPipeline.from_pretrained(
-        str(MODEL_DIR), torch_dtype=torch.bfloat16, low_cpu_mem_usage=True)
+        str(model_dir), torch_dtype=torch.bfloat16, low_cpu_mem_usage=True)
     if vram_gb < 9:
         # The transformer is larger than the card; stream it layer by layer.
         pipe.enable_sequential_cpu_offload()

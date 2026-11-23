@@ -155,9 +155,49 @@ private val ocr: List<ModelAsset> = listOf(
     ),
 )
 
-    val assets: List<ModelAsset> = audio + image + upscale + vlm + ocr
+    /**
+     * Photo colorization. `deoldify-artistic` is the default (most chroma,
+     * keeps the original luminance), matching the PC product.
+     */
+    private val colorize: List<ModelAsset> = listOf(
+        ModelAsset(
+            id = "deoldify-artistic", kind = "colorize", engine = "onnxruntime",
+            label = "DeOldify Artistic - 250 MB (default colorizer)",
+            files = listOf(
+                ModelFile("deoldify_artistic.onnx",
+                    "https://huggingface.co/facefusion/models-3.0.0/resolve/main/deoldify_artistic.onnx",
+                    250),
+            ),
+            note = "Strongest colours, keeps the source structure. Input is grayscale RGB 0-255; " +
+                   "only the chroma is taken from the model.",
+        ),
+        ModelAsset(
+            id = "ddcolor-full", kind = "colorize", engine = "onnxruntime",
+            label = "DDColor full - 435 MB (photorealistic)",
+            files = listOf(
+                ModelFile("ddcolor-512-fp16.onnx",
+                    "https://huggingface.co/Diogo122333/ddcolor-512-fp16/resolve/main/ddcolor-512-fp16.onnx",
+                    435),
+            ),
+            note = "Conservative, historically plausible colours. The app removes the " +
+                   "checkpoint's red cast and smooths chroma noise before merging.",
+        ),
+        ModelAsset(
+            id = "ddcolor-artistic", kind = "colorize", engine = "onnxruntime",
+            label = "DDColor artistic - 980 MB (richer chroma)",
+            files = listOf(
+                ModelFile("ddcolor_artistic.onnx",
+                    "https://huggingface.co/facefusion/models-3.0.0/resolve/main/ddcolor_artistic.onnx",
+                    980),
+            ),
+            note = "Middle ground: more colour than ddcolor-full, still grounded.",
+        ),
+    )
 
-    val kinds: List<String> = listOf("audio", "image", "upscale", "vlm", "ocr", "custom")
+    val assets: List<ModelAsset> =
+        audio + image + upscale + vlm + ocr + colorize
+
+    val kinds: List<String> = listOf("audio", "image", "upscale", "vlm", "ocr", "colorize", "custom")
 
     fun kindLabel(kind: String): String = when (kind) {
         "audio" -> "Transcription (Whisper)"
@@ -165,6 +205,7 @@ private val ocr: List<ModelAsset> = listOf(
         "upscale" -> "Upscale"
         "vlm" -> "Vision-language (VLM)"
         "ocr" -> "OCR (Xiaomi-OCR-0)"
+        "colorize" -> "Colorization"
         "custom" -> "Custom (own URL)"
         else -> kind
     }

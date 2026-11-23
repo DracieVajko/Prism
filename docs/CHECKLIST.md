@@ -48,6 +48,7 @@ Status legend: [x] done, [~] in progress, [ ] todo, [!] experimental/blocked.
 ## Android endpoints
 
 - [x] GET /health, /v1/models, /v1/models/catalog, /v1/models/custom
+- [x] GET /healthz (ASR/server probe)
 - [x] POST /v1/models/install, /uninstall, /cancel, /add, /delete
 - [x] GET /v1/models/progress/{id}
 - [x] POST /v1/images/generations (local ONNX) — **200**
@@ -71,7 +72,8 @@ Status legend: [x] done, [~] in progress, [ ] todo, [!] experimental/blocked.
 - [x] Separate WebUI with all tabs.
 - [x] Model catalog + install/uninstall + custom URL.
 - [x] FFmpeg presets (5 video, 6 audio, 8 resize).
-- [x] Bind 0.0.0.0.
+- [ ] Deferred optional models for later testing (deleted to save disk): cohere-transcribe (gated), parakeet-v3/v2/unified-en, nb-whisper-medium, ivrit-whisper-turbo, firered-ocr. Test one at a time after cleanup.
+- [x] GET /healthz (ASR model + loaded state for Cindy probe).
 - [x] Dropdown alignment + hideable missing-models message.
 - [x] Console: scrollable (220 px), selectable, **copy** + **clear**.
 - [x] **Save transcript** link (downloads `.txt`).
@@ -1110,3 +1112,64 @@ Android (`Android/data/<pkg>/files/output/<kind>/`):
       LM Studio at n_ctx 32 000. The digest keeps each read bounded, but a
       56 min meeting is still ~14 k transcript tokens, so a larger context or a
       cloud model would be the next real headroom.
+
+## Model curation and local secrets (2026-11-23)
+
+- [x] Colorization fixed and made multi-model: ddcolor-full, ddcolor-artistic,
+      deoldify-artistic on POST /v1/images/colorize (model field).
+      DDColor needed per-model chroma boost (2.2x full, 1.6x artistic); deoldify
+      now follows the FaceFusion reference pipeline (0-255 input, original L kept)
+      after two wrong attempts (ImageNet normalisation, then an R/B swap).
+- [x] deoldify-artistic previously returned a blue-only image; root cause was the
+      missing 0-255 input contract and taking the model's own luminance.
+- [x] Restore now uses Juggernaut XL img2img at 768x768 (was DreamShaper 512).
+      Override with PRISM_RESTORE_MODEL; falls back to DreamShaper when absent.
+- [x] FLUX.1-Kontext-dev cannot run on this machine and is documented as such:
+      bf16 needs ~31.8 GB RAM, FP8 has no matmul on Ampere, ComfyUI GGUF has
+      incompatible tensor shapes. Kept as optional downloads, removed from disk.
+- [x] Z-Image Turbo replaced by the FP8 build (z-image-turbo-fp8, 14.4 GB vs
+      30.6 GB). Verified end to end: 778 s including a 12 min cold load.
+- [x] Quantized downloads added to download_models.py with presets:
+      lux-kontext-dev-fp8, z-image-turbo-fp8 (--preset zimage-fp8). Both
+      load through the same diffusers pipelines as the full-precision builds.
+- [x] Local secrets: pc/settings.local.json (git-ignored) stores the HuggingFace
+      token and LLM provider settings. New endpoints:
+      GET/PUT /v1/settings/secrets, POST .../test/hf, POST .../test/llm.
+      Secrets are masked in responses and a masked round-trip cannot overwrite
+      them. PC WebUI Settings tab and Android 'API & model settings' dialog both
+      edit these values; Android attaches the token to HuggingFace downloads.
+- [x] GFPGAN removed from code as well as disk: the face-restore route now returns
+      an honest 503 pointing at /v1/images/restore and /v1/images/colorize.
+- [x] Disk: removed AbsoluteReality, AnimagineXL, cohere-transcribe, falcon-ocr,
+      lightonocr-2-1b, ovis-ocr2, paddleocr-vl-1.6, granite-docling-258m,
+      nemotron-transcribe-30b, LCM ONNX, instruct-pix2pix, ddcolor-tiny,
+      z-image-turbo bf16 and all FLUX variants. All remain optional downloads.
+
+- [x] Colorization default is now `deoldify-artistic` (most chroma, keeps the
+      original luminance). `ddcolor-full` and `ddcolor-artistic` stay selectable
+      through the `model` field. Verified: a request without `model` reports
+      `engine=deoldify-artistic`.
+
+## Android parity with the PC curation pass (2026-11-23)
+
+- [x] `ColorizeEngine` (Kotlin, ONNX Runtime) implements the same two model
+      families as the PC: `deoldify-artistic` (default; grayscale RGB 0..255,
+      chroma merged into the original luminance) and the two `ddcolor`*
+      checkpoints (median cast removal + guided-filter chroma smoothing before
+      the Lab merge, which is what removes the red/blue fringe).
+- [x] `POST /v1/images/colorize` on Android accepts `{image, model}` and
+      returns the same `{image, elapsed, engine, request_id, outputs}` shape as
+      the PC, so one client works against both. Default model:
+      `deoldify-artistic`.
+- [x] New catalog group `colorize` with the three ONNX assets (250 MB / 435 MB
+      / 980 MB); they appear in the Models tab and install like any other asset.
+- [x] Android UI: a `Colorize (DeOldify)` button next to Upscale in the Vision
+      card; the result lands in the preview and can be saved with the existing
+      Save button.
+- [x] `switchTo` releases the colorizer session when another engine needs the
+      RAM, and the button path checks free memory first (honest 503 instead of an
+      OOM kill).
+- [x] `POST /v1/images/restore` now answers an honest 503 pointing at the PC
+      server and at `/v1/images/colorize` instead of falling through to 404.
+- [x] `assembleDebug` BUILD SUCCESSFUL (104.4 MB APK). No device was attached,
+      so the on-device colorize run is still pending.

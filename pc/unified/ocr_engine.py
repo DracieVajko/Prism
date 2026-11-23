@@ -95,13 +95,6 @@ OCR_SPECS = {
         "license": "Apache-2.0",
         "size_gb": 2.0,
     },
-    "firered-ocr": {
-        "repo": "FireRedTeam/FireRed-OCR",
-        "family": "qwen-vl",
-        "label": "FireRed-OCR (Qwen3-VL-2B fine-tune)",
-        "license": "Apache-2.0",
-        "size_gb": 4.3,
-    },
     "qianfan-ocr": {
         "repo": "baidu/Qianfan-OCR",
         "family": "native-vl",

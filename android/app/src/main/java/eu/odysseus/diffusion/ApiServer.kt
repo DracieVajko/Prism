@@ -186,6 +186,14 @@ data class UpscaleReq(
     val request_id: String = "",
 )
 
+/** Colorize a black-and-white photo (ddcolor-* or deoldify-artistic). */
+@Serializable
+data class ColorizeReq(
+    val image: String = "",
+    val model: String = ColorizeEngine.DEFAULT_MODEL,
+    val request_id: String = "",
+)
+
 /** Expand the canvas and let the inpaint engine paint the new border. */
 @Serializable
 data class OutpaintReq(
@@ -491,7 +499,7 @@ private val batchState = ConcurrentHashMap<String, BatchState>()
             val token = AppConfig.authToken
             if (token.isNotEmpty()) {
                 val path = call.request.path()
-                if (path != "/health") {
+                if (path != "/health" && path != "/healthz") {
                     val auth = call.request.headers["Authorization"] ?: ""
                     val ok = auth == "Bearer $token"
                     if (!ok) {
@@ -604,6 +612,18 @@ private val batchState = ConcurrentHashMap<String, BatchState>()
                 } catch (e: Exception) {
                     android.util.Log.w("ApiServer", "realtime ASR: ${e.message}")
                 }
+            }
+            get("/healthz") {
+                val st = manager.status()
+                call.respond(
+                    jsonOf(
+                        "ok" to true,
+                        "status" to "ok",
+                        "asr_model" to st.loadedId,
+                        "loaded" to (st.loadedId != null),
+                        "audio_whisper_models_resident" to if (st.loadedId != null) 1 else 0,
+                    ),
+                )
             }
             get("/health") {
                 val st = manager.status()
@@ -1561,6 +1581,57 @@ private val batchState = ConcurrentHashMap<String, BatchState>()
                     "detail" to "video frame upscale is PC-only (ffmpeg + Real-ESRGAN/SwinIR/Z-Image); use the PC server",
                 ))
             }
+            // Restoration needs an SD/FLUX-class model; the phone ships none.
+            // Colourisation above is the on-device equivalent for old photos.
+            post("/v1/images/restore") {
+                call.respond(HttpStatusCode.ServiceUnavailable, jsonOf(
+                    "error" to "will not load",
+                    "detail" to "photo restoration runs on the PC server (Z-Image Turbo / Juggernaut); " +
+                        "on the phone use /v1/images/colorize",
+                ))
+            }
+            post("/v1/images/colorize") {
+                val req = wireJson.decodeFromString<ColorizeReq>(call.receiveText())
+                if (req.image.isEmpty()) {
+                    call.respond(HttpStatusCode.BadRequest, jsonOf("error" to "image required (base64)"))
+                    return@post
+                }
+                val modelId = if (req.model.isEmpty()) ColorizeEngine.DEFAULT_MODEL else req.model
+                this@ApiServer.requireModelReady(modelId)
+                switchTo("colorize", modelId)
+                lastHeavyUse = System.currentTimeMillis()
+                val rid = req.request_id.ifEmpty { UUID.randomUUID().toString() }
+                val src = decodeB64Image(req.image)
+                if (src == null) {
+                    call.respond(HttpStatusCode.BadRequest, jsonOf("error" to "invalid image base64"))
+                    return@post
+                }
+                val ctx = appContext ?: run {
+                    src.recycle()
+                    call.respond(HttpStatusCode.InternalServerError, jsonOf("error" to "no app context"))
+                    return@post
+                }
+                val t0 = System.currentTimeMillis()
+                val out = withContext(heavyDispatcher) {
+                    requireMemory(300, "the colorizer")
+                    ColorizeEngine.colorize(ctx, src, modelId)
+                }
+                src.recycle()
+                if (out == null) {
+                    throw ModelWillNotLoadError(
+                        "colorize failed: " + ColorizeEngine.lastError, -1, -1)
+                }
+                val elapsed = (System.currentTimeMillis() - t0) / 1000.0
+                val b64 = bitmapToB64(out)
+                out.recycle()
+                call.respond(jsonOf(
+                    "image" to b64,
+                    "elapsed" to elapsed,
+                    "request_id" to rid,
+                    "engine" to modelId,
+                    "outputs" to outputList(storeB64("image", ".png", b64, rid)),
+                ))
+            }
             post("/v1/images/caption") {
                 val req = wireJson.decodeFromString<CaptionReq>(call.receiveText())
                 if (req.image.isEmpty()) {
@@ -2492,6 +2563,11 @@ switchTo("audio", effectiveModel) // 503 loading while switching image→audio
         // LOW_MEMORY during a transcription run (pid 21358, 2026-10-27 10:33).
         if (prev == "image" && kind != "image") {
             LcmOnnxEngine.release()
+        }
+        // The colorizer holds its own ORT session; free it as soon as another
+        // kind needs the RAM (it is cheap to reload).
+        if (prev == "colorize" && kind != "colorize") {
+            ColorizeEngine.release()
         }
         if (kind == "audio" && RealEsrganNcnnEngine.isReady()) {
             RealEsrganNcnnEngine.release()
