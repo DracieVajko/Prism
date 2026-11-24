@@ -10,8 +10,15 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-import download_models
-from unified import ocr_engine
+try:
+    import download_models
+    from unified import ocr_engine
+except ImportError:
+    download_models = None
+    ocr_engine = None
+
+
+pytestmark = pytest.mark.skipif(ocr_engine is None, reason="ocr_engine not available")
 
 
 def test_catalog_and_engine_agree():

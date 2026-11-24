@@ -49,9 +49,7 @@ _SESSIONS = {}
 _DEFAULT_MODEL = "deoldify-artistic"
 _ACTIVE_ID = _DEFAULT_MODEL
 
-# Chroma boost per model. ddcolor-artistic already produces stronger chroma,
-# so it gets a gentler boost; deoldify outputs full RGB and needs none.
-# Chroma gain after cast removal. ddcolor-full needs more because the
+# Chroma boost per model. ddcolor-full needs more because the
 # edge-aware smoothing flattens its noisier chroma; artistic is already richer.
 SATURATION_BOOST = {
     "ddcolor-full": 3.0,
@@ -59,58 +57,25 @@ SATURATION_BOOST = {
     "deoldify-artistic": 1.0,
 }
 
-# Both DDColor checkpoints predict a constant chroma offset for a whole image:
-# ddcolor-full sits at a≈+7.5 (red cast), ddcolor-artistic at b≈+12.9 (yellow
-# cast). Subtracting the per-image median recentres the scene without touching
-# local colour. Values are the fraction of the median that is removed.
+# Chroma cast correction per model. ddcolor-full predicts a ~7 red offset in
+# the 'a' channel, ddcolor-artistic already produces stronger chroma so it
+# needs a gentler boost; deoldify outputs full RGB and needs none.
 CAST_CORRECTION = {
-    "ddcolor-full": 1.0,
-    "ddcolor-artistic": 1.0,
+    "ddcolor-full": 2.2,
+    "ddcolor-artistic": 2.2,
+    "deoldify-artistic": 1.0,
 }
 
-# Natural photographs stay well inside ±60 in Lab a/b.
-AB_CLAMP = 60.0
-
-# Edge-aware chroma smoothing strength. The full checkpoint is noisier than
-# the artistic one, which is why only the former showed fringing.
-CHROMA_SMOOTH = {
-    "ddcolor-full": 1,
-    "ddcolor-artistic": 1,
-    "deoldify-artistic": 0,
-}
-
-
-def _guided_filter(guide: np.ndarray, src: np.ndarray, radius: int = 6,
-                   eps: float = 120.0) -> np.ndarray:
-    """Single-channel guided filter (He et al.) using box filters.
-
-    Keeps edges from `guide` while flattening `src` inside flat regions. Used to
-    clean per-pixel chroma noise without blurring colour across object borders.
-    """
-    if not _has_cv2():
-        return src
-    g = guide.astype(np.float32)
-    p = src.astype(np.float32)
-    ksize = (2 * radius + 1, 2 * radius + 1)
-    mean_i = cv2.blur(g, ksize)
-    mean_p = cv2.blur(p, ksize)
-    corr_ip = cv2.blur(g * p, ksize)
-    corr_ii = cv2.blur(g * g, ksize)
-    cov_ip = corr_ip - mean_i * mean_p
-    var_i = corr_ii - mean_i * mean_i
-    a = cov_ip / (var_i + eps)
-    b = mean_p - a * mean_i
-    mean_a = cv2.blur(a, ksize)
-    mean_b = cv2.blur(b, ksize)
-    return mean_a * g + mean_b
+# Chroma clamp after scaling: keeps colors within valid Lab range.
+AB_CLAMP = 127.0
 
 
 def _ensure_nvidia_dlls():
     try:
         from unified.onnx_env import register_nvidia_dlls
         register_nvidia_dlls()
-    except Exception as e:
-        logger.debug("onnx_env register failed: %s", e)
+    except Exception:
+        pass
 
 
 def _get_session(model_id: str = _DEFAULT_MODEL):
@@ -131,7 +96,7 @@ def _get_session(model_id: str = _DEFAULT_MODEL):
         logger.info("Colorize model loaded: %s", model_id)
         return session
     except Exception as e:
-        logger.error("Colorize model load failed: %s: %s", model_id, e)
+        logger.error("Colorize model load failed: %s", model_id, e)
         return None
 
 
@@ -151,6 +116,25 @@ def _has_cv2() -> bool:
     return cv2 is not None
 
 
+def _bgr_to_lab_l(bgr):
+    if _has_cv2():
+        lab = cv2.cvtColor(bgr.astype(np.float32), cv2.COLOR_BGR2LAB)
+        return lab[:, :, 0].astype(np.float32)
+    # Fallback manual RGB->Lab L channel
+    rgb = bgr[:, :, ::-1]
+    mask = rgb <= 0.04045
+    linear = np.where(mask, rgb / 12.92, ((rgb + 0.055) / 1.055) ** 2.4)
+    M = np.array([[0.4124564, 0.3575761, 0.1804375],
+                  [0.2126729, 0.7151522, 0.0721750],
+                  [0.0193339, 0.1191920, 0.9503041]], dtype=np.float32)
+    xyz = linear @ M.T
+    y = xyz[:, :, 1]
+    delta = 6 / 29
+    fy = np.where(y > delta ** 3, np.cbrt(y), y / (3 * delta ** 2) + 4 / 29)
+    L = 116 * fy - 16
+    return L.astype(np.float32)
+
+
 def colorize_b64(image_b64: str, model_id: str = _DEFAULT_MODEL) -> dict:
     """Colorize a base64-encoded grayscale/B&W image.
 
@@ -162,90 +146,72 @@ def colorize_b64(image_b64: str, model_id: str = _DEFAULT_MODEL) -> dict:
     img = Image.open(io.BytesIO(raw)).convert("RGB")
     orig_w, orig_h = img.size
 
-    spec = COLORIZE_MODELS.get(model_id, COLORIZE_MODELS[_DEFAULT_MODEL])
+    spec = COLORIZE_MODELS.get(model_id, COLORIZE_MODELS["ddcolor-full"])
     mtype = spec["type"]
     size = spec["size"]
-    session = _get_session(model_id if model_id in COLORIZE_MODELS else _DEFAULT_MODEL)
+    session = _get_session(model_id if model_id in COLORIZE_MODELS else "ddcolor-full")
     if session is None:
         raise RuntimeError(f"Colorize model not loaded: {model_id}")
 
     if mtype == "ddcolor":
-        # Facefusion approach: convert to grayscale, L channel, predict ab
+        # DDColor: predict ab channels, merge with L from original image.
         img_bgr = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
-        gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
-        gray_rgb = cv2.cvtColor(gray, cv2.COLOR_GRAY2RGB)
-        gray_rgb = (gray_rgb / 255.0).astype(np.float32)
-        # L channel from grayscale
-        lab = cv2.cvtColor(gray_rgb, cv2.COLOR_RGB2LAB)
-        L_small = lab[:, :, 0:1]  # (H, W, 1)
-        # Concatenate L + 0 + 0 -> Lab with zero chroma
-        lab_zero = np.concatenate([L_small, np.zeros_like(L_small), np.zeros_like(L_small)], axis=-1)
-        rgb_input = cv2.cvtColor(lab_zero.astype(np.float32), cv2.COLOR_LAB2RGB)
-        rgb_input = cv2.resize(rgb_input, (size, size), interpolation=cv2.INTER_AREA)
-        # Luminance at model resolution: used as the edge guide for chroma.
-        L_guide = cv2.cvtColor(rgb_input.astype(np.float32), cv2.COLOR_RGB2LAB)[:, :, 0]
-        inp = rgb_input.transpose(2, 0, 1)[np.newaxis, ...].astype(np.float32)
+        L_full = _bgr_to_lab_l(img_bgr)
+
+        img_resized = cv2.resize(img_bgr, (size, size), interpolation=cv2.INTER_AREA)
+        L_512 = _bgr_to_lab_l(img_resized)
+
+        lab_gray = np.zeros((size, size, 3), dtype=np.float32)
+        lab_gray[:, :, 0] = L_512
+        bgr_gray = cv2.cvtColor(lab_gray.astype(np.float32), cv2.COLOR_LAB2BGR).astype(np.float32)
+        rgb_gray = bgr_gray[:, :, ::-1]
+        inp = rgb_gray.transpose(2, 0, 1)[np.newaxis, ...].astype(np.float32)
 
         outputs = session.run(None, {session.get_inputs()[0].name: inp})
-        ab = outputs[0][0].transpose(1, 2, 0)  # (size, size, 2)
+        ab = outputs[0][0].transpose(1, 2, 0)  # (512, 512, 2)
 
-        # Remove the checkpoint's global colour cast, then scale to a natural
-        # photographic chroma range. Values are in CIE Lab a/b units.
+        # Remove the checkpoint's global colour cast, then scale to
+        # vivid but not extreme chroma.
         cast = CAST_CORRECTION.get(model_id, 0.0)
         if cast:
             for c in range(2):
-                ab[:, :, c] -= cast * float(np.median(ab[:, :, c]))
-        ab = ab * SATURATION_BOOST.get(model_id, 2.0)
+                ch = ab[:, :, c]
+                ab[:, :, c] = ch - cast * float(np.median(ch))
+        ab_scale = np.percentile(np.abs(ab), 99.5)
+        if ab_scale > 0:
+            ab = ab / ab_scale * SATURATION_BOOST.get(model_id, 2.0)
         ab = np.clip(ab, -AB_CLAMP, AB_CLAMP)
 
-        # Full-res L from original image
-        img_bgr_f = (img_bgr / 255.0).astype(np.float32)
-        L_full = cv2.cvtColor(img_bgr_f, cv2.COLOR_BGR2LAB)[:, :, 0:1]
-
-        # Edge-aware smoothing of the predicted chroma. The checkpoint emits
-        # per-pixel chroma noise; amplifying it and upscaling with plain
-        # bilinear produced fringes along high-contrast edges (the red/blue
-        # "3D glasses" look). A guided filter keyed on the model-resolution
-        # luminance removes the speckle and keeps chroma aligned to edges.
-        if CHROMA_SMOOTH.get(model_id, 0):
-            for c in range(2):
-                ab[:, :, c] = _guided_filter(L_guide, ab[:, :, c],
-                                             radius=6, eps=120.0)
-
-        # Resize ab to original size
         ab_full = cv2.resize(ab, (orig_w, orig_h), interpolation=cv2.INTER_LINEAR)
 
-        # Merge L + ab -> Lab -> RGB (use RGB directly, not BGR)
-        lab_out = np.concatenate([L_full, ab_full], axis=-1).astype(np.float32)
+        lab_out = np.zeros((orig_h, orig_w, 3), dtype=np.float32)
+        lab_out[:, :, 0] = L_full
+        # Swap a and b: model outputs (b, a) not (a, b)
+        lab_out[:, :, 1] = ab_full[:, :, 1]
+        lab_out[:, :, 2] = ab_full[:, :, 0]
+
         rgb_out = cv2.cvtColor(lab_out, cv2.COLOR_LAB2RGB)
         rgb_out = np.clip(rgb_out, 0, 1)
-        # Chroma is already scaled in the a/b domain; no extra HSV boost, which
-        # used to wash the hue and made the result look posterised.
-        out_uint8 = (np.clip(rgb_out, 0, 1) * 255).astype(np.uint8)
+        out_uint8 = (rgb_out * 255).astype(np.uint8)
 
     elif mtype == "deoldify":
-        # DeOldify (FaceFusion reference pipeline):
-        #   input  = grayscale RGB, 0-255 float, no normalization
-        #   output = RGB 0-255
-        # The model's chroma is merged into the ORIGINAL luminance so the
-        # result keeps the source structure instead of becoming a redraw.
-        src_bgr = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
-        gray = cv2.cvtColor(src_bgr, cv2.COLOR_BGR2GRAY)
-        gray_rgb = cv2.cvtColor(gray, cv2.COLOR_GRAY2RGB)
-        resized = cv2.resize(gray_rgb, (size, size))
-        inp = resized.transpose(2, 0, 1)[np.newaxis, ...].astype(np.float32)
+        # DeOldify: ImageNet-normalized RGB input, then facefusion-style merge
+        # (preserve original L, take color from model output).
+        img_resized = img.resize((size, size), Image.BILINEAR)
+        arr = np.array(img_resized, dtype=np.float32) / 255.0
+        mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
+        std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
+        arr_norm = (arr - mean) / std
+        inp = arr_norm.transpose(2, 0, 1)[np.newaxis, ...].astype(np.float32)
         outputs = session.run(None, {session.get_inputs()[0].name: inp})
-        out = outputs[0][0].transpose(1, 2, 0)          # RGB, 0-255
-        out_resized = cv2.resize(out, (orig_w, orig_h))
+        out = outputs[0][0].transpose(1, 2, 0)
+        out = out * std + mean
+        out = np.clip(out, 0, 1)
 
-        # Keep the original L (blue channel is a faithful luminance proxy),
-        # take only chroma (a, b) from the colorized output.
-        blue_ch, _, _ = cv2.split(src_bgr)
-        color = cv2.cvtColor(out_resized.astype(np.uint8), cv2.COLOR_BGR2RGB)
-        color = cv2.cvtColor(color, cv2.COLOR_BGR2LAB)
-        _, a_ch, b_ch = cv2.split(color)
-        merged = cv2.cvtColor(cv2.merge((blue_ch, a_ch, b_ch)), cv2.COLOR_LAB2BGR)
-        out_img = Image.fromarray(cv2.cvtColor(merged, cv2.COLOR_BGR2RGB))
+        # The model output has a blue bias; swap R and B to correct it.
+        out_rgb = out[:, :, ::-1]
+        out_img = Image.fromarray((out_rgb * 255).astype(np.uint8))
+        out_img = out_img.resize((orig_w, orig_h), Image.LANCZOS)
         out_uint8 = np.array(out_img)
 
     out_rgb = Image.fromarray(out_uint8, mode="RGB")
