@@ -328,9 +328,10 @@ class OCREngine:
             text = self.processor.decode(output[0][input_len:],
                                          skip_special_tokens=True)
             # Clean up GPU memory after generation
+            # NOTE: no `import torch` here - a local import would shadow the
+            # one already imported above and make torch unbound in _run_once.
             del output
             try:
-                import torch
                 if torch.cuda.is_available():
                     torch.cuda.empty_cache()
             except Exception:
