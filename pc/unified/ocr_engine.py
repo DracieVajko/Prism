@@ -255,12 +255,23 @@ class OCREngine:
         # Qwen-VL and Idefics3 need the chat template: it inserts the <image>
         # token. A bare prompt gives "0 <image> tokens and [0, 1] images".
         messages = [{"role": "user", "content": [
-            {"type": "image"},
+            {"type": "image", "image": image},
             {"type": "text", "text": prompt},
         ]}]
-        chat = self.processor.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True)
-        return self.processor(text=chat, images=[image], return_tensors="pt")
+        try:
+            # transformers 5.x: apply_chat_template can tokenise directly
+            return self.processor.apply_chat_template(
+                messages,
+                add_generation_prompt=True,
+                tokenize=True,
+                return_dict=True,
+                return_tensors="pt",
+            )
+        except (TypeError, ValueError):
+            # Fallback for older transformers: two-step
+            chat = self.processor.apply_chat_template(
+                messages, tokenize=False, add_generation_prompt=True)
+            return self.processor(text=chat, images=[image], return_tensors="pt")
 
     def transcribe(self, image_path: str, language: str = "auto",
                    task: str = "ocr") -> str:
