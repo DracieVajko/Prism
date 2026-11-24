@@ -197,6 +197,8 @@ class OCREngine:
                 trust_remote_code=self.trust_remote_code,
             )
             self._loaded = True
+            if hasattr(self.model, "eval"):
+                self.model.eval()
             logger.info("OCR model %s loaded from %s", self.model_id, self.model_dir)
             return True
         except Exception as e:
@@ -285,25 +287,54 @@ class OCREngine:
 
         if image.mode != "RGB":
             image = image.convert("RGB")
-        inputs = self._inputs(image, prompt)
-        device = self.model.device
-        moved = {}
-        for key, value in inputs.items():
-            if torch.is_tensor(value):
-                moved[key] = value.to(device)
-            else:
-                moved[key] = value
-        inputs = moved
-        with torch.no_grad():
-            output = self.model.generate(
-                **inputs,
-                max_new_tokens=max_new_tokens or self.max_new_tokens,
-                do_sample=False,
-            )
-        input_len = inputs["input_ids"].shape[1]
-        text = self.processor.decode(output[0][input_len:],
-                                     skip_special_tokens=True)
-        return text.strip()
+
+        def _run_once():
+            # Ensure model is in eval mode before each inference
+            if hasattr(self.model, "eval"):
+                self.model.eval()
+            inputs = self._inputs(image, prompt)
+            # Determine target device safely. After device_map="auto" the model
+            # may be spread across devices; use the first parameter's device.
+            try:
+                device = next(self.model.parameters()).device
+            except Exception:
+                device = self.model.device
+            moved = {}
+            for key, value in inputs.items():
+                if torch.is_tensor(value):
+                    moved[key] = value.to(device)
+                else:
+                    moved[key] = value
+            inputs = moved
+            with torch.inference_mode():
+                output = self.model.generate(
+                    **inputs,
+                    max_new_tokens=max_new_tokens or self.max_new_tokens,
+                    do_sample=False,
+                    use_cache=False,
+                )
+            input_len = inputs["input_ids"].shape[1]
+            text = self.processor.decode(output[0][input_len:],
+                                         skip_special_tokens=True)
+            # Clean up GPU memory after generation
+            del output
+            try:
+                import torch
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+            except Exception:
+                pass
+            return text.strip()
+
+        try:
+            return _run_once()
+        except Exception as e:
+            logger.warning("OCR generate failed (%s): %s - re-initialising model", self.model_id, e)
+            # Reset and retry once
+            self.release()
+            if not self.init():
+                raise RuntimeError(f"{self.model_id} failed to re-load after error")
+            return _run_once()
 
     def transcribe_pil(self, image, language: str = "auto",
                        task: str = "ocr") -> str:
