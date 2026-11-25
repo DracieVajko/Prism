@@ -78,9 +78,6 @@ Java_eu_odysseus_diffusion_RealEsrganNcnnEngine_ncnnUpscaleTile(
             reinterpret_cast<const unsigned char*>(src),
             ncnn::Mat::PIXEL_RGB, w, h);
     env->ReleaseByteArrayElements(rgb, src, JNI_ABORT);
-    // The shipped realesrgan-x4plus ncnn model is trained on 0..1 floats; the
-    // official Vulkan app feeds it 0..255 and gets near-black output, which is
-    // what this bridge did until the range probe below showed min/max ~0.16.
     const float norm[3] = {1.f / 255.f, 1.f / 255.f, 1.f / 255.f};
     in.substract_mean_normalize(nullptr, norm);
 
@@ -101,13 +98,13 @@ Java_eu_odysseus_diffusion_RealEsrganNcnnEngine_ncnnUpscaleTile(
     if (ow <= 0 || oh <= 0) {
         return nullptr;
     }
+
     // Range probe. On some Vulkan drivers (observed on Mali-G925, Android 16)
-    // the graph runs but emits a constant frame regardless of the input, which
-    // looked like a black upscale. Detect it and fail the tile so Kotlin can
-    // retry on CPU; a genuinely flat input is not treated as broken.
+    // the graph runs but emits a constant frame regardless of the input.
     float in_min = 1e9f, in_max = -1e9f;
     for (int c = 0; c < in.c; ++c) {
         const float* p = in.channel(c);
+        if (p == nullptr) continue;
         for (int i = 0; i < in.w * in.h; ++i) {
             if (p[i] < in_min) in_min = p[i];
             if (p[i] > in_max) in_max = p[i];
@@ -116,22 +113,17 @@ Java_eu_odysseus_diffusion_RealEsrganNcnnEngine_ncnnUpscaleTile(
     float out_min = 1e9f, out_max = -1e9f;
     for (int c = 0; c < out.c; ++c) {
         const float* p = out.channel(c);
+        if (p == nullptr) continue;
         for (int i = 0; i < out.w * out.h; ++i) {
             if (p[i] < out_min) out_min = p[i];
             if (p[i] > out_max) out_max = p[i];
         }
     }
     if (net->opt.use_vulkan_compute) {
-        // Only the Vulkan path needs per-tile range telemetry; the CPU path is
-        // the steady state and would otherwise spam the log.
         __android_log_print(ANDROID_LOG_INFO, "realesrgan_jni",
                             "range in %.3f..%.3f out %.3f..%.3f pack=%d",
                             in_min, in_max, out_min, out_max, out.elempack);
     }
-    // An ESRGAN pass keeps (or widens) the input contrast. A broken Vulkan
-    // graph returns a compressed constant-ish frame: measured on Mali-G925 the
-    // output range was 7 % of the input range for both a solid colour and a
-    // gradient. Treat that as a failed tile so Kotlin retries on CPU.
     const float in_range = in_max - in_min;
     const float out_range = out_max - out_min;
     const bool vulkan_suspect = net->opt.use_vulkan_compute &&
@@ -143,6 +135,9 @@ Java_eu_odysseus_diffusion_RealEsrganNcnnEngine_ncnnUpscaleTile(
         return nullptr;
     }
 
+    // Use ncnn's to_pixels to safely convert output to interleaved RGB bytes.
+    // This handles elempack conversion internally and avoids null-pointer
+    // crashes that occurred with manual channel() access on some devices.
     jbyteArray result = env->NewByteArray(static_cast<jsize>(ow) * oh * 3);
     if (result == nullptr) {
         return nullptr;
@@ -151,23 +146,7 @@ Java_eu_odysseus_diffusion_RealEsrganNcnnEngine_ncnnUpscaleTile(
     if (dst == nullptr) {
         return nullptr;
     }
-    // Manual planar float -> interleaved RGB bytes with the 0..1 -> 0..255
-    // rescale and clamping. to_pixels() would clamp without scaling.
-    {
-        unsigned char* o = reinterpret_cast<unsigned char*>(dst);
-        const int plane = ow * oh;
-        const float* r = out.channel(0);
-        const float* g = out.c > 1 ? out.channel(1) : out.channel(0);
-        const float* b = out.c > 2 ? out.channel(2) : out.channel(0);
-        for (int i = 0; i < plane; ++i) {
-            float rv = r[i] * 255.f;
-            float gv = g[i] * 255.f;
-            float bv = b[i] * 255.f;
-            o[i * 3 + 0] = (unsigned char) (rv < 0.f ? 0 : (rv > 255.f ? 255 : rv));
-            o[i * 3 + 1] = (unsigned char) (gv < 0.f ? 0 : (gv > 255.f ? 255 : gv));
-            o[i * 3 + 2] = (unsigned char) (bv < 0.f ? 0 : (bv > 255.f ? 255 : bv));
-        }
-    }
+    out.to_pixels(reinterpret_cast<unsigned char*>(dst), ncnn::Mat::PIXEL_RGB);
     env->ReleaseByteArrayElements(result, dst, 0);
     return result;
 }

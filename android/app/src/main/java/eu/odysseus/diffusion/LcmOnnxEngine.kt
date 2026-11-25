@@ -478,7 +478,7 @@ object LcmOnnxEngine {
         val w = size / 8
         val sampleShape = longArrayOf(1, 4, h.toLong(), w.toLong())
         // Direct ByteBuffer to avoid GC and JNI copy overhead
-        val sampleBuf = java.nio.ByteBuffer.allocateDirect(4 * 4 * h * w * 4)
+        val sampleBuf = java.nio.ByteBuffer.allocateDirect(4 * h * w * 4)
             .order(java.nio.ByteOrder.nativeOrder())
             .asFloatBuffer()
         sampleBuf.put(sample)
@@ -645,9 +645,9 @@ object LcmOnnxEngine {
         val pixels = IntArray(outH * outW)
         for (y in 0 until outH) {
             for (x in 0 until outW) {
-                val r = (((arr[y * outW + x] / 2f + 0.5f).coerceIn(0f, 1f) * 127.5f) + 127.5f).toInt().coerceIn(0, 255)
-                val g = (((arr[outH * outW + y * outW + x] / 2f + 0.5f).coerceIn(0f, 1f) * 127.5f) + 127.5f).toInt().coerceIn(0, 255)
-                val b = (((arr[2 * outH * outW + y * outW + x] / 2f + 0.5f).coerceIn(0f, 1f) * 127.5f) + 127.5f).toInt().coerceIn(0, 255)
+                val r = ((arr[y * outW + x] / 2f + 0.5f).coerceIn(0f, 1f) * 255f).toInt().coerceIn(0, 255)
+                val g = ((arr[outH * outW + y * outW + x] / 2f + 0.5f).coerceIn(0f, 1f) * 255f).toInt().coerceIn(0, 255)
+                val b = ((arr[2 * outH * outW + y * outW + x] / 2f + 0.5f).coerceIn(0f, 1f) * 255f).toInt().coerceIn(0, 255)
                 pixels[y * outW + x] = Color.rgb(r, g, b)
             }
         }
