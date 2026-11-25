@@ -34,7 +34,12 @@ from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 
-import torch
+try:
+    import torch
+    TORCH_AVAILABLE = True
+except ImportError:
+    torch = None
+    TORCH_AVAILABLE = False
 import uvicorn
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -81,7 +86,7 @@ def _setup_logging(level: str, log_file: str):
 
 _pipe = None
 _model_id = ""
-DTYPE_MAP = {"bfloat16": torch.bfloat16, "float16": torch.float16, "float32": torch.float32}
+DTYPE_MAP = None  # populated lazily once torch is confirmed available
 @dataclass
 class EngineConfig:
     """Typed configuration for the diffusion engine, replacing the old
@@ -969,6 +974,11 @@ def _active_device() -> str:
 
 
 def _active_torch_dtype():
+    global DTYPE_MAP
+    if torch is None:
+        raise RuntimeError("torch not available")
+    if DTYPE_MAP is None:
+        DTYPE_MAP = {"bfloat16": torch.bfloat16, "float16": torch.float16, "float32": torch.float32}
     return DTYPE_MAP.get(_LOAD_DTYPE or (_args.dtype if _args else "bfloat16"),
                          torch.bfloat16)
 
@@ -1209,6 +1219,8 @@ def load_model(device: str | None = None, dtype: str | None = None):
 
     model_path = _args.model
     _model_id = Path(model_path).name
+    if torch is None:
+        raise RuntimeError("torch not available")
     dtype_map = {"bfloat16": torch.bfloat16, "float16": torch.float16, "float32": torch.float32}
     dtype_name = dtype or _args.dtype
     torch_dtype = dtype_map.get(dtype_name, torch.bfloat16)
