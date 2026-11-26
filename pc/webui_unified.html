@@ -900,6 +900,7 @@ const LIVE_MAX_QUEUE = 2;        // max waiting chunks; drop the oldest beyond t
 const LIVE_DRAIN_MS = 10000;     // bounded wait for pending completions on Stop
 const LIVE_MODEL = 'turbo';      // Whisper model announced to /v1/realtime
 let LIVE = null;                 // active session state, or null when idle
+let LIVE_STARTING = false;       // synchronous claim held until the session is created
 
 // Inline AudioWorklet processor: forwards float frames to the main thread,
 // where they are downsampled to 16 kHz int16. Loaded from a Blob URL so the
@@ -1246,27 +1247,45 @@ async function startLiveSource(state, source, lang){
 
 async function startLive(){
   if (!window.isSecureContext) { setLiveStatus('Live capture needs localhost'); return; }
-  if (LIVE) { setLiveStatus('A live session is already running.'); return; }
+  if (LIVE || LIVE_STARTING) { setLiveStatus('A live session is already starting or running.'); return; }
   const mic = document.getElementById('liveMic').checked;
   const dev = document.getElementById('liveDevice').checked;
   if (!mic && !dev) { setLiveStatus('Select at least one live source.'); return; }
   const lang = document.getElementById('liveLang').value;
+
+  // Claim the session synchronously, before the first await (the create POST),
+  // and disable Start. A second click during the fetch or permission prompts
+  // must not open a second session whose capture, socket and 5 s timer would
+  // be orphaned (no handle left to stop them).
+  LIVE_STARTING = true;
+  const startBtn = document.getElementById('btnLiveStart');
+  if (startBtn) startBtn.disabled = true;
   setLiveStatus('Starting live session…');
   resetLiveLinks();
+
   let session;
   try {
     const r = await fetch('/v1/live/sessions', {
       method: 'POST', headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({language: lang, model: LIVE_MODEL, label: 'webui'}),
     });
-    if (!r.ok) { setLiveStatus('Could not start: HTTP ' + r.status); return; }
+    if (!r.ok) { throw new Error('HTTP ' + r.status); }
     session = await r.json();
-  } catch (e) { setLiveStatus('Could not start: ' + e); return; }
+  } catch (e) {
+    // Fetch/parse failure: release the claim and restore the controls so the
+    // user can retry. No session was created, so there is nothing to close.
+    LIVE_STARTING = false;
+    setLiveButtons(false);
+    setLiveStatus('Could not start: ' + (e && e.message ? e.message : e));
+    return;
+  }
+
   const state = {
     sid: session.id, startTime: Date.now(), descriptors: session.descriptors || {},
     sources: {}, stopping: false, loss: false,
   };
   LIVE = state;
+  LIVE_STARTING = false;
   setLiveButtons(true);
   const wanted = [];
   if (mic) wanted.push('mic');
@@ -1276,6 +1295,8 @@ async function startLive(){
   }
   const active = Object.keys(state.sources);
   if (!active.length) {
+    // No capture source started (permission denied / no audio track). stopLive
+    // clears LIVE and restores buttons, so the user can retry.
     setLiveStatus('No live source could start; closing the session.');
     await stopLive();
     return;
