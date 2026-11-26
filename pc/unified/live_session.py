@@ -81,7 +81,9 @@ class LiveSessionStore:
             "name": path.name,
             "kind": "text",
             "size": path.stat().st_size,
-            "path": str(path),
+            # Public paths match _store_output: relative, no server filesystem
+            # location. The absolute Path stays internal on session.paths.
+            "path": f"text/{path.name}",
             "url": f"/v1/outputs/text/{path.name}",
         }
 
@@ -142,7 +144,9 @@ class LiveSessionStore:
                 "model": session.model,
                 "label": session.label,
                 "closed": False,
-                **{source: dict(session.descriptors[source]) for source in SOURCES},
+                "descriptors": {
+                    source: dict(session.descriptors[source]) for source in SOURCES
+                },
             }
 
     def append(self, session_id: str, source: str, text: str,
@@ -164,8 +168,6 @@ class LiveSessionStore:
             fragment = (str(text or "")
                         .replace("\r\n", " ").replace("\r", " ").replace("\n", " ")
                         .strip())
-            if item_id:
-                seen.add(item_id)
             if not fragment:
                 return {
                     "ok": True, "duplicate": False, "bytes": 0,
@@ -175,6 +177,10 @@ class LiveSessionStore:
             handle: TextIO = session.files[source]
             handle.write(line)
             handle.flush()
+            # Only a written line consumes the id; an empty append leaves the
+            # id free so a retransmit with real text can still be recorded.
+            if item_id:
+                seen.add(item_id)
             session.lines[source] += 1
             session.descriptors[source] = self._descriptor(session, source)
             return {
