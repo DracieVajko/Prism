@@ -103,7 +103,7 @@ def resolve_engine(raw_model: str) -> tuple[AsrEngine | None, str]:
 
     * ``nemotron-*`` / ``sherpa-*`` select that engine explicitly, so the
       caller must not silently fall back to Whisper when it is missing.
-    * the generic ``whisper-1`` alias follows ``PRISM_ASR_ENGINE`` when one of
+    * the generic ``whisper-1`` alias follows ``LENSWRIGHT_ASR_ENGINE`` when one of
       the optional engines is enabled, otherwise it means Whisper ``turbo``.
     * any other name is returned unchanged for the Whisper allow-list check.
     """

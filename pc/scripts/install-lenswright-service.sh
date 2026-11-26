@@ -1,32 +1,32 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Prism Server Installer (Linux / macOS)
+# Lenswright Server Installer (Linux / macOS)
 # ============================================================================
-# Installs Prism as a system service that starts automatically at boot/login.
+# Installs Lenswright as a system service that starts automatically at boot/login.
 #
-# On Linux:   creates a systemd user service (~/.config/systemd/user/prism.service)
-# On macOS:   creates a launchd agent (~/Library/LaunchAgents/com.prism.server.plist)
+# On Linux:   creates a systemd user service (~/.config/systemd/user/lenswright.service)
+# On macOS:   creates a launchd agent (~/Library/LaunchAgents/com.lenswright.server.plist)
 #
 # Usage:
-#   ./pc/scripts/install-prism-service.sh              # install and start
-#   ./pc/scripts/install-prism-service.sh --uninstall  # remove
+#   ./pc/scripts/install-lenswright-service.sh              # install and start
+#   ./pc/scripts/install-lenswright-service.sh --uninstall  # remove
 # ============================================================================
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PC_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-PORT="${PRISM_PORT:-8101}"
-PYTHON="${PRISM_PYTHON:-python3}"
+PORT="${LENSWRIGHT_PORT:-8101}"
+PYTHON="${LENSWRIGHT_PYTHON:-python3}"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
-log()  { echo -e "${GREEN}[prism]${NC} $*"; }
-warn() { echo -e "${YELLOW}[prism]${NC} $*"; }
-err()  { echo -e "${RED}[prism]${NC} $*" >&2; }
+log()  { echo -e "${GREEN}[lenswright]${NC} $*"; }
+warn() { echo -e "${YELLOW}[lenswright]${NC} $*"; }
+err()  { echo -e "${RED}[lenswright]${NC} $*" >&2; }
 
 # ---------------------------------------------------------------------------
 # Uninstall
@@ -34,7 +34,7 @@ err()  { echo -e "${RED}[prism]${NC} $*" >&2; }
 if [ "${1:-}" = "--uninstall" ]; then
     OS="$(uname -s)"
     if [ "$OS" = "Darwin" ]; then
-        PLIST="$HOME/Library/LaunchAgents/com.prism.server.plist"
+        PLIST="$HOME/Library/LaunchAgents/com.lenswright.server.plist"
         if [ -f "$PLIST" ]; then
             launchctl unload "$PLIST" 2>/dev/null || true
             rm -f "$PLIST"
@@ -43,9 +43,9 @@ if [ "${1:-}" = "--uninstall" ]; then
             warn "No launchd agent found."
         fi
     else
-        if systemctl --user list-unit-files 2>/dev/null | grep -q '^prism.service'; then
-            systemctl --user disable --now prism.service 2>/dev/null || true
-            rm -f "$HOME/.config/systemd/user/prism.service"
+        if systemctl --user list-unit-files 2>/dev/null | grep -q '^lenswright.service'; then
+            systemctl --user disable --now lenswright.service 2>/dev/null || true
+            rm -f "$HOME/.config/systemd/user/lenswright.service"
             systemctl --user daemon-reload 2>/dev/null || true
             log "Removed systemd user service."
         else
@@ -59,7 +59,7 @@ fi
 # Preflight
 # ---------------------------------------------------------------------------
 if ! command -v "$PYTHON" &> /dev/null; then
-    err "Python '$PYTHON' not found. Install Python 3.8+ or set PRISM_PYTHON."
+    err "Python '$PYTHON' not found. Install Python 3.8+ or set LENSWRIGHT_PYTHON."
     exit 1
 fi
 
@@ -70,7 +70,7 @@ fi
 
 mkdir -p "$PC_DIR/logs"
 
-log "Prism installer"
+log "Lenswright installer"
 log "  repo   : $PC_DIR"
 log "  python : $PYTHON"
 log "  port   : $PORT"
@@ -88,9 +88,9 @@ if [ "$(uname -s)" = "Linux" ]; then
     UNIT_DIR="$HOME/.config/systemd/user"
     mkdir -p "$UNIT_DIR"
 
-    cat > "$UNIT_DIR/prism.service" <<EOF
+    cat > "$UNIT_DIR/lenswright.service" <<EOF
 [Unit]
-Description=Prism unified server (images, audio, OCR, VLM, ffmpeg)
+Description=Lenswright unified server (images, audio, OCR, VLM, ffmpeg)
 After=network-online.target
 Wants=network-online.target
 
@@ -100,7 +100,7 @@ WorkingDirectory=$PC_DIR
 ExecStart=$PYTHON -m uvicorn unified_server:app --host 127.0.0.1 --port $PORT
 Restart=on-failure
 RestartSec=5
-Environment=PRISM_PORT=$PORT
+Environment=LENSWRIGHT_PORT=$PORT
 StandardOutput=append:$PC_DIR/logs/service.out.log
 StandardError=append:$PC_DIR/logs/service.err.log
 
@@ -109,13 +109,13 @@ WantedBy=default.target
 EOF
 
     systemctl --user daemon-reload
-    systemctl --user enable prism.service
-    systemctl --user restart prism.service
+    systemctl --user enable lenswright.service
+    systemctl --user restart lenswright.service
 
-    log "systemd user service 'prism' installed and started."
-    log "  status : systemctl --user status prism"
+    log "systemd user service 'lenswright' installed and started."
+    log "  status : systemctl --user status lenswright"
     log "  logs   : tail -f $PC_DIR/logs/service.out.log"
-    log "  stop   : systemctl --user stop prism"
+    log "  stop   : systemctl --user stop lenswright"
 
     # Enable lingering so the service starts at boot, not just at login.
     if command -v loginctl &> /dev/null; then
@@ -132,7 +132,7 @@ EOF
 # ---------------------------------------------------------------------------
 elif [ "$(uname -s)" = "Darwin" ]; then
     PLIST_DIR="$HOME/Library/LaunchAgents"
-    PLIST="$PLIST_DIR/com.prism.server.plist"
+    PLIST="$PLIST_DIR/com.lenswright.server.plist"
     mkdir -p "$PLIST_DIR"
 
     cat > "$PLIST" <<EOF
@@ -141,7 +141,7 @@ elif [ "$(uname -s)" = "Darwin" ]; then
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.prism.server</string>
+    <string>com.lenswright.server</string>
     <key>WorkingDirectory</key>
     <string>$PC_DIR</string>
     <key>ProgramArguments</key>
@@ -173,8 +173,8 @@ EOF
     launchctl unload "$PLIST" 2>/dev/null || true
     launchctl load "$PLIST"
 
-    log "launchd agent 'com.prism.server' installed and started."
-    log "  status : launchctl list | grep prism"
+    log "launchd agent 'com.lenswright.server' installed and started."
+    log "  status : launchctl list | grep lenswright"
     log "  logs   : tail -f $PC_DIR/logs/service.out.log"
     log "  stop   : launchctl unload $PLIST"
 

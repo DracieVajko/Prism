@@ -1,22 +1,22 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Prism Server Start Script (Linux / macOS)
+# Lenswright Server Start Script (Linux / macOS)
 # ============================================================================
-# Starts the Prism unified server on port 8101.
+# Starts the Lenswright unified server on port 8101.
 # Models are downloaded lazily on first use.
 #
 # Usage:
-#   ./pc/scripts/start-prism.sh           # start in foreground
-#   PRISM_PORT=8102 ./pc/scripts/start-prism.sh  # custom port
+#   ./pc/scripts/start-lenswright.sh           # start in foreground
+#   LENSWRIGHT_PORT=8102 ./pc/scripts/start-lenswright.sh  # custom port
 # ============================================================================
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PC_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-PORT="${PRISM_PORT:-8101}"
-HOST="${PRISM_HOST:-127.0.0.1}"
-PYTHON="${PRISM_PYTHON:-python3}"
+PORT="${LENSWRIGHT_PORT:-8101}"
+HOST="${LENSWRIGHT_HOST:-127.0.0.1}"
+PYTHON="${LENSWRIGHT_PYTHON:-python3}"
 
 # Colors for output
 RED='\033[0;31m'
@@ -25,7 +25,7 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 echo "=================================================="
-echo "  Prism Server"
+echo "  Lenswright Server"
 echo "=================================================="
 echo "Working directory: $PC_DIR"
 echo "Port: $PORT"
@@ -41,7 +41,7 @@ fi
 # Check Python exists
 if ! command -v "$PYTHON" &> /dev/null; then
     echo -e "${RED}Error: Python executable '$PYTHON' not found.${NC}"
-    echo "Install Python 3.8+ or set PRISM_PYTHON environment variable."
+    echo "Install Python 3.8+ or set LENSWRIGHT_PYTHON environment variable."
     exit 1
 fi
 
@@ -57,7 +57,7 @@ fi
 # Check if unified_server.py exists
 if [ ! -f "$PC_DIR/unified_server.py" ]; then
     echo -e "${RED}Error: unified_server.py not found in $PC_DIR${NC}"
-    echo "Make sure you are running this from the pc/ directory or set PRISM_PYTHON correctly."
+    echo "Make sure you are running this from the pc/ directory or set LENSWRIGHT_PYTHON correctly."
     exit 1
 fi
 
@@ -74,7 +74,7 @@ if [ ! -d "$OUTPUT_DIR" ]; then
     mkdir -p "$OUTPUT_DIR"
 fi
 
-# Kill any existing Prism server on this port
+# Kill any existing Lenswright server on this port
 if command -v lsof &> /dev/null; then
     EXISTING_PID=$(lsof -ti:$PORT 2>/dev/null || true)
     if [ -n "$EXISTING_PID" ]; then
@@ -85,7 +85,7 @@ if command -v lsof &> /dev/null; then
 fi
 
 echo ""
-echo "Starting Prism server..."
+echo "Starting Lenswright server..."
 echo "----------------------------------------"
 
 # Run the server

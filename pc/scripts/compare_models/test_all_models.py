@@ -15,8 +15,8 @@ from unified.transcription_utils import (
 )
 from unified_server import _transcribe_with_whisper
 
-VIDEO = Path(r"D:\AI\Prism\testdata\video\test_1min.mp4")
-AUDIO_OUT = Path(r"D:\AI\Prism\testdata\video\test_1min_audio.wav")
+VIDEO = Path(r"D:\AI\Lenswright\testdata\video\test_1min.mp4")
+AUDIO_OUT = Path(r"D:\AI\Lenswright\testdata\video\test_1min_audio.wav")
 
 results = {}
 
@@ -124,7 +124,7 @@ def test_external_llm_postprocess(text: str):
 
 def main():
     print("=" * 70)
-    print("PRISM — Kompletny test vsetkych modelov")
+    print("LENSWRIGHT — Kompletny test vsetkych modelov")
     print("=" * 70)
 
     # Validate video

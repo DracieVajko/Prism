@@ -4,7 +4,7 @@ Models: k2-fsa/sherpa-onnx-streaming-zipformer-*.onnx (or Whisper via Sherpa-ONN
 Provides causal streaming ASR with ~80-320 ms latency vs whisper.cpp's
 500-1500 ms per chunk.
 
-Enabled with PRISM_ASR_ENGINE=sherpa, or per-request with
+Enabled with LENSWRIGHT_ASR_ENGINE=sherpa, or per-request with
 `model=sherpa-zipformer-small` on /v1/audio/transcriptions.
 """
 
@@ -55,7 +55,7 @@ def is_installed(model_id: str | None = None) -> bool:
 
 
 def enabled() -> bool:
-    return os.environ.get("PRISM_ASR_ENGINE", "").strip().lower() == "sherpa"
+    return os.environ.get("LENSWRIGHT_ASR_ENGINE", "").strip().lower() == "sherpa"
 
 
 _processor = None

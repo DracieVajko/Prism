@@ -1,8 +1,8 @@
-# Prism LLM Model Optimization Guide
+# Lenswright LLM Model Optimization Guide
 
 ## Overview
 
-This guide covers optimization techniques for LLM models used in Prism PC server and Android app, including Gemma 4, Whisper, Nemotron ASR, and on-device Android models.
+This guide covers optimization techniques for LLM models used in Lenswright PC server and Android app, including Gemma 4, Whisper, Nemotron ASR, and on-device Android models.
 
 ---
 
@@ -79,7 +79,7 @@ def get_optimal_context(input_tokens: int) -> int:
 Models should NEVER load at startup. Load on first request:
 
 ```python
-# PC server pattern (already implemented in Prism)
+# PC server pattern (already implemented in Lenswright)
 _model = None
 
 def init():
@@ -120,7 +120,7 @@ IDLE_UNLOAD_SECONDS = 600  # 10 minutes
 
 ---
 
-## 4. PC Server Optimizations (Prism)
+## 4. PC Server Optimizations (Lenswright)
 
 ### Current State
 

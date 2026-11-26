@@ -1,7 +1,7 @@
 # nssm.exe (Windows service helper)
 
 `nssm.exe` is the bundled [NSSM](https://nssm.cc/) service manager used by
-`install-prism-service.ps1` and `remove-legacy-services.ps1`. It is committed
+`install-lenswright-service.ps1` and `remove-legacy-services.ps1`. It is committed
 on purpose: the service scripts
 must work offline, and the upstream site (`nssm.cc`) is frequently unavailable.
 

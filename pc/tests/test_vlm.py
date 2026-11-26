@@ -41,8 +41,8 @@ def test_caption_contract_no_model(monkeypatch):
 def test_chat_completions_text_without_provider_503(monkeypatch):
     # Text-only chat is routed to an external LLM provider. Without one the
     # server must answer 503 with a clear reason, never 500.
-    monkeypatch.delenv("PRISM_LLM_BASE_URL", raising=False)
-    monkeypatch.delenv("PRISM_LLM_PROVIDER", raising=False)
+    monkeypatch.delenv("LENSWRIGHT_LLM_BASE_URL", raising=False)
+    monkeypatch.delenv("LENSWRIGHT_LLM_PROVIDER", raising=False)
     import unified_server as us
     from fastapi.testclient import TestClient
     c = TestClient(us.app)

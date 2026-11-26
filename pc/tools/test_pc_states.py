@@ -9,7 +9,7 @@ import time
 
 import httpx
 
-BASE = os.getenv("PRISM_BASE", "http://127.0.0.1:8200")
+BASE = os.getenv("LENSWRIGHT_BASE", "http://127.0.0.1:8200")
 c = httpx.Client(base_url=BASE, timeout=900.0)
 failures = []
 

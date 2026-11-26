@@ -1,4 +1,4 @@
-"""Auto-update checker for Prism.
+"""Auto-update checker for Lenswright.
 
 Checks GitHub for new commits and provides update functionality.
 """
@@ -11,7 +11,7 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-REPO_URL = "https://api.github.com/repos/DracieVajko/Prism"
+REPO_URL = "https://api.github.com/repos/DracieVajko/Lenswright"
 LOCAL_REPO = Path(__file__).resolve().parent.parent
 
 

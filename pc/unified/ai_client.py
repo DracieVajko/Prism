@@ -1,5 +1,5 @@
 """
-AI Client abstraction for Prism.
+AI Client abstraction for Lenswright.
 Supports multiple LLM providers: OpenAI, Anthropic (Claude), Google (Gemini),
 and local models (via Ollama, LM Studio, or local transformers).
 
@@ -115,8 +115,8 @@ class AIClient:
                 model=os.getenv("CUSTOM_AI_MODEL", "default"),
             ))
 
-        # Set default provider: prefer explicit PRISM_AI_PROVIDER, else first configured
-        env_provider = os.getenv("PRISM_AI_PROVIDER")
+        # Set default provider: prefer explicit LENSWRIGHT_AI_PROVIDER, else first configured
+        env_provider = os.getenv("LENSWRIGHT_AI_PROVIDER")
         if env_provider and env_provider in self._providers:
             self._default_provider = env_provider
         elif self._providers:

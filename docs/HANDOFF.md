@@ -8,7 +8,7 @@ Quick context for continuing after a restart. The source of truth is the code, n
 
 ## Done
 
-### Android (Prism)
+### Android (Lenswright)
 - `ModelDownloader.kt` — custom download engine (resume, staging, manifest, cancel, progress).
 - `ModelCatalog.kt` — whisper-large-v3-turbo, LCM-Dreamshaper ONNX (QDQ), Real-ESRGAN NCNN, SmolVLM/SmolVLM2.
 - `LcmOnnxEngine.kt` — full LCM pipeline (CLIP BPE tokenizer, text encoder, UNet, LCM scheduler, VAE decode).

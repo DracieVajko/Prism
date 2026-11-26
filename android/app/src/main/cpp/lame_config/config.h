@@ -5,8 +5,8 @@
  * below, so the portable subset is enough. Keep this file in the repository:
  * the LAME sources themselves are fetched, not committed.
  */
-#ifndef PRISM_LAME_CONFIG_H
-#define PRISM_LAME_CONFIG_H
+#ifndef LENSWRIGHT_LAME_CONFIG_H
+#define LENSWRIGHT_LAME_CONFIG_H
 
 #define HAVE_ERRNO_H 1
 #define HAVE_FCNTL_H 1
@@ -34,4 +34,4 @@ typedef float ieee754_float32_t;
 #define HAVE_ICONV 0
 #define HAVE_LANGINFO_CODESET 0
 
-#endif /* PRISM_LAME_CONFIG_H */
+#endif /* LENSWRIGHT_LAME_CONFIG_H */

@@ -86,7 +86,7 @@ final transcript per commit; it does not send partial deltas.
 
 ## Client compatibility
 
-| Client | Mode | Prism setting |
+| Client | Mode | Lenswright setting |
 |---|---|---|
 | Cindy | Custom realtime ASR -> OpenAI transcription | `ws://<host>:8101/v1/realtime`, model `turbo`, any API key |
 | Odysseus | Speech provider `endpoint:<id>` (OpenAI STT) | `http://<host>:8101/v1`, audio model `turbo`/`large` |

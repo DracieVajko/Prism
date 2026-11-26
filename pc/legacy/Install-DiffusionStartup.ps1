@@ -11,7 +11,7 @@ param([switch]$Remote)
 
 $ErrorActionPreference = "Stop"
 $ServerDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$TaskName = "OdysseusDiffusionHelper"
+$TaskName = "LenswrightHelper"
 
 # Environment for the task
 foreach ($kv in @(

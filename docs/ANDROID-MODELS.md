@@ -1,4 +1,4 @@
-# Prism Android — On-Device AI Models
+# Lenswright Android — On-Device AI Models
 
 ## Available Models for Summarization / Cleanup
 
@@ -45,7 +45,7 @@ val summary = summarizer.summarize(text, params).await()
 
 ## 2. Gemma 4 via LiteRT-LM
 
-Already integrated in Prism Android (`XiaomiOcrEngine.kt` uses LiteRT-LM). For summarization:
+Already integrated in Lenswright Android (`XiaomiOcrEngine.kt` uses LiteRT-LM). For summarization:
 
 ### Download Quantized Weights
 ```bash
@@ -72,7 +72,7 @@ val contextSize = min(inputTokens * 2, 8192) // Cap at 8K for mobile
 
 ### Download
 ```bash
-huggingface-cli download prism-ml/Bonsai-27B-gguf \
+huggingface-cli download lenswright-ml/Bonsai-27B-gguf \
     Bonsai-27B-Q1_0.gguf \
     --local-dir ./models/bonsai-27b-q1
 ```

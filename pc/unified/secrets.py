@@ -25,11 +25,11 @@ _LOCK = threading.Lock()
 # Field name -> environment variable. Nested groups use "group.field".
 _ENV_MAP = {
     "hf_token": "HF_TOKEN",
-    "llm.provider": "PRISM_LLM_PROVIDER",
-    "llm.base_url": "PRISM_LLM_BASE_URL",
-    "llm.api_key": "PRISM_LLM_API_KEY",
-    "llm.model": "PRISM_LLM_MODEL",
-    "llm.endpoint": "PRISM_LLM_ENDPOINT",
+    "llm.provider": "LENSWRIGHT_LLM_PROVIDER",
+    "llm.base_url": "LENSWRIGHT_LLM_BASE_URL",
+    "llm.api_key": "LENSWRIGHT_LLM_API_KEY",
+    "llm.model": "LENSWRIGHT_LLM_MODEL",
+    "llm.endpoint": "LENSWRIGHT_LLM_ENDPOINT",
 }
 
 SECRET_FIELDS = {"hf_token", "llm.api_key"}
@@ -83,7 +83,13 @@ def _apply_env(flat: dict) -> None:
     for name, env in _ENV_MAP.items():
         value = flat.get(name)
         if isinstance(value, str) and value.strip():
-            os.environ[env] = value.strip()
+            text = value.strip().replace("\x00", "")
+            if text != value.strip():
+                logger.warning(
+                    "dropped NUL bytes from %s: environment variables cannot hold them", name
+                )
+            if text:
+                os.environ[env] = text
     # huggingface_hub also honours this alias
     if os.environ.get("HF_TOKEN"):
         os.environ.setdefault("HUGGING_FACE_HUB_TOKEN", os.environ["HF_TOKEN"])
@@ -136,7 +142,9 @@ def save(updates: dict) -> dict:
         for name, value in _flatten(updates).items():
             if name not in _ENV_MAP:
                 continue
-            value = "" if value is None else str(value)
+            # Environment variables cannot hold NUL; strip it before it reaches
+            # settings.local.json or os.environ (it raised ValueError -> 500).
+            value = "" if value is None else str(value).replace("\x00", "")
             if value.startswith("****"):
                 continue
             current[name] = value.strip()

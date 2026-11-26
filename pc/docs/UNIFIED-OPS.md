@@ -6,19 +6,19 @@ All paths below are relative to the repository root. The PC product lives in
 ## Start / stop (Windows, .venv)
 
 ```powershell
-.\pc\Start-Prism.bat                    # :8101 (falls back to 8102 if busy), opens the WebUI
-powershell -File pc\scripts\Start-Prism.ps1 -Remote    # binds 0.0.0.0 (Tailscale/LAN) - UNAUTHENTICATED API
-.\pc\Stop-Prism.bat                     # stop the service, the autostart runner, or whatever holds the port
+.\pc\Start-Lenswright.bat                    # :8101 (falls back to 8102 if busy), opens the WebUI
+powershell -File pc\scripts\Start-Lenswright.ps1 -Remote    # binds 0.0.0.0 (Tailscale/LAN) - UNAUTHENTICATED API
+.\pc\Stop-Lenswright.bat                     # stop the service, the autostart runner, or whatever holds the port
 
 # Linux / macOS
-./pc/scripts/start-prism.sh
-./pc/scripts/stop-prism.sh
-./pc/scripts/install-prism-service.sh    # systemd user unit / launchd agent, auto-start
+./pc/scripts/start-lenswright.sh
+./pc/scripts/stop-lenswright.sh
+./pc/scripts/install-lenswright-service.sh    # systemd user unit / launchd agent, auto-start
 ```
 
 ### Network access (LAN / Tailscale)
 
-The Startup runner and `Start-Prism.ps1 -Remote` bind `0.0.0.0`, so the same
+The Startup runner and `Start-Lenswright.ps1 -Remote` bind `0.0.0.0`, so the same
 server answers on every interface:
 
 ```
@@ -28,7 +28,7 @@ http://<tailscale-ip>:8101   tailnet (find it with: tailscale ip -4)
 ws://<any-of-them>:8101/v1/realtime   Cindy / OpenAI Realtime ASR
 ```
 
-Windows Firewall must allow inbound TCP 8101 (the existing Prism/Odysseus
+Windows Firewall must allow inbound TCP 8101 (the existing Lenswright/Odysseus
 rules do). There is **no authentication**: keep 8101 on a trusted LAN or the
 tailnet, never port-forward it to the internet.
 
@@ -38,7 +38,7 @@ The old `Start-Diffusion.ps1` / `Stop-Diffusion.ps1` lives in `pc/legacy/`
 `pc/run/unified-shim.pid`.
 Env: `UNIFIED_WHISPER_URL` (default `http://127.0.0.1:4444`),
 `UNIFIED_NO_ENGINE=1` = without diffusion registration (always placeholder),
-`PRISM_API_TOKEN` = require `Authorization: Bearer <token>` on every `/v1/*`
+`LENSWRIGHT_API_TOKEN` = require `Authorization: Bearer <token>` on every `/v1/*`
 route (`/health` stays open). Without it the API is unauthenticated and must
 stay bound to localhost or behind a firewall/Tailscale.
 
@@ -70,11 +70,11 @@ pip install transformers                        # Qwen3-VL caption/chat
 pip install onnxruntime-directml
 ```
 
-- `PRISM_ONNX_PROVIDER=auto|cuda|dml|cpu` (default `auto`).
+- `LENSWRIGHT_ONNX_PROVIDER=auto|cuda|dml|cpu` (default `auto`).
 - `auto` prefers CUDA; DirectML is skipped for the INT8 QDQ LCM model because
   DML cannot fuse that graph.
 - `/health` shows `device` and `onnx_provider`.
-- The 6 GB RTX 3060 runs at ~5.9 GB VRAM; use `PRISM_ONNX_PROVIDER=cpu` if
+- The 6 GB RTX 3060 runs at ~5.9 GB VRAM; use `LENSWRIGHT_ONNX_PROVIDER=cpu` if
   other GPU apps need memory. Switching to upscale/VLM releases the LCM
   sessions first.
 - AMD: the current INT8 QDQ asset runs on CPU only; DirectML needs a
@@ -85,7 +85,7 @@ pip install onnxruntime-directml
 - `pc/download_models.py --preset upscale` fetches `RealESRGAN_x4plus.pth`.
 - Convert once for torch-free inference:
   `python pc/tools/convert_esrgan_onnx.py` → `RealESRGAN_x4plus.onnx` (67 MB, single file).
-- `PRISM_UPSCALE_ENGINE=auto|torch|onnx|pillow` (default `auto`:
+- `LENSWRIGHT_UPSCALE_ENGINE=auto|torch|onnx|pillow` (default `auto`:
   torch → ONNX → Pillow). Measured 512→1024 on CUDA: ~6 s.
 - Deterministic alternative: `--preset swinir` (SwinIR real-SR x4 ONNX,
   Apache-2.0, fits 4 GB; slower but gentler than ESRGAN on photos and text).
@@ -99,8 +99,8 @@ pip install onnxruntime-directml
   Measured on the 6 GB / 32 GB machine: 256 -> 512 px in 46 s warm; the first
   call after a restart spends ~19 min loading the 20 GB of weights. Raise
   `UNIFIED_IDLE_UNLOAD_SECONDS` (default 900) to keep it resident.
-  Env: `PRISM_ZIMAGE_TILE` (1024), `PRISM_ZIMAGE_OVERLAP` (96),
-  `PRISM_ZIMAGE_MAX_TILES` (9).
+  Env: `LENSWRIGHT_ZIMAGE_TILE` (1024), `LENSWRIGHT_ZIMAGE_OVERLAP` (96),
+  `LENSWRIGHT_ZIMAGE_MAX_TILES` (9).
 
 ### Batch upscale
 
@@ -207,21 +207,21 @@ card. Models appear in `/v1/models/catalog` (kind `audio`) for download.
 Summaries, cleanup, grammar fixes and meeting notes can be sent to an external
 LLM instead of loading a model inside the server process.
 
-- `PRISM_LLM_PROVIDER=ollama|lmstudio|openai|anthropic|custom|none`
+- `LENSWRIGHT_LLM_PROVIDER=ollama|lmstudio|openai|anthropic|custom|none`
   (default `none`: no post-processing).
-- `PRISM_LLM_BASE_URL` — e.g. `http://127.0.0.1:11434` for Ollama,
+- `LENSWRIGHT_LLM_BASE_URL` — e.g. `http://127.0.0.1:11434` for Ollama,
   `http://127.0.0.1:1234` for LM Studio.
-- `PRISM_LLM_API_KEY` — sent as `Authorization: Bearer` when set.
-- `PRISM_LLM_MODEL` (default `gemma4:12b`).
-- `PRISM_LLM_ENDPOINT` — override the request path.
+- `LENSWRIGHT_LLM_API_KEY` — sent as `Authorization: Bearer` when set.
+- `LENSWRIGHT_LLM_MODEL` (default `gemma4:12b`).
+- `LENSWRIGHT_LLM_ENDPOINT` — override the request path.
 
 A local model occupies the same memory as the models the user loads by hand, so
 every call first checks what is already resident on the provider:
 
-- `PRISM_LLM_MAX_CONCURRENT=1` — resident models allowed, ours included. With
-  `1` (default) Prism waits while another model is loaded.
-- `PRISM_LLM_POLL_INTERVAL=120` — seconds between re-checks while waiting.
-- `PRISM_LLM_WAIT_TIMEOUT=3600` — seconds to wait before giving up. On timeout
+- `LENSWRIGHT_LLM_MAX_CONCURRENT=1` — resident models allowed, ours included. With
+  `1` (default) Lenswright waits while another model is loaded.
+- `LENSWRIGHT_LLM_POLL_INTERVAL=120` — seconds between re-checks while waiting.
+- `LENSWRIGHT_LLM_WAIT_TIMEOUT=3600` — seconds to wait before giving up. On timeout
   the request still succeeds and returns the unprocessed text.
 
 Ollama is inspected via `/api/ps`, preloaded with `keep_alive=10m` and unloaded
@@ -296,15 +296,15 @@ extract-audio|trim|compress|info}` (multipart).
 
 ## Switching the Windows service to unified
 
-The `OdysseusDiffusion` service currently runs the old `pc/diffusion_server.py`. Switching
+The `Lenswright` service currently runs the old `pc/diffusion_server.py`. Switching
 (changes the running service, run it deliberately):
 
-powershell -ExecutionPolicy Bypass -File pc\scripts\install-prism-service.ps1 -RemoveLegacy
+powershell -ExecutionPolicy Bypass -File pc\scripts\install-lenswright-service.ps1 -RemoveLegacy
 
-That creates the single `Prism` service (auto start at boot), points it at
-`unified_server:app` on port 8101, and deletes the old `OdysseusDiffusion` and
+That creates the single `Lenswright` service (auto start at boot), points it at
+`unified_server:app` on port 8101, and deletes the old `Lenswright` and
 `whisper-api` services. Without elevation it writes a Startup-folder launcher
-instead. To remove the old services without reinstalling Prism:
+instead. To remove the old services without reinstalling Lenswright:
 
 powershell -ExecutionPolicy Bypass -File pc\scripts\remove-legacy-services.ps1 -WhatIf
 powershell -ExecutionPolicy Bypass -File pc\scripts\remove-legacy-services.ps1
@@ -322,9 +322,9 @@ V1 = repo + `.venv` + `models/` + a launcher per platform:
 
 | Platform | Start | Stop | Auto-start |
 |---|---|---|---|
-| Windows | `Start-Prism.bat` | `Stop-Prism.bat` | `pc\scripts\install-prism-service.ps1` |
-| Linux | `./pc/scripts/start-prism.sh` | `./pc/scripts/stop-prism.sh` | `./pc/scripts/install-prism-service.sh` (systemd user unit + lingering) |
-| macOS | `./pc/scripts/start-prism.sh` | `./pc/scripts/stop-prism.sh` | `./pc/scripts/install-prism-service.sh` (launchd agent) |
+| Windows | `Start-Lenswright.bat` | `Stop-Lenswright.bat` | `pc\scripts\install-lenswright-service.ps1` |
+| Linux | `./pc/scripts/start-lenswright.sh` | `./pc/scripts/stop-lenswright.sh` | `./pc/scripts/install-lenswright-service.sh` (systemd user unit + lingering) |
+| macOS | `./pc/scripts/start-lenswright.sh` | `./pc/scripts/stop-lenswright.sh` | `./pc/scripts/install-lenswright-service.sh` (launchd agent) |
 
 Under the hood every launcher runs `python -m uvicorn unified_server:app` from
 the venv. Mac uses the CPU path automatically (torch MPS/CPU; SD is slow but

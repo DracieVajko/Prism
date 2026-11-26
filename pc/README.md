@@ -1,4 +1,4 @@
-# Prism — PC server
+# Lenswright — PC server
 
 FastAPI server with an OpenAI-compatible API and a single-file WebUI.
 
@@ -16,27 +16,27 @@ python -m uvicorn unified_server:app --host 127.0.0.1 --port 8101
 
 Open `http://127.0.0.1:8101/webui`.
 
-**Easiest:** double-click `Start-Prism.bat` (in the repository root, or in
+**Easiest:** double-click `Start-Lenswright.bat` (in the repository root, or in
 this `pc/` folder if you downloaded only PC). It finds a Python with the
 dependencies, starts the server and opens the WebUI; if port 8101 is occupied
-by the old service it uses 8102. Stop with `Stop-Prism.bat`.
+by the old service it uses 8102. Stop with `Stop-Lenswright.bat`.
 
-Linux/macOS: `./scripts/start-prism.sh` (venv at `pc/.venv` or repo root `.venv`),
-stop with `./scripts/stop-prism.sh`.
+Linux/macOS: `./scripts/start-lenswright.sh` (venv at `pc/.venv` or repo root `.venv`),
+stop with `./scripts/stop-lenswright.sh`.
 
-To run Prism automatically at boot/login on either platform:
+To run Lenswright automatically at boot/login on either platform:
 
 ```bash
 # Linux (systemd user unit, enables lingering so it starts before login)
 # macOS (launchd agent)
-./pc/scripts/install-prism-service.sh
+./pc/scripts/install-lenswright-service.sh
 
 # Windows, elevated PowerShell
-powershell -ExecutionPolicy Bypass -File pc\scripts\install-prism-service.ps1 -RemoveLegacy
+powershell -ExecutionPolicy Bypass -File pc\scripts\install-lenswright-service.ps1 -RemoveLegacy
 ```
 
-`-RemoveLegacy` deletes the old `OdysseusDiffusion` and `whisper-api` services.
-To remove them later, or on a machine where Prism is already installed:
+`-RemoveLegacy` deletes the old `Lenswright` and `whisper-api` services.
+To remove them later, or on a machine where Lenswright is already installed:
 
 ```powershell
 # preview first, then run for real
@@ -55,8 +55,8 @@ pip install transformers                            # SmolVLM caption/chat
 pip install onnxruntime-directml
 ```
 
-- `PRISM_ONNX_PROVIDER=auto|cuda|dml|cpu` (default `auto`).
-- `PRISM_UPSCALE_ENGINE=auto|torch|onnx|pillow`.
+- `LENSWRIGHT_ONNX_PROVIDER=auto|cuda|dml|cpu` (default `auto`).
+- `LENSWRIGHT_UPSCALE_ENGINE=auto|torch|onnx|pillow`.
 - `/health` reports `device` and `onnx_provider`.
 - The INT8 QDQ LCM model cannot use DirectML; AMD stays on CPU unless a
   non-QDQ FP16/FP32 model is exported.
@@ -99,11 +99,11 @@ with `--port 8200`).
 
 ## Service (Windows)
 
-The legacy services (`OdysseusDiffusion`, `whisper-api`) are replaced by the
-single `Prism` service. Install it from an elevated PowerShell:
+The legacy services (`Lenswright`, `whisper-api`) are replaced by the
+single `Lenswright` service. Install it from an elevated PowerShell:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File pc\scripts\install-prism-service.ps1 -RemoveLegacy
+powershell -ExecutionPolicy Bypass -File pc\scripts\install-lenswright-service.ps1 -RemoveLegacy
 ```
 
 Without elevation the same command writes a hidden launcher into the user's
@@ -120,7 +120,7 @@ powershell -ExecutionPolicy Bypass -File pc\scripts\remove-legacy-services.ps1  
 
 By default, the server binds to **127.0.0.1** (localhost only). To allow LAN
 access, pass `--host 0.0.0.0` (or use `-Remote` in the PowerShell launchers,
-or set `PRISM_HOST=0.0.0.0`).
+or set `LENSWRIGHT_HOST=0.0.0.0`).
 
 **WARNING:** The API has **no authentication**. Binding to 0.0.0.0 exposes an
 unauthenticated API to the network. Only use LAN binding on a trusted network.

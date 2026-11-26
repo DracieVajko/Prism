@@ -1,4 +1,4 @@
-"""Silero VAD (Voice Activity Detection) for Prism PC server.
+"""Silero VAD (Voice Activity Detection) for Lenswright PC server.
 
 Silero VAD is a tiny (~2 MB) ONNX model that detects speech segments in audio.
 Used as a pre-filter before transcription to avoid processing silence, which

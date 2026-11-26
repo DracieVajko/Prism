@@ -21,7 +21,7 @@ from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[2]
 TD = ROOT / "testdata"
-OUT = Path(os.environ.get("TEMP", ".")) / "prism_full_test"
+OUT = Path(os.environ.get("TEMP", ".")) / "lenswright_full_test"
 OUT.mkdir(parents=True, exist_ok=True)
 
 results = []
@@ -90,7 +90,7 @@ def shutil_which(name: str):
 def main() -> int:
     global BASE
     ap = argparse.ArgumentParser()
-    ap.add_argument("--base", default=os.environ.get("PRISM_BASE", BASE))
+    ap.add_argument("--base", default=os.environ.get("LENSWRIGHT_BASE", BASE))
     ap.add_argument("--skip-files", action="store_true", help="skip ffmpeg/audio work")
     ap.add_argument("--only", default="",
                     help="comma-separated substrings; only matching checks run")
@@ -131,7 +131,7 @@ def main() -> int:
     def webui():
         r = c.get("/webui")
         assert r.status_code == 200
-        assert "<title>Prism</title>" in r.text
+        assert "<title>Lenswright</title>" in r.text
         for tab in ("Generate", "Transcribe", "Upscale", "Caption", "Inpaint",
                     "Edit", "Tools", "Models", "Settings"):
             assert tab in r.text, f"tab {tab} missing"

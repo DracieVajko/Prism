@@ -30,7 +30,7 @@ black returns, search the log for `BLACKED`. Otherwise lower the resolution.
 
 ## Port busy / nothing listening
 `Get-NetTCPConnection -LocalPort 8101 -State Listen` should show python.
-If not: `Restart-Service OdysseusDiffusion` (admin) and read
+If not: `Restart-Service Lenswright` (admin) and read
 `logs/service-err.log`. Two instances at once (service + manual start)
 collide — always exactly one.
 

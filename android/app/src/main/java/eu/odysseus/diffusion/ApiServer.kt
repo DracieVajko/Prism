@@ -2137,7 +2137,7 @@ private val batchState = ConcurrentHashMap<String, BatchState>()
             }
             tts.language = locale
             tts.setSpeechRate(speed.coerceIn(0.5f, 2.0f))
-            val outFile = java.io.File(ctx.cacheDir, "prism_tts_${System.nanoTime()}.wav")
+            val outFile = java.io.File(ctx.cacheDir, "lenswright_tts_${System.nanoTime()}.wav")
             val synthLatch = java.util.concurrent.CountDownLatch(1)
             var synthOk = false
             tts.setOnUtteranceProgressListener(object : android.speech.tts.UtteranceProgressListener() {
@@ -2148,7 +2148,7 @@ private val batchState = ConcurrentHashMap<String, BatchState>()
                 override fun onError(utteranceId: String?, errorCode: Int) { synthLatch.countDown() }
             })
             val params = android.os.Bundle()
-            val res = tts.synthesizeToFile(input, params, outFile, "prism-tts")
+            val res = tts.synthesizeToFile(input, params, outFile, "lenswright-tts")
             if (res != android.speech.tts.TextToSpeech.SUCCESS) {
                 tts.shutdown()
                 return@withContext null

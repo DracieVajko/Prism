@@ -1,21 +1,21 @@
 ---
-name: prism
-description: "Operate Prism, a local offline OpenAI-compatible AI server on PC (pc/) and Android (android/). Use for starting/stopping/verifying the server, image generation, edits, inpaint, outpaint, colorize, restore, upscale, OCR, caption, VLM chat, transcription, TTS, realtime ASR, FFmpeg, batch jobs, model downloads, secrets and client setup. Covers endpoints, model IDs, env vars, honest-503 fallbacks and ADB testing. Trigger on Prism, port 8101 or 'is the server running'."
+name: lenswright
+description: "Operate Lenswright, a local offline OpenAI-compatible AI server on PC (pc/) and Android (android/). Use for starting/stopping/verifying the server, image generation, edits, inpaint, outpaint, colorize, restore, upscale, OCR, caption, VLM chat, transcription, TTS, realtime ASR, FFmpeg, batch jobs, model downloads, secrets and client setup. Covers endpoints, model IDs, env vars, honest-503 fallbacks and ADB testing. Trigger on Lenswright, port 8101 or 'is the server running'."
 version: 1.0.0
 author: DracieVajko
-tags: [prism, local-ai, server, android, image-generation, ocr, asr, adb]
+tags: [lenswright, local-ai, server, android, image-generation, ocr, asr, adb]
 category: custom
 source_repository: https://github.com/DracieVajko/Dracievajko-SkillsSet
-source_file: skills/original/prism/SKILL.md
+source_file: skills/original/lenswright/SKILL.md
 license: MIT
 local_modifications: original
 verification_status: verified
 authorship: original
 ---
 
-# Prism — agent operating guide
+# Lenswright — agent operating guide
 
-Prism is **two independent products** sharing one API contract:
+Lenswright is **two independent products** sharing one API contract:
 
 | Product | Folder | Runtime | UI | When to use it |
 |---|---|---|---|---|
@@ -30,7 +30,7 @@ Core principles to preserve:
 - **Single resident model** — at most one heavy engine loaded at a time; a switch releases the previous one.
 - **Honest errors** — unavailable features should return `503 {"error":"will not load", "reason":...}`; beware a few legacy 200 fallbacks (see §6).
 - **Lazy models** — download on demand, `.READY` manifest only after preparation; resume + cancel supported.
-- **LAN-only, optional token** — no auth by default; set `PRISM_API_TOKEN` for bearer auth; never expose to the internet.
+- **LAN-only, optional token** — no auth by default; set `LENSWRIGHT_API_TOKEN` for bearer auth; never expose to the internet.
 
 **Code is authoritative.** Several docs (`docs/CHECKLIST.md`, `docs/ONDEVICE-PLAN.md`,
 `docs/ARCHITECTURE.md`, `pc/README.md`, `pc/docs/UNIFIED-CONTRACT.md`) are stale
@@ -87,9 +87,9 @@ running on the PC.
 
 One-click (Windows, from repo root):
 ```powershell
-.\Start-Prism.bat                 # uses pc\scripts\Start-Prism.ps1, opens WebUI
-.\Start-Prism.bat -Remote         # bind 0.0.0.0 (warns if no PRISM_API_TOKEN)
-.\Start-Prism.bat -Port 8102 -NoBrowser -Cpu
+.\Start-Lenswright.bat                 # uses pc\scripts\Start-Lenswright.ps1, opens WebUI
+.\Start-Lenswright.bat -Remote         # bind 0.0.0.0 (warns if no LENSWRIGHT_API_TOKEN)
+.\Start-Lenswright.bat -Port 8102 -NoBrowser -Cpu
 ```
 Manual (any OS, run from `pc/` so relative model paths resolve):
 ```powershell
@@ -97,24 +97,24 @@ cd pc
 python -m uvicorn unified_server:app --host 127.0.0.1 --port 8101
 # WebUI: http://127.0.0.1:8101/webui
 ```
-Scripts: `pc/scripts/start-prism.sh` (Linux/macOS, `PRISM_PORT`, `PRISM_HOST`,
-`PRISM_PYTHON`), `pc/scripts/start-prism-autostart.ps1` (logon autostart),
-`pc/scripts/install-prism-service.ps1` (NSSM Windows service `OdysseusDiffusion`),
+Scripts: `pc/scripts/start-lenswright.sh` (Linux/macOS, `LENSWRIGHT_PORT`, `LENSWRIGHT_HOST`,
+`LENSWRIGHT_PYTHON`), `pc/scripts/start-lenswright-autostart.ps1` (logon autostart),
+`pc/scripts/install-lenswright-service.ps1` (NSSM Windows service `Lenswright`),
 systemd unit under `pc/scripts/systemd/`.
 
-`Start-Prism.ps1` discovers a Python that has `fastapi`, `uvicorn`, `onnxruntime`
+`Start-Lenswright.ps1` discovers a Python that has `fastapi`, `uvicorn`, `onnxruntime`
 (prefers `pc/.venv`), falls back to port 8102 if 8101 is busy, and opens the
 WebUI unless `-NoBrowser`.
 
 ### 2.2 PC — stop
 
 ```powershell
-.\Stop-Prism.bat                  # NOTE: root bat calls pc\scripts\Stop-Unified.ps1
+.\Stop-Lenswright.bat                  # NOTE: root bat calls pc\scripts\Stop-Unified.ps1
                                   #       which may be missing — prefer the script below
-powershell -ExecutionPolicy Bypass -File pc\scripts\Stop-Prism.ps1 -Port 8101
+powershell -ExecutionPolicy Bypass -File pc\scripts\Stop-Lenswright.ps1 -Port 8101
 ```
-`Stop-Prism.ps1` stops the Windows service, the autostart runner, then whatever
-holds the port. Also valid: `Stop-Service OdysseusDiffusion`, or kill the PID
+`Stop-Lenswright.ps1` stops the Windows service, the autostart runner, then whatever
+holds the port. Also valid: `Stop-Service Lenswright`, or kill the PID
 from `Get-NetTCPConnection -LocalPort 8101 -State Listen`.
 
 ### 2.3 PC — verify it is running
@@ -282,25 +282,25 @@ Set before starting the server (PC) or via the Android Settings UI.
 
 | Variable | Effect |
 |---|---|
-| `PRISM_API_TOKEN` | Require `Authorization: Bearer <token>` on `/v1/*`; set it before `-Remote` / `0.0.0.0` |
-| `PRISM_ONNX_PROVIDER` | `cpu` forces CPU even with CUDA (fallback for 6 GB cards); default auto (CUDA → CPU) |
-| `PRISM_ASR_MODEL` | default ASR model (e.g. `turbo`) |
-| `PRISM_ASR_ENGINE` | force ASR engine |
+| `LENSWRIGHT_API_TOKEN` | Require `Authorization: Bearer <token>` on `/v1/*`; set it before `-Remote` / `0.0.0.0` |
+| `LENSWRIGHT_ONNX_PROVIDER` | `cpu` forces CPU even with CUDA (fallback for 6 GB cards); default auto (CUDA → CPU) |
+| `LENSWRIGHT_ASR_MODEL` | default ASR model (e.g. `turbo`) |
+| `LENSWRIGHT_ASR_ENGINE` | force ASR engine |
 | `WHISPER_DEVICE` | `cuda` opts into GPU whisper (default CPU int8) |
 | `UNIFIED_WHISPER_URL` | legacy WhisperApi proxy URL (default `http://127.0.0.1:4444`) |
 | `UNIFIED_IDLE_UNLOAD_SECONDS` | PC idle unload delay (default 900 s) |
 | `UNIFIED_NO_ENGINE` | `1` skips engine init; any other truthy value disables VLM/caption/chat → 503 |
-| `PRISM_OCR_DEVICE` | `auto\|cpu\|cuda` for OCR/VLM; `cuda` avoids cross-device hooks |
-| `PRISM_NEMOTRON_DEVICE` | device override for Nemotron OCR |
-| `PRISM_RESTORE_ENGINE` | `sd` forces SDXL restore; default Z-Image first |
-| `PRISM_RESTORE_MODEL` | override restore model |
-| `PRISM_UPSCALE_ENGINE` | `torch\|onnx\|pillow` |
-| `PRISM_SWINIR_MAX_SIDE`, `PRISM_ZIMAGE_TILE`, `PRISM_ZIMAGE_OVERLAP`, `PRISM_ZIMAGE_MAX_TILES` | Z-Image / SwinIR tiling caps |
+| `LENSWRIGHT_OCR_DEVICE` | `auto\|cpu\|cuda` for OCR/VLM; `cuda` avoids cross-device hooks |
+| `LENSWRIGHT_NEMOTRON_DEVICE` | device override for Nemotron OCR |
+| `LENSWRIGHT_RESTORE_ENGINE` | `sd` forces SDXL restore; default Z-Image first |
+| `LENSWRIGHT_RESTORE_MODEL` | override restore model |
+| `LENSWRIGHT_UPSCALE_ENGINE` | `torch\|onnx\|pillow` |
+| `LENSWRIGHT_SWINIR_MAX_SIDE`, `LENSWRIGHT_ZIMAGE_TILE`, `LENSWRIGHT_ZIMAGE_OVERLAP`, `LENSWRIGHT_ZIMAGE_MAX_TILES` | Z-Image / SwinIR tiling caps |
 | `HF_TOKEN`, `HUGGING_FACE_HUB_TOKEN` | gated model downloads (or store in secrets) |
-| `PRISM_LLM_PROVIDER`, `PRISM_LLM_BASE_URL`, `PRISM_LLM_MODEL`, `PRISM_LLM_API_KEY`, `PRISM_LLM_ENDPOINT` | LLM provider (also stored in secrets) |
-| `PRISM_LLM_MAX_CONCURRENT`, `PRISM_LLM_POLL_INTERVAL`, `PRISM_LLM_WAIT_TIMEOUT` | LLM queue behavior (defaults 1 / 120 / 3600) |
-| `PRISM_PROMPT_<OPERATION>` | override LLM prompt for `summary\|cleanup\|grammar\|list\|translate\|rewrite\|meeting_notes` |
-| `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`, `OLLAMA_BASE_URL`, `LM_STUDIO_BASE_URL` | external LLM providers used by action extraction (Prism does not host LLMs) |
+| `LENSWRIGHT_LLM_PROVIDER`, `LENSWRIGHT_LLM_BASE_URL`, `LENSWRIGHT_LLM_MODEL`, `LENSWRIGHT_LLM_API_KEY`, `LENSWRIGHT_LLM_ENDPOINT` | LLM provider (also stored in secrets) |
+| `LENSWRIGHT_LLM_MAX_CONCURRENT`, `LENSWRIGHT_LLM_POLL_INTERVAL`, `LENSWRIGHT_LLM_WAIT_TIMEOUT` | LLM queue behavior (defaults 1 / 120 / 3600) |
+| `LENSWRIGHT_PROMPT_<OPERATION>` | override LLM prompt for `summary\|cleanup\|grammar\|list\|translate\|rewrite\|meeting_notes` |
+| `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`, `OLLAMA_BASE_URL`, `LM_STUDIO_BASE_URL` | external LLM providers used by action extraction (Lenswright does not host LLMs) |
 
 Secrets are stored in **`pc/settings.local.json`** (git-ignored) and exposed via
 `/v1/settings/secrets` masked as `****abcd`; masked values sent back are ignored
@@ -345,7 +345,7 @@ Operational gotchas learned the hard way:
 - **One worker** — a single long job blocks the event loop; use the process list
   if health times out.
 - **Model switching** can crash a process on some GPU/driver combinations; hold
-  one model when testing, or set `PRISM_OCR_DEVICE=cuda` and keep the GPU free.
+  one model when testing, or set `LENSWRIGHT_OCR_DEVICE=cuda` and keep the GPU free.
 - **Driver resets** (`nvlddmkm` Event 153 on Windows) can surface as native
   `0xc0000005` in `torch_cpu.dll` — that is a GPU driver issue, not a Python bug.
 - **Android image sizes** must be multiples of 64 (256–512); 288 fails in the

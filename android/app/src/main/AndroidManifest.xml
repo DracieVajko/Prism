@@ -14,7 +14,7 @@
     <!-- NNAPI is NOT used (deprecated / inconsistent SD operators) — intentionally no uses-feature. -->
 
     <application
-        android:label="Prism"
+        android:label="Lenswright"
         android:largeHeap="true"
         android:supportsRtl="true"
         android:theme="@style/Theme.Odysseus"

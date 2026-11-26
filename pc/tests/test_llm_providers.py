@@ -10,13 +10,13 @@ def test_operation_selects_its_prompt():
 def test_bare_operation_name_is_a_selector_not_an_instruction(monkeypatch):
     # The WebUI sends "translate" in both fields; the model must get the
     # translate prompt with the target language filled in.
-    monkeypatch.delenv("PRISM_PROMPT_TRANSLATE", raising=False)
+    monkeypatch.delenv("LENSWRIGHT_PROMPT_TRANSLATE", raising=False)
     prompt = llm_providers._resolve_instruction("translate", "translate", "sk")
     assert "Translate the text into sk" in prompt
 
 
 def test_ui_summarize_alias_maps_to_summary(monkeypatch):
-    monkeypatch.delenv("PRISM_PROMPT_SUMMARY", raising=False)
+    monkeypatch.delenv("LENSWRIGHT_PROMPT_SUMMARY", raising=False)
     prompt = llm_providers._resolve_instruction("summarize", "summarize", "en")
     assert "Summarize the text" in prompt
 
@@ -32,5 +32,5 @@ def test_empty_falls_back_to_cleanup_prompt():
 
 
 def test_env_override_is_used(monkeypatch):
-    monkeypatch.setenv("PRISM_PROMPT_CLEANUP", "Only fix commas.")
+    monkeypatch.setenv("LENSWRIGHT_PROMPT_CLEANUP", "Only fix commas.")
     assert llm_providers._resolve_instruction("", "cleanup", "en") == "Only fix commas."

@@ -1,4 +1,4 @@
-# Prism â€” On-device plan (Android only, offline)
+# Lenswright â€” On-device plan (Android only, offline)
 
 Goal: **every tab works on the phone, locally and offline.** No PC, no remote
 host, no network after the models are downloaded.
@@ -167,7 +167,7 @@ whisper.cpp only.
 | Engine | How to select | Size | Notes |
 |---|---|---|---|
 | faster-whisper | default, model=tiny|base|small|medium|turbo|large | 75 MB - 3 GB | chunked, 5-min segments for long audio |
-| NVIDIA Nemotron 3.5 ASR 0.6B | model=nemotron-asr-0.6b or PRISM_ASR_ENGINE=nemotron | 2.55 GB | FastConformer-RNNT, 40 languages (sk=28 in the prompt dictionary), native punctuation. Live: JFK 2.7 s warm vs whisper 10.3 s |
+| NVIDIA Nemotron 3.5 ASR 0.6B | model=nemotron-asr-0.6b or LENSWRIGHT_ASR_ENGINE=nemotron | 2.55 GB | FastConformer-RNNT, 40 languages (sk=28 in the prompt dictionary), native punctuation. Live: JFK 2.7 s warm vs whisper 10.3 s |
 | Gemma4 E2B (post-processing) | post_process=cleanup|translate|summarize|rewrite | 10.25 GB | text-in/text-out only, not a transcription engine |
 
 Measured on this machine (RTX 3060 6 GB, 32 GB RAM):

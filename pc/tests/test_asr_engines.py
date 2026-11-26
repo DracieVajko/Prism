@@ -29,11 +29,11 @@ def test_sherpa_installed_requires_all_parts(monkeypatch, tmp_path):
 
 
 def test_sherpa_enabled_env_gate(monkeypatch):
-    monkeypatch.setenv("PRISM_ASR_ENGINE", "sherpa")
+    monkeypatch.setenv("LENSWRIGHT_ASR_ENGINE", "sherpa")
     assert sherpa_asr.enabled() is True
-    monkeypatch.setenv("PRISM_ASR_ENGINE", " Whisper ")
+    monkeypatch.setenv("LENSWRIGHT_ASR_ENGINE", " Whisper ")
     assert sherpa_asr.enabled() is False
-    monkeypatch.delenv("PRISM_ASR_ENGINE")
+    monkeypatch.delenv("LENSWRIGHT_ASR_ENGINE")
     assert sherpa_asr.enabled() is False
 
 
@@ -79,9 +79,9 @@ def test_nemotron_accepts_sharded_weights(monkeypatch, tmp_path):
 
 
 def test_nemotron_enabled_env_gate(monkeypatch):
-    monkeypatch.setenv("PRISM_ASR_ENGINE", "nemotron")
+    monkeypatch.setenv("LENSWRIGHT_ASR_ENGINE", "nemotron")
     assert nemotron_asr.enabled() is True
-    monkeypatch.setenv("PRISM_ASR_ENGINE", "sherpa")
+    monkeypatch.setenv("LENSWRIGHT_ASR_ENGINE", "sherpa")
     assert nemotron_asr.enabled() is False
 
 

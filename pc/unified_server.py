@@ -36,6 +36,7 @@ from fastapi.responses import (
     RedirectResponse,
 )
 from pydantic import BaseModel
+
 from unified.engine import init_diffusion_engine, try_real_inpaint
 from unified.registry import build_registry
 from unified.resident_model import ModelLoadingError, ResidentModelGate
@@ -54,9 +55,9 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Optional bearer-token gate. The product is local-first, so it is off by
-# default; setting PRISM_API_TOKEN turns it on for every /v1 route except
-# /health. This is the supported way to expose Prism to a LAN or Tailscale.
-API_TOKEN = os.environ.get("PRISM_API_TOKEN", "").strip()
+# default; setting LENSWRIGHT_API_TOKEN turns it on for every /v1 route except
+# /health. This is the supported way to expose Lenswright to a LAN or Tailscale.
+API_TOKEN = os.environ.get("LENSWRIGHT_API_TOKEN", "").strip()
 
 HERE = Path(__file__).resolve().parent
 OUTPUT_DIR = HERE / "output"
@@ -143,9 +144,9 @@ async def lifespan(application):
         logger.info("API bearer-token authentication enabled")
     else:
         logger.warning(
-            "SECURITY: Prism API has NO authentication. "
+            "SECURITY: Lenswright API has NO authentication. "
             "Bind to 127.0.0.1 (default) for local use only, or set "
-            "PRISM_API_TOKEN to require Authorization: Bearer <token>. "
+            "LENSWRIGHT_API_TOKEN to require Authorization: Bearer <token>. "
             "LAN access (--host 0.0.0.0 / -Remote) without a token exposes "
             "an unauthenticated API; do NOT expose port %s to the internet.",
             os.getenv("PORT", "8101"),
@@ -211,7 +212,7 @@ async def _require_token(request, call_next):
     if request.headers.get("authorization", "") != f"Bearer {API_TOKEN}":
         return JSONResponse(status_code=401, content={
             "error": "unauthorized",
-            "detail": "send Authorization: Bearer $PRISM_API_TOKEN",
+            "detail": "send Authorization: Bearer $LENSWRIGHT_API_TOKEN",
         })
     return await call_next(request)
 

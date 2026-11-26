@@ -175,7 +175,7 @@ def _whisper_cancelled(model_id: str) -> bool:
 
 def _http_open(url: str, start: int = 0, timeout: int = 60):
     req = urllib.request.Request(url, headers={
-        "User-Agent": "prism/1.0",
+        "User-Agent": "lenswright/1.0",
         **({"Range": f"bytes={start}-"} if start else {}),
     })
     return urllib.request.urlopen(req, timeout=timeout)

@@ -1,15 +1,15 @@
-# Prism
+# Lenswright
 
 On-device AI server for image generation, transcription, OCR and upscaling — with a PC WebUI and a fully native Android app. Both run locally and offline, expose the same OpenAI-compatible API on port 8101, and never bundle model weights.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Version: 0.7.0](https://img.shields.io/badge/version-0.7.0-blue.svg)](CHANGELOG.md)
+[![Version: 0.8.0](https://img.shields.io/badge/version-0.8.0-blue.svg)](CHANGELOG.md)
 [![Sponsor on GitHub](https://img.shields.io/badge/Sponsor-GitHub-ea4aaa?logo=github)](https://github.com/sponsors/DracieVajko)
 [![PC CI](https://img.shields.io/github/actions/workflow/status/DracieVajko/Prism/ci.yml?label=PC%20CI)](.github/workflows/ci.yml)
 
-## What Prism is
+## What Lenswright is
 
-Prism is **two independent products in one repository**, sharing a single API contract. You only need the folder for the product you want to run — they do not depend on each other.
+Lenswright is **two independent products in one repository**, sharing a single API contract. You only need the folder for the product you want to run — they do not depend on each other.
 
 | Product | Folder | Runtime | UI | Dependencies |
 |---|---|---|---|---|
@@ -30,7 +30,7 @@ curl -F "file=@audio.wav" -F "language=en" http://<host>:8101/v1/audio/transcrip
 
 ## Problem being solved
 
-Running local AI should not require cloud accounts, subscriptions, or sending private data to third parties. Prism lets you run image generation, transcription, OCR and upscaling entirely on your own hardware — PC or phone — with models downloaded on demand and removed when idle. Features that cannot run on the current machine answer `503` with an honest reason instead of faking output.
+Running local AI should not require cloud accounts, subscriptions, or sending private data to third parties. Lenswright lets you run image generation, transcription, OCR and upscaling entirely on your own hardware — PC or phone — with models downloaded on demand and removed when idle. Features that cannot run on the current machine answer `503` with an honest reason instead of faking output.
 
 ## Main features
 
@@ -64,7 +64,7 @@ Running local AI should not require cloud accounts, subscriptions, or sending pr
 - **Single resident model:** at most one heavy engine loaded at a time (VRAM/RAM budget)
 - **Honest errors:** unavailable features return `503 will-not-load` with a reason, never faked
 - **Lazy models:** weights are never bundled; downloaded on demand
-- **LAN-only, optional bearer token:** set `PRISM_API_TOKEN` to require `Authorization: Bearer <token>` on `/v1/*`; without it the server is unauthenticated, so do not expose ports to the internet; use Tailscale or your LAN firewall
+- **LAN-only, optional bearer token:** set `LENSWRIGHT_API_TOKEN` to require `Authorization: Bearer <token>` on `/v1/*`; without it the server is unauthenticated, so do not expose ports to the internet; use Tailscale or your LAN firewall
 
 ## Models
 
@@ -126,19 +126,19 @@ python -m uvicorn unified_server:app --host 127.0.0.1 --port 8101
 
 Open `http://127.0.0.1:8101/webui`.
 
-**Easiest on Windows:** double-click `Start-Prism.bat` (repository root). It finds a Python with dependencies, starts the server and opens the WebUI; if port 8101 is occupied it falls back to 8102. Stop with `Stop-Prism.bat`.
+**Easiest on Windows:** double-click `Start-Lenswright.bat` (repository root). It finds a Python with dependencies, starts the server and opens the WebUI; if port 8101 is occupied it falls back to 8102. Stop with `Stop-Lenswright.bat`.
 
 Linux/macOS:
 
 ```bash
 cd pc
-./scripts/start-prism.sh          # venv at pc/.venv or repo root .venv
-./scripts/stop-prism.sh
+./scripts/start-lenswright.sh          # venv at pc/.venv or repo root .venv
+./scripts/stop-lenswright.sh
 ```
 
 ### Android
 
-Install the APK from GitHub Releases (push a tag → CI builds and attaches `prism-vX.Y.Z-release.apk`), or build locally:
+Install the APK from GitHub Releases (push a tag → CI builds and attaches `lenswright-vX.Y.Z-release.apk`), or build locally:
 
 ```powershell
 cd android
@@ -160,11 +160,11 @@ pip install onnxruntime-directml
 ```
 
 Relevant env vars:
-- `PRISM_ONNX_PROVIDER=auto|cuda|dml|cpu` (default `auto`)
-- `PRISM_UPSCALE_ENGINE=auto|torch|onnx|pillow`
+- `LENSWRIGHT_ONNX_PROVIDER=auto|cuda|dml|cpu` (default `auto`)
+- `LENSWRIGHT_UPSCALE_ENGINE=auto|torch|onnx|pillow`
 - `WHISPER_DEVICE=cuda` (default `cpu`; CUDA 12 DLLs required)
-- `PRISM_LLM_MODEL=gemma4:12b` (external LLM provider for post-processing)
-- `PRISM_LLM_MAX_CONCURRENT=1` (local model slot gate)
+- `LENSWRIGHT_LLM_MODEL=gemma4:12b` (external LLM provider for post-processing)
+- `LENSWRIGHT_LLM_MAX_CONCURRENT=1` (local model slot gate)
 
 ## Configuration
 
@@ -240,7 +240,7 @@ See `docs/ONDEVICE-PLAN.md` and `docs/RESEARCH-IMPROVEMENTS.md` for the full pla
 
 ## Security
 
-LAN-only, optional bearer token. The server defaults to binding `127.0.0.1` (localhost only). To allow LAN access, pass `--host 0.0.0.0` (or `-Remote` in the PowerShell launchers, or `PRISM_HOST=0.0.0.0`). Set `PRISM_API_TOKEN` to require `Authorization: Bearer <token>` on every `/v1/*` route (`/health` stays open for probes). Without a token the API is unauthenticated: **do not expose ports 8101 / 8102 to the internet**. Use Tailscale or your LAN firewall to restrict access. The NSFW safety checker is disabled in the launchers.
+LAN-only, optional bearer token. The server defaults to binding `127.0.0.1` (localhost only). To allow LAN access, pass `--host 0.0.0.0` (or `-Remote` in the PowerShell launchers, or `LENSWRIGHT_HOST=0.0.0.0`). Set `LENSWRIGHT_API_TOKEN` to require `Authorization: Bearer <token>` on every `/v1/*` route (`/health` stays open for probes). Without a token the API is unauthenticated: **do not expose ports 8101 / 8102 to the internet**. Use Tailscale or your LAN firewall to restrict access. The NSFW safety checker is disabled in the launchers.
 
 ## License
 
@@ -250,7 +250,7 @@ MIT — see `LICENSE`. Copyright (c) 2026 DracieVajko.
 
 ## Support this work
 
-Prism is developed and maintained by one person. Sponsoring helps keep the project local-first, offline-capable and free of cloud dependencies.
+Lenswright is developed and maintained by one person. Sponsoring helps keep the project local-first, offline-capable and free of cloud dependencies.
 
 Your support goes toward:
 

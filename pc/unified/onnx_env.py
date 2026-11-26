@@ -8,7 +8,7 @@ Two jobs:
               skipped; CUDA (if available) or CPU is used.
    - `generic`: FP32/FP16 models. CUDA first, then DirectML, then CPU.
 
-Override with `PRISM_ONNX_PROVIDER=cuda|dml|cpu` (default: auto).
+Override with `LENSWRIGHT_ONNX_PROVIDER=cuda|dml|cpu` (default: auto).
 """
 import os
 import sys
@@ -73,7 +73,7 @@ _CUDA = ("CUDAExecutionProvider", _CUDA_OPTS)
 
 def pick_providers(kind: str = "generic") -> list:
     """Return the provider list for a model kind (`qdq` or `generic`)."""
-    override = (os.environ.get("PRISM_ONNX_PROVIDER") or "auto").strip().lower()
+    override = (os.environ.get("LENSWRIGHT_ONNX_PROVIDER") or "auto").strip().lower()
     avail = available_providers()
 
     if override == "cpu":

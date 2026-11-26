@@ -57,7 +57,7 @@
 - [ ] Run tests, lint, type checks, Android Gradle checks
 - [ ] Final Desloppify scan
 - [ ] Git diff review
-- [ ] Commit: `refactor: improve Prism architecture, security and documentation`
+- [ ] Commit: `refactor: improve Lenswright architecture, security and documentation`
 - [ ] Push to correct repository and branch
 
 ## Phase 11: Final Report

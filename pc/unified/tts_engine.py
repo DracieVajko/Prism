@@ -173,7 +173,7 @@ def synthesize_bytes(text: str, voice: str = "0", speed: float = 1.0,
     if fmt not in ("mp3", "aac", "m4a", "wav", "opus", "ogg", "flac"):
         fmt = "mp3"
     samples, sr = synthesize(text, voice=voice, speed=speed)
-    tmpdir = Path(tempfile.mkdtemp(prefix="prism_tts_"))
+    tmpdir = Path(tempfile.mkdtemp(prefix="lenswright_tts_"))
     wav_path = tmpdir / "out.wav"
     _write_wav(samples, sr, wav_path)
     if fmt == "wav":

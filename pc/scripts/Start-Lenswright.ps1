@@ -1,13 +1,13 @@
-# Start-Prism.ps1 - start the PC server and open the WebUI.
+# Start-Lenswright.ps1 - start the PC server and open the WebUI.
 #
-# Double-click Start-Prism.bat in the repository root, or run:
-#   powershell -ExecutionPolicy Bypass -File pc/scripts/Start-Prism.ps1
+# Double-click Start-Lenswright.bat in the repository root, or run:
+#   powershell -ExecutionPolicy Bypass -File pc/scripts/Start-Lenswright.ps1
 #
 # Options:
 #   -Port 8101     preferred port (default 8101)
 #   -Remote        bind 0.0.0.0 instead of 127.0.0.1
 #   -NoBrowser     do not open the browser
-#   -Cpu           force PRISM_ONNX_PROVIDER=cpu for this process
+#   -Cpu           force LENSWRIGHT_ONNX_PROVIDER=cpu for this process
 param(
   [int]$Port = 8101,
   [switch]$Remote,
@@ -40,7 +40,7 @@ function Find-Python {
   throw "No Python with fastapi/uvicorn/onnxruntime found. Create pc/.venv and pip install -r pc/requirements.txt."
 }
 
-function Test-Prism($port) {
+function Test-Lenswright($port) {
   try {
     $r = Invoke-WebRequest -Uri "http://127.0.0.1:$port/webui" -TimeoutSec 3 -UseBasicParsing
     return ($r.StatusCode -eq 200)
@@ -56,35 +56,35 @@ function Test-AnyListener($port) {
 
 $python = Find-Python
 $BindHost = if ($Remote) { "0.0.0.0" } else { "127.0.0.1" }
-if ($Remote -and -not $env:PRISM_API_TOKEN) {
-    Write-Warning "Remote bind without PRISM_API_TOKEN exposes an unauthenticated API on the LAN/Tailscale. Set PRISM_API_TOKEN before using -Remote."
+if ($Remote -and -not $env:LENSWRIGHT_API_TOKEN) {
+    Write-Warning "Remote bind without LENSWRIGHT_API_TOKEN exposes an unauthenticated API on the LAN/Tailscale. Set LENSWRIGHT_API_TOKEN before using -Remote."
 }
 
-# Pick a free/Prism port. 8101 may still be the legacy service without WebUI.
+# Pick a free/Lenswright port. 8101 may still be the legacy service without WebUI.
 $chosen = $Port
-if (Test-Prism $chosen) {
-  Write-Host "Prism is already running on port $chosen."
+if (Test-Lenswright $chosen) {
+  Write-Host "Lenswright is already running on port $chosen."
   if (-not $NoBrowser) { Start-Process "http://127.0.0.1:$chosen/webui" }
   exit 0
 }
 if (Test-AnyListener $chosen) {
-  Write-Warning "Port $chosen is used by another server (legacy OdysseusDiffusion has no WebUI)."
+  Write-Warning "Port $chosen is used by another server (legacy Lenswright has no WebUI)."
   $chosen = 8102
   while (Test-AnyListener $chosen) { $chosen++ }
-  Write-Host "Starting Prism on port $chosen instead."
+  Write-Host "Starting Lenswright on port $chosen instead."
 }
 
 $RunDir = Join-Path $PcDir "run"
 $LogsDir = Join-Path $PcDir "logs"
 New-Item -ItemType Directory -Force -Path $RunDir, $LogsDir | Out-Null
 $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
-$LogFile = Join-Path $LogsDir "prism-$stamp.log"
+$LogFile = Join-Path $LogsDir "lenswright-$stamp.log"
 
-if ($Cpu) { $env:PRISM_ONNX_PROVIDER = "cpu" }
+if ($Cpu) { $env:LENSWRIGHT_ONNX_PROVIDER = "cpu" }
 $env:PYTHONUNBUFFERED = "1"
 $env:PYTHONUTF8 = "1"
 
-Write-Host "Starting Prism (PC server)..."
+Write-Host "Starting Lenswright (PC server)..."
 Write-Host "  python : $python"
 Write-Host "  bind   : ${BindHost}:${chosen}"
 Write-Host "  log    : $LogFile"
@@ -110,13 +110,13 @@ while ((Get-Date) -lt $deadline) {
 }
 
 if (-not $ready) {
-  Write-Error "Prism did not start. Log tail:"
+  Write-Error "Lenswright did not start. Log tail:"
   if (Test-Path $LogFile) { Get-Content $LogFile -Tail 40 }
   if (Test-Path ($LogFile + ".err")) { Get-Content ($LogFile + ".err") -Tail 40 }
   exit 1
 }
 
 $url = "http://127.0.0.1:$chosen/webui"
-Write-Host "Prism is running: $url"
-Write-Host "Stop it with Stop-Prism.bat (or pc/scripts/Stop-Unified.ps1)."
+Write-Host "Lenswright is running: $url"
+Write-Host "Stop it with Stop-Lenswright.bat (or pc/scripts/Stop-Unified.ps1)."
 if (-not $NoBrowser) { Start-Process $url }

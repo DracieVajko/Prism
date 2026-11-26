@@ -63,7 +63,7 @@ LiteRT engine.
 - On a 6 GB card, `qwen3-vl-2b` and `firered-ocr` overflow and fall back to CPU
   layers; `ovis-ocr2`, `glm-ocr`, `paddleocr-vl-1.6`, `lightonocr-2-1b` and
   `granite-docling` fit comfortably.
-- `PRISM_OCR_DEVICE=auto|cpu|cuda` controls placement. Use `cpu` when the GPU
+- `LENSWRIGHT_OCR_DEVICE=auto|cpu|cuda` controls placement. Use `cpu` when the GPU
   is busy with an LLM; `qianfan-ocr` (9.5 GB) and other large models only load
   with offload.
 - LightOnOCR 2 declares `model_type: mistral3`, so the generic auto class builds

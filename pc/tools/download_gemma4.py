@@ -1,4 +1,4 @@
-"""Download Gemma4 E2B model for Prism PC.
+"""Download Gemma4 E2B model for Lenswright PC.
 
 Usage:
     python pc/tools/download_gemma4.py

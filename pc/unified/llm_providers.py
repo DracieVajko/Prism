@@ -6,13 +6,13 @@ public API, etc.). This module only provides a thin client to call an external
 endpoint that the user configures.
 
 Configuration (environment variables):
-  PRISM_LLM_PROVIDER   : ollama | lmstudio | openai | anthropic | mistral | gemini | llamacpp | custom | none
-  PRISM_LLM_BASE_URL   : http://localhost:11434 (ollama), http://localhost:1234 (lmstudio), etc.
-  PRISM_LLM_API_KEY    : API key for public providers (optional)
-  PRISM_LLM_MODEL      : model name (e.g. "gemma4:12b", "qwen3.5-9b", "gpt-4o-mini")
-  PRISM_LLM_ENDPOINT   : custom endpoint path (default: /api/generate or /v1/chat/completions)
+  LENSWRIGHT_LLM_PROVIDER   : ollama | lmstudio | openai | anthropic | mistral | gemini | llamacpp | custom | none
+  LENSWRIGHT_LLM_BASE_URL   : http://localhost:11434 (ollama), http://localhost:1234 (lmstudio), etc.
+  LENSWRIGHT_LLM_API_KEY    : API key for public providers (optional)
+  LENSWRIGHT_LLM_MODEL      : model name (e.g. "gemma4:12b", "qwen3.5-9b", "gpt-4o-mini")
+  LENSWRIGHT_LLM_ENDPOINT   : custom endpoint path (default: /api/generate or /v1/chat/completions)
 
-Default prompts per operation (overridable via env vars PRISM_PROMPT_<OPERATION>):
+Default prompts per operation (overridable via env vars LENSWRIGHT_PROMPT_<OPERATION>):
   summary       : Summarize the text into structured notes with key points and action items.
   cleanup       : Fix grammar, spelling, and punctuation. Keep the meaning unchanged.
   grammar       : Fix grammar and spelling only. Do not rewrite or summarize.
@@ -33,7 +33,7 @@ from unified.llm_monitor import acquire, loaded_models, release_model
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Default prompts per operation. Override with PRISM_PROMPT_<OPERATION> env var.
+# Default prompts per operation. Override with LENSWRIGHT_PROMPT_<OPERATION> env var.
 # ---------------------------------------------------------------------------
 _DEFAULT_PROMPTS = {
     "summary": "Summarize the text into concise notes with key points.",
@@ -48,7 +48,7 @@ _DEFAULT_PROMPTS = {
 
 def _get_prompt(operation: str) -> str:
     """Return the prompt for the given operation, honoring env overrides."""
-    env_key = f"PRISM_PROMPT_{operation.upper()}"
+    env_key = f"LENSWRIGHT_PROMPT_{operation.upper()}"
     env_val = os.environ.get(env_key, "").strip()
     if env_val:
         return env_val
@@ -92,11 +92,11 @@ def _resolve_instruction(instruction: str, operation: str | None,
 
 def _get_config() -> dict:
     return {
-        "provider": os.environ.get("PRISM_LLM_PROVIDER", "none").strip().lower(),
-        "base_url": os.environ.get("PRISM_LLM_BASE_URL", "").strip().rstrip("/"),
-        "api_key": os.environ.get("PRISM_LLM_API_KEY", "").strip(),
-        "model": os.environ.get("PRISM_LLM_MODEL", "gemma4:12b").strip(),
-        "endpoint": os.environ.get("PRISM_LLM_ENDPOINT", "").strip(),
+        "provider": os.environ.get("LENSWRIGHT_LLM_PROVIDER", "none").strip().lower(),
+        "base_url": os.environ.get("LENSWRIGHT_LLM_BASE_URL", "").strip().rstrip("/"),
+        "api_key": os.environ.get("LENSWRIGHT_LLM_API_KEY", "").strip(),
+        "model": os.environ.get("LENSWRIGHT_LLM_MODEL", "gemma4:12b").strip(),
+        "endpoint": os.environ.get("LENSWRIGHT_LLM_ENDPOINT", "").strip(),
     }
 
 

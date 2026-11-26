@@ -49,7 +49,7 @@ gen_png = None
 if r is not None and r.status_code == 200:
     b64 = r.json().get("data", [{}])[0].get("b64_json", "")
     gen_png = base64.b64decode(b64)
-    (Path(tempfile.mkdtemp(prefix="prism_e2e_")) / "test_generate.png").write_bytes(gen_png)
+    (Path(tempfile.mkdtemp(prefix="lenswright_e2e_")) / "test_generate.png").write_bytes(gen_png)
     print(f"      image bytes={len(gen_png)}")
 
 check("generate 512x512", "POST", "/v1/images/generations", (200,),

@@ -1,4 +1,4 @@
-# Prism Checklist
+# Lenswright Checklist
 
 Status legend: [x] done, [~] in progress, [ ] todo, [!] experimental/blocked.
 
@@ -30,8 +30,8 @@ Status legend: [x] done, [~] in progress, [ ] todo, [!] experimental/blocked.
 - [x] Keyboard does not auto-open.
 - [x] Max audio size limit removed (chunking handles it).
 - [x] Console log: scrollable (220 dp) + selectable + **copy** button.
-- [x] **Save image** button (Pictures/Prism via MediaStore).
-- [x] **Save transcript** button (Download/Prism via MediaStore).
+- [x] **Save image** button (Pictures/Lenswright via MediaStore).
+- [x] **Save transcript** button (Download/Lenswright via MediaStore).
 - [x] Download progress button says **Stop N%** and cancels the download.
 - [x] Single-resident: audio releases the image engine, image releases whisper.
 
@@ -242,7 +242,7 @@ Last result: **25/25 passed** (before the PC-mode removal).
 ### UI fixes (2026-10-23)
 
 - Console: scrollable (220 dp), selectable, **copy** button.
-- Save image (Pictures/Prism) and Save transcript (Download/Prism).
+- Save image (Pictures/Lenswright) and Save transcript (Download/Lenswright).
 - Download button shows **Stop N%** and cancels.
 - File picker: OpenDocument with initial URI `Recordings` (audio) / `Pictures`
   (images) and `*/*` for audio, so `.wav` files are visible.
@@ -317,7 +317,7 @@ Test files: `pc/tools/test_pc_states.py` (PASS) and `android/tests/test_android_
 - [x] `release()` frees ONNX sessions on idle/model switch.
 - [x] Measured (warm): 256/4 6.3 s, 384/6 10.7 s, 512/6 51.8 s (CPU: 23/45/65 s).
 - [x] First run of a new shape pays cuDNN planning (43/65/184 s, one-time).
-- [x] `PRISM_ONNX_PROVIDER=cpu` documented as the fallback for the 6 GB card.
+- [x] `LENSWRIGHT_ONNX_PROVIDER=cpu` documented as the fallback for the 6 GB card.
 - [ ] AMD iGPU: DirectML cannot run the INT8 QDQ graph → CPU only; needs a
       non-QDQ FP16/FP32 model in a separate `onnxruntime-directml` env.
 
@@ -328,7 +328,7 @@ Test files: `pc/tools/test_pc_states.py` (PASS) and `android/tests/test_android_
       produced garbage).
 - [x] `pc/tools/convert_esrgan_onnx.py` exports `RealESRGAN_x4plus.onnx` (single 67 MB
       file, max diff vs torch 2e-6).
-- [x] Engine order: torch → ONNX → Pillow; `PRISM_UPSCALE_ENGINE=torch|onnx|pillow`.
+- [x] Engine order: torch → ONNX → Pillow; `LENSWRIGHT_UPSCALE_ENGINE=torch|onnx|pillow`.
 - [x] Upscale is its own resident kind; switching releases the LCM pipeline,
       so the 6 GB card has VRAM for ESRGAN.
 - [x] Measured 512→1024: torch CUDA **5.4–6.2 s**, ONNX CUDA 13.6 s,
@@ -365,13 +365,13 @@ Test files: `pc/tools/test_pc_states.py` (PASS) and `android/tests/test_android_
 - [x] Verified: `pytest` 44 from `pc/`, e2e 37/37 from `pc/`, Android
       `assembleDebug` OK.
 - [ ] Run `pc/scripts/migrate-service-paths.ps1` **as Administrator** to
-      repoint the `OdysseusDiffusion` service at `pc/` (until then a
+      repoint the `Lenswright` service at `pc/` (until then a
       temporary root `nssm.exe` keeps the SCM path valid; the service will
       fail on restart because its script path is still the old root one).
 
-## Prism PC launcher and transcription (2026-10-26)
+## Lenswright PC launcher and transcription (2026-10-26)
 
-- [x] WebUI renamed to **Prism** (title + header); tab order Generate,
+- [x] WebUI renamed to **Lenswright** (title + header); tab order Generate,
       Transcribe, Upscale, Caption, Inpaint, Edit, Tools, Models, Settings.
 - [x] `GET /v1/models` reports `kind` + `installed` for image/audio/upscale/vlm,
       using the installable catalog (`model_catalog.catalog()`) as the source
@@ -389,11 +389,11 @@ Test files: `pc/tools/test_pc_states.py` (PASS) and `android/tests/test_android_
       automatic CUDA -> CPU fallback; this machine has no `cublas64_12.dll`.
 - [x] Long audio is transcribed in one pass (no 30 s re-splitting); splitting
       remains for the remote `WhisperApi` path.
-- [x] One-click launchers `Start-Prism.bat` / `Stop-Prism.bat` (root and `pc/`):
+- [x] One-click launchers `Start-Lenswright.bat` / `Stop-Lenswright.bat` (root and `pc/`):
       python discovery, 8101 -> 8102 port fallback, WebUI auto-open.
 - [x] Verified live on 8102: `/v1/models` kinds = audio/image/upscale/vlm,
       `small installed=True`, other whisper sizes `installed=False`; WebUI DOM
-      shows title Prism, 9 tabs, `small (local)`, `max 500 MB`;
+      shows title Lenswright, 9 tabs, `small (local)`, `max 500 MB`;
       `POST /v1/audio/transcriptions` with `testdata/audio/jfk.wav` -> 200,
       engine `local`, exact JFK sentence (34 s including model load);
       `pytest` **44 passed** from `pc/`.
@@ -406,7 +406,7 @@ Test files: `pc/tools/test_pc_states.py` (PASS) and `android/tests/test_android_
       `False/0` -> transcribe -> `True/1` -> image generate -> `False/0`,
       so switching to an image model really releases the whisper model.
 
-## Prism WebUI model dropdowns and downloads (2026-10-26)
+## Lenswright WebUI model dropdowns and downloads (2026-10-26)
 
 - [x] Root cause of the broken dropdowns: `:root` redefined its own tokens
       (`--bg: var(--bg)`, ...), so every variable resolved to nothing. The page
@@ -534,7 +534,7 @@ scripts, requirements, contracts.
 - [x] **Personal addresses removed:** `100.88.219.120` (Tailscale) was hardcoded
       in `Switch-Service-ToUnified.ps1`, `migrate-service-paths.ps1` and a
       `test_api.py` docstring; `192.168.1.60` (the phone) in
-      `android/contract-compat.md`. The scripts now read `PRISM_ALLOWED_HOST`,
+      `android/contract-compat.md`. The scripts now read `LENSWRIGHT_ALLOWED_HOST`,
       docs use placeholders. Remaining IPs are generic examples
       (`192.168.1.50`, `100.64.0.0/10`).
 - [x] **Temporary-looking files:** `android/tools/tools_fetch_tmp.ps1` and
@@ -714,7 +714,7 @@ Android (`Android/data/<pkg>/files/output/<kind>/`):
 - [x] UI: an **Outputs** button in the Settings card opens a dialog listing the
       files (kind/name/size); tapping opens the file through a FileProvider
       (`<pkg>.files`), "Save all to Downloads" copies everything into the public
-      `Download/Prism` folder, and "Open folder path" shows the exact path.
+      `Download/Lenswright` folder, and "Open folder path" shows the exact path.
 
 ## Job progress and cancellation (2026-10-27)
 
@@ -746,15 +746,15 @@ Android (`Android/data/<pkg>/files/output/<kind>/`):
 
 ## Windows autostart (2026-11-18)
 
-- [x] `Startup\Prism.vbs` failed at logon with `800A0401 Expected end of
-      statement` (line 3, char 86). Root cause: `install-prism-service.ps1`
-      interpolated `-File "D:\...\start-prism-autostart.ps1"` into a VBScript
+- [x] `Startup\Lenswright.vbs` failed at logon with `800A0401 Expected end of
+      statement` (line 3, char 86). Root cause: `install-lenswright-service.ps1`
+      interpolated `-File "D:\...\start-lenswright-autostart.ps1"` into a VBScript
       string literal without VBS escaping, so the embedded `"` ended the
       string early. Fixed by doubling quotes (`$psArgs.Replace('"', '""')`)
       before building `$vbsBody`.
-- [x] `pc/scripts/start-prism-autostart.ps1` still hardcoded
+- [x] `pc/scripts/start-lenswright-autostart.ps1` still hardcoded
       `D:\AI\DiffusionServer\pc` for the working directory and the log after
-      the move to `D:\AI\Prism`; both now derive from `$PSScriptRoot`, so no
+      the move to `D:\AI\Lenswright`; both now derive from `$PSScriptRoot`, so no
       absolute path has to survive a move.
 - [x] Regenerated the Startup file from the fixed generator, byte-identical to
       its output. Verified from the installed artifact: `wscript` -> VBS ->
@@ -768,7 +768,7 @@ Android (`Android/data/<pkg>/files/output/<kind>/`):
       unchanged), `swinir-realsr-x4`, `z-image-turbo`; unknown names return 400.
 - [x] SwinIR exposed as a deterministic engine through the existing ONNX
       model (Apache-2.0): x4 then resize, input cap raised 512 -> 1024 px
-      (`PRISM_SWINIR_MAX_SIDE`), 64 px tiles keep it inside 4 GB. Measured
+      (`LENSWRIGHT_SWINIR_MAX_SIDE`), 64 px tiles keep it inside 4 GB. Measured
       512 -> 2048 px in ~2.5 min on the RTX 3060; minutes, not seconds.
 - [x] `diffusion_server` no longer auto-discovers `z-image-turbo` as a
       StableDiffusion pipeline (added to `NON_DIFFUSION_DIRS`).
@@ -812,7 +812,7 @@ Android (`Android/data/<pkg>/files/output/<kind>/`):
 - [x] Client compatibility documented in `pc/docs/UNIFIED-CONTRACT.md`:
       Cindy (WS), Odysseus (`endpoint:<id>` HTTP STT), OpenAI SDK/any
       OpenAI-compatible client. Claude Code and Codex CLI built-in voice does
-      not accept a custom ASR endpoint, so they cannot use Prism for that.
+      not accept a custom ASR endpoint, so they cannot use Lenswright for that.
 - [x] Tests: `pc/tests/test_realtime_ws.py` (session flow with a stubbed
       transcriber).
 
@@ -823,7 +823,7 @@ Android (`Android/data/<pkg>/files/output/<kind>/`):
 - [x] Verified: `/health` on 127.0.0.1, 10.15.14.87 (LAN) and
       100.88.219.120 (Tailscale); WebSocket `/v1/realtime` over the Tailscale
       IP returned the expected transcript.
-- [x] Inbound TCP 8101 already allowed by the existing Prism/Odysseus firewall
+- [x] Inbound TCP 8101 already allowed by the existing Lenswright/Odysseus firewall
       rules. No auth: trusted LAN/tailnet only, never public.
 
 ## OCR + Z-Image batch/video (2026-11-19)
@@ -917,7 +917,7 @@ Android (`Android/data/<pkg>/files/output/<kind>/`):
 
 - [x] Qianfan-OCR (4.7B, 192 languages, KIE/layout) added through the same
       qwen-vl path with prompt "Parse this document to Markdown."; catalogued
-      at 9.5 GB with an offload warning. `PRISM_OCR_DEVICE=auto|cpu|cuda`
+      at 9.5 GB with an offload warning. `LENSWRIGHT_OCR_DEVICE=auto|cpu|cuda`
       controls placement so OCR can run while an LLM holds the GPU.
 - [x] Surya OCR 2 and Chandra 2 are package-based (`surya`, `chandra`), not
       plain transformers; documented in OCR-MODELS.md instead of pretending
@@ -944,7 +944,7 @@ Android (`Android/data/<pkg>/files/output/<kind>/`):
 - [x] Tested every installed model through the HTTP API; matrix and timings in
       `docs/MODEL-TESTS.md`. Passed: Whisper turbo/large, Granite Speech,
       Real-ESRGAN, SwinIR, SmolVLM, DDColor, GFPGAN, all four image models.
-- [x] Fixed OCR loading: missing `os` import from the PRISM_OCR_DEVICE change;
+- [x] Fixed OCR loading: missing `os` import from the LENSWRIGHT_OCR_DEVICE change;
       OCR engines now keep only one model resident (release on switch).
 - [x] Fixed install detection: `.incomplete/.part/.lock` files no longer count
       as installed (instruct-pix2pix was a 4.5 GB partial shown as installed).
@@ -1056,7 +1056,7 @@ Android (`Android/data/<pkg>/files/output/<kind>/`):
 
 - [x] Installed `desloppify 1.0.1`, installed the Claude/OpenCode skill docs, and
       kept `.desloppify/`, `scorecard.png`, `.opencode/` and `.claude/` ignored.
-- [x] Scanned `D:\AI\Prism`; reviewed all 20 subjective dimensions and imported
+- [x] Scanned `D:\AI\Lenswright`; reviewed all 20 subjective dimensions and imported
       the blind review. Strict score moved from the plan-start 64.4 to 69.3
       (overall 71.3, objective 81.2).
 - [x] Fixed the convention outliers: all PC loggers use
@@ -1066,7 +1066,7 @@ Android (`Android/data/<pkg>/files/output/<kind>/`):
       `llm_monitor.release_model()` separated; extract/trim/compress share
       `_run_media_transform`; `cleanup_chunks` no longer has a dead
       `keep_original` parameter.
-- [x] Added optional `PRISM_API_TOKEN` bearer auth for every `/v1/*` route
+- [x] Added optional `LENSWRIGHT_API_TOKEN` bearer auth for every `/v1/*` route
       (`/health` and CORS preflight exempt), with 401/200 tests and LAN
       documentation. Default remains localhost-friendly.
 - [x] Added tests for `transcription_utils`, `onnx_env`, `registry`,
@@ -1123,7 +1123,7 @@ Android (`Android/data/<pkg>/files/output/<kind>/`):
 - [x] deoldify-artistic previously returned a blue-only image; root cause was the
       missing 0-255 input contract and taking the model's own luminance.
 - [x] Restore now uses Juggernaut XL img2img at 768x768 (was DreamShaper 512).
-      Override with PRISM_RESTORE_MODEL; falls back to DreamShaper when absent.
+      Override with LENSWRIGHT_RESTORE_MODEL; falls back to DreamShaper when absent.
 - [x] FLUX.1-Kontext-dev cannot run on this machine and is documented as such:
       bf16 needs ~31.8 GB RAM, FP8 has no matmul on Ampere, ComfyUI GGUF has
       incompatible tensor shapes. Kept as optional downloads, removed from disk.

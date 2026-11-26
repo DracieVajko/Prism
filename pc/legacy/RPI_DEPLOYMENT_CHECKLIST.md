@@ -103,7 +103,7 @@ python run_diffusion_menu.py
 .\Install-DiffusionStartup.ps1 -Remote
 
 # Start now
-Start-ScheduledTask -TaskName OdysseusDiffusionHelper
+Start-ScheduledTask -TaskName LenswrightHelper
 
 # Stop
 .\Stop-Diffusion.ps1

@@ -32,7 +32,7 @@ def build_registry():
     return {
         "port": img.get("port", 8101),
         "default_image_model": img.get("default_model", "DreamShaper_8"),
-        "default_audio_model": os.getenv("PRISM_ASR_MODEL", "small"),
+        "default_audio_model": os.getenv("LENSWRIGHT_ASR_MODEL", "small"),
         "image_models": img.get("models", {}),
         "audio_models": list(WHISPER_MODELS),
         "audio_info": WHISPER_INFO,

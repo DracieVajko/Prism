@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.8.0 (2026-11-26) — rename: Prism → Lenswright
+
+- **Renamed** the product from Prism to Lenswright, because "Prism" collided with
+  dozens of unrelated tools and could not be found on GitHub (76 000+ repos match
+  the name). The API contract is untouched: same port 8101, same `/v1/*` paths,
+  same model IDs, same 503 shapes.
+- **Environment variables:** `PRISM_*` → `LENSWRIGHT_*` (48 names, including the
+  seven `PRISM_PROMPT_*` overrides and the four keystore variables).
+- **Backwards compatibility:** `pc/unified_server.py` copies every `PRISM_*` name
+  to `LENSWRIGHT_*` at import time when the new name is unset, so existing
+  `settings.local.json`, `.bat`/`.sh` launchers and systemd units keep working.
+  The shim is scheduled for removal in 0.9.0.
+- **Files and services renamed:** `Start-Lenswright.bat`, `Stop-Lenswright.bat`,
+  `pc/scripts/start-lenswright.sh`, `install-lenswright-service.{ps1,sh}`,
+  `lenswright.service`, `lenswright.env.example`, and the Windows service
+  (`OdysseusDiffusion` → `Lenswright`). Re-run the installer to re-register it.
+- **Android:** launcher name `Lenswright` (`app_name`, `android:label`) and the
+  nine colour tokens `prism_*` → `lenswright_*`. `applicationId` deliberately
+  stays `eu.odysseus.diffusion` so existing installs, settings and downloaded
+  models survive; it changes at 1.0.
+- **Skill:** `skills/original/prism/SKILL.md` → `skills/original/lenswright/SKILL.md`
+  with new trigger words.
+- **Left alone on purpose:** released CHANGELOG entries, the dated checkpoint and
+  checklist evidence, and `testdata/images/*RESULTS*.md` keep the old name —
+  they record what was measured under it. GitHub repository URLs still point at
+  `DracieVajko/Prism` and switch over with the repository rename.
+
 ## 0.7.0 (2026-10-27) — Prism
 
 - **Repository split:** `pc/` is the PC product (server, `unified/`, WebUI, models,

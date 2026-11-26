@@ -3,16 +3,16 @@
     Remove the legacy Odysseus/WhisperApi services and their files.
 
 .DESCRIPTION
-    Before Prism there were two separate products on this machine:
+    Before Lenswright there were two separate products on this machine:
 
-      * OdysseusDiffusion  - diffusion_server.py behind NSSM, port 8101
+      * Lenswright  - diffusion_server.py behind NSSM, port 8101
       * whisper-api        - "C:\Program Files\Whisper Api", port 4444
 
-    Prism now serves both on port 8101, so both are dead weight: whisper-api is
+    Lenswright now serves both on port 8101, so both are dead weight: whisper-api is
     still set to Automatic and would keep binding 4444 on every boot.
 
     This script stops and deletes the services, removes their files, and reports
-    what it could not touch. It never deletes the Prism repo.
+    what it could not touch. It never deletes the Lenswright repo.
 
     Requires an elevated PowerShell. Run with -WhatIf first.
 
@@ -25,7 +25,7 @@
 #>
 [CmdletBinding(SupportsShouldProcess = $true)]
 param(
-    [string[]]$LegacyServices = @("OdysseusDiffusion", "whisper-api"),
+    [string[]]$LegacyServices = @("Lenswright", "whisper-api"),
     [string[]]$LegacyDirs = @("C:\Program Files\Whisper Api"),
     [string]$LegacyNssm = "D:\AI\DiffusionServer\nssm.exe",
     [switch]$KeepFiles
@@ -40,7 +40,7 @@ function Test-Admin {
 }
 
 $isAdmin = Test-Admin
-Write-Host "Prism legacy cleanup"
+Write-Host "Lenswright legacy cleanup"
 Write-Host "  elevated: $isAdmin"
 Write-Host ""
 
@@ -116,9 +116,9 @@ if (-not $KeepFiles) {
 # Leftovers
 # ---------------------------------------------------------------------------
 Write-Host ""
-Write-Host "Remaining services matching Odysseus/whisper/Prism:"
+Write-Host "Remaining services matching Odysseus/whisper/Lenswright:"
 $left = Get-CimInstance Win32_Service -ErrorAction SilentlyContinue |
-    Where-Object { $_.Name -match "Odysseus|whisper|Prism" } |
+    Where-Object { $_.Name -match "Odysseus|whisper|Lenswright" } |
     Select-Object Name, State, StartMode
 if ($left) {
     $left | Format-Table -AutoSize | Out-String | Write-Host

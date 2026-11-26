@@ -34,7 +34,7 @@ class DiffusionService : Service() {
 
     private fun buildNotification(text: String): Notification =
         NotificationCompat.Builder(this, "srv")
-            .setContentTitle("Prism")
+            .setContentTitle("Lenswright")
             .setContentText(text)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setOngoing(true)

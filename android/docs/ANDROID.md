@@ -1,4 +1,4 @@
-# Android — the phone as a Prism server
+# Android — the phone as a Lenswright server
 
 The phone is a **standalone, offline AI server**. No WebUI, no PC/remote mode.
 Every feature runs locally; models are downloaded once and then used offline.
@@ -150,7 +150,7 @@ Only one heavy engine is loaded at a time:
 
 The live suite (`android/tests/test_android_live.py`) checks the 400 for a
 missing file and, when the model is installed, that a synthetic page returns
-PRISM/OCR/2026 plus an outputs entry; an honest 503 passes with its reason.
+LENSWRIGHT/OCR/2026 plus an outputs entry; an honest 503 passes with its reason.
 
 ## Image generation note
 

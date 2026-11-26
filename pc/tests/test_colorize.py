@@ -1,7 +1,7 @@
 """Tests for unified/colorize.py — multi-model colorization.
 
 Unit tests use a fake ONNX session, so no weights and no GPU are required.
-The real-model test is opt-in via PRISM_RUN_MODEL_TESTS=1.
+The real-model test is opt-in via LENSWRIGHT_RUN_MODEL_TESTS=1.
 """
 import base64
 import io
@@ -14,7 +14,7 @@ import pytest
 from PIL import Image
 from unified import colorize as cz
 
-RUN_MODEL_TESTS = os.environ.get("PRISM_RUN_MODEL_TESTS") == "1"
+RUN_MODEL_TESTS = os.environ.get("LENSWRIGHT_RUN_MODEL_TESTS") == "1"
 
 
 @pytest.fixture(autouse=True)
@@ -79,7 +79,7 @@ def test_colorize_b64_unknown_model_falls_back_to_default():
         pass
 
 
-@pytest.mark.skipif(not RUN_MODEL_TESTS, reason="set PRISM_RUN_MODEL_TESTS=1")
+@pytest.mark.skipif(not RUN_MODEL_TESTS, reason="set LENSWRIGHT_RUN_MODEL_TESTS=1")
 def test_colorize_real_model():
     if not any(cz.COLORIZE_MODELS[m]["path"].exists() for m in cz.COLORIZE_MODELS):
         pytest.skip("no colorize weights installed")

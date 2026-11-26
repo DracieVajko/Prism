@@ -1,4 +1,4 @@
-# Prism Checkpoints
+# Lenswright Checkpoints
 
 Chronological record of decisions and verified states. Newest last.
 
@@ -35,7 +35,7 @@ AI client (OpenAI-compatible), without the phone depending on the PC.
 
 ## 2026-10-22 — Rename + English
 
-- "Odysseus Diffusion" → "Prism" (label, notification, header, docs).
+- "Odysseus Diffusion" → "Lenswright" (label, notification, header, docs).
 - `AGENTS.md`: English only; architecture rules.
 
 ## 2026-10-22 — Remote proxy
@@ -360,7 +360,7 @@ Hardware: RTX 3060 Laptop 6 GB, driver 617.42, CUDA 13.4, cuDNN 9.27
 (`nvidia-cudnn-cu13` pip), `onnxruntime-gpu 1.31.0`.
 
 Provider logic (`pc/unified/onnx_env.py`):
-- `PRISM_ONNX_PROVIDER=auto` (default): CUDA → CPU. DirectML is skipped for
+- `LENSWRIGHT_ONNX_PROVIDER=auto` (default): CUDA → CPU. DirectML is skipped for
   `qdq` models because DML fails in `DmlGraphFusionHelper` on the INT8 graph.
 - `cuda` / `dml` / `cpu` force a path.
 - Windows: the pip `nvidia/*/bin` DLL directories are registered before the
@@ -380,7 +380,7 @@ Measured on the server (warm, LCM-Dreamshaper INT8):
 Caveats (measured):
 - The first run of each new shape pays cuDNN planning: 256 ≈ 43 s, 384 ≈ 65 s,
   512 ≈ 184 s (one-time per process; the first also includes engine init).
-- VRAM sits at ~5.9 GB of 6 GB. `PRISM_ONNX_PROVIDER=cpu` is the safe fallback.
+- VRAM sits at ~5.9 GB of 6 GB. `LENSWRIGHT_ONNX_PROVIDER=cpu` is the safe fallback.
 - ORT reports 777 Memcpy nodes for CUDA on this QDQ graph ("unable to run CUDA
   graph"), so the gain is modest at 512.
 - `release()` frees the ONNX sessions on idle/model switch, so the GPU
@@ -455,7 +455,7 @@ correct key names (`conv1..conv5`, `conv_up1/2`), exports with dynamic H/W,
 inlines the external weights and validates against torch:
 `max abs diff 2e-6`, single 67 MB `RealESRGAN_x4plus.onnx`.
 `find_onnx_weight` accepts inline or `.onnx.data` weights.
-`PRISM_UPSCALE_ENGINE=auto|torch|onnx|pillow` selects the path.
+`LENSWRIGHT_UPSCALE_ENGINE=auto|torch|onnx|pillow` selects the path.
 
 **Single-resident fix:** upscale now calls
 `_manager.ensure("upscale", "RealESRGAN_x4v3")`, and `_release_engines` calls
@@ -501,14 +501,14 @@ testdata/  shared test fixtures
   **37/37** against the server started from `pc/`, Android
   `assembleDebug` **BUILD SUCCESSFUL**.
 
-**Windows service:** `OdysseusDiffusion` still points at the old root paths.
+**Windows service:** `Lenswright` still points at the old root paths.
 Run `pc/scripts/migrate-service-paths.ps1` as Administrator once to repoint
 the SCM binary to `pc/scripts/nssm.exe` and the app parameters to
 `pc/diffusion_server.py` + `pc/models.json`. A temporary root `nssm.exe`
 (gitignored) keeps the SCM path valid until then; the service will fail on
 restart before the migration because its script path no longer exists.
 
-## Prism PC launcher and transcription model (2026-10-26)
+## Lenswright PC launcher and transcription model (2026-10-26)
 
 **Models contract.** `/v1/models` is the same contract for both products, so it
 now carries `kind` and `installed`. The installable catalog
@@ -532,12 +532,12 @@ stays for the remote `WhisperApi` path.
 
 **Evidence.** `pytest` 44 passed from `pc/`; live server on 8102 returns
 `kind` for audio/image/upscale/vlm with `small installed=True`; the WebUI
-renders as Prism with 9 tabs, populated dropdowns and the 500 MB label;
+renders as Lenswright with 9 tabs, populated dropdowns and the 500 MB label;
 `POST /v1/audio/transcriptions` on `testdata/audio/jfk.wav` -> 200 with the
 exact JFK sentence; the 40:57 recording produced 272 segments in 539 s.
 
-**Port.** 8101 is still held by the legacy `OdysseusDiffusion` service, so the
-launcher detects an occupied port and starts Prism on 8102. The permanent fix
+**Port.** 8101 is still held by the legacy `Lenswright` service, so the
+launcher detects an occupied port and starts Lenswright on 8102. The permanent fix
 is the Administrator migration script.
 
 **Whisper residency truth (2026-10-26).** `_WHISPER_CACHE` holds the
@@ -548,7 +548,7 @@ that cache. Verified: `False/0` -> transcription -> `True/1` -> image
 generation -> `False/0`, i.e. `_release_engines` drops whisper on a model
 switch. `pytest` 44 passed after the change.
 
-## Prism WebUI dropdown root cause (2026-10-26)
+## Lenswright WebUI dropdown root cause (2026-10-26)
 
 **Cause:** the stylesheet declared `--bg: var(--bg)` (and the same for every
 other token) in `:root`, i.e. each custom property referenced itself. Invalid
@@ -602,7 +602,7 @@ edge-replicated to the target canvas, the border becomes the mask, strength is
 4 MP, returning 400 with the computed size otherwise.
 
 **Evidence.** 39/39 checks, including pixel-level assertions and ffprobe
-metadata; artifacts in `%TEMP%\prism_full_test` (`gen_512.png`, `inpaint_add.png`,
+metadata; artifacts in `%TEMP%\lenswright_full_test` (`gen_512.png`, `inpaint_add.png`,
 `outpaint_768.png`, `upscale_1024.png`, `results.json`).
 
 **img2img engine order.** `/v1/images/edits` used to try the ONNX LCM engine
@@ -653,7 +653,7 @@ the exact size and SHA256, and documents the verification command.
 
 **Personal addresses.** Tailscale (`100.88.219.120`) and the phone's LAN IP
 (`192.168.1.60`) were baked into scripts and docs. They are now environment
-variables (`PRISM_ALLOWED_HOST`) or placeholders, so the same files work for any
+variables (`LENSWRIGHT_ALLOWED_HOST`) or placeholders, so the same files work for any
 machine without editing and without publishing someone's network layout.
 
 **Docs are classified, not deleted.** `HANDOFF.md` is a dated snapshot and is
@@ -795,7 +795,7 @@ was auditable afterwards and a job could not be re-opened from a file.
 **Where.** The PC writes under `pc/output/<kind>/`, the phone under
 `Android/data/<pkg>/files/output/<kind>/` (app-private, so the server can list
 and serve it without storage permissions). The phone additionally offers
-"Save all to Downloads", which copies into `Download/Prism` via MediaStore, so
+"Save all to Downloads", which copies into `Download/Lenswright` via MediaStore, so
 the files are visible in any file manager.
 
 **How it is exposed.** Same shape on both: `GET /v1/outputs` (newest first),
@@ -841,8 +841,8 @@ the cancel latency is bounded by the chunk, not by the request.
 **External LLM concurrency gate (PC).**
 - New `pc/unified/llm_monitor.py`: before calling an external provider it counts
   the models already resident (`/api/ps` on Ollama, `/v1/models` on LM Studio).
-  With `PRISM_LLM_MAX_CONCURRENT=1` (default) Prism waits and re-checks every
-  `PRISM_LLM_POLL_INTERVAL=120` s; after `PRISM_LLM_WAIT_TIMEOUT=3600` s the
+  With `LENSWRIGHT_LLM_MAX_CONCURRENT=1` (default) Lenswright waits and re-checks every
+  `LENSWRIGHT_LLM_POLL_INTERVAL=120` s; after `LENSWRIGHT_LLM_WAIT_TIMEOUT=3600` s the
   request returns the unprocessed text instead of failing.
 - The model is unloaded when the job ends (`keep_alive=0`, or LM Studio
   `/api/v0/models/unload`) unless it was already resident before the request.
