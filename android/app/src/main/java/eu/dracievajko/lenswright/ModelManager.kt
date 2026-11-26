@@ -1,4 +1,4 @@
-package eu.odysseus.diffusion
+package eu.dracievajko.lenswright
 
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock

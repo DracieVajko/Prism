@@ -1,4 +1,4 @@
-package eu.odysseus.diffusion
+package eu.dracievajko.lenswright
 
 object GemmaLib {
     init {

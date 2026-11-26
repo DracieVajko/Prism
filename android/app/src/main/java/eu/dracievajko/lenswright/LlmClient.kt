@@ -1,4 +1,4 @@
-package eu.odysseus.diffusion
+package eu.dracievajko.lenswright
 
 import android.util.Log
 import okhttp3.MediaType.Companion.toMediaType

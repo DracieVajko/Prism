@@ -1,4 +1,4 @@
-package eu.odysseus.diffusion
+package eu.dracievajko.lenswright
 
 import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
@@ -346,7 +346,7 @@ class MainActivity : AppCompatActivity() {
         }
         selectTab(0)
         // Headless start for tests / automation:
-        //   adb shell am start -n eu.odysseus.diffusion/.MainActivity --ez start_server true
+        //   adb shell am start -n eu.odysseus.diffusion/eu.dracievajko.lenswright.MainActivity --ez start_server true
         if (intent?.getBooleanExtra("start_server", false) == true) {
             window.decorView.post { if (!serverRunning) toggleServer() }
         }

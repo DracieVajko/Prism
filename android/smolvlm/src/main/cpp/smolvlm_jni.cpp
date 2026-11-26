@@ -78,7 +78,7 @@ bool bitmap_to_rgb(JNIEnv* env, jobject bitmap, std::vector<unsigned char>& rgb,
 }  // namespace
 
 extern "C" JNIEXPORT jlong JNICALL
-Java_eu_odysseus_diffusion_SmolVlmEngine_llamaLoadContext(
+Java_eu_dracievajko_lenswright_SmolVlmEngine_llamaLoadContext(
         JNIEnv* env, jobject /*thiz*/, jstring model_path, jstring mmproj_path) {
     const std::string model_file = jstring_to_std(env, model_path);
     const std::string mmproj_file = jstring_to_std(env, mmproj_path);
@@ -132,7 +132,7 @@ Java_eu_odysseus_diffusion_SmolVlmEngine_llamaLoadContext(
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_eu_odysseus_diffusion_SmolVlmEngine_llamaReleaseContext(
+Java_eu_dracievajko_lenswright_SmolVlmEngine_llamaReleaseContext(
         JNIEnv* /*env*/, jobject /*thiz*/, jlong ptr) {
     VlmHandle* h = as_handle(ptr);
     if (h == nullptr) return;
@@ -143,7 +143,7 @@ Java_eu_odysseus_diffusion_SmolVlmEngine_llamaReleaseContext(
 }
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_eu_odysseus_diffusion_SmolVlmEngine_llamaGenerateCaption(
+Java_eu_dracievajko_lenswright_SmolVlmEngine_llamaGenerateCaption(
         JNIEnv* env, jobject /*thiz*/, jlong ptr, jobject bitmap,
         jstring prompt_str, jint max_tokens) {
     VlmHandle* h = as_handle(ptr);

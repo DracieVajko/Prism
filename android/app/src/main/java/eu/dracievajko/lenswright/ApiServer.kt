@@ -1,4 +1,4 @@
-package eu.odysseus.diffusion
+package eu.dracievajko.lenswright
 
 import io.ktor.http.HttpStatusCode
 import com.google.gson.GsonBuilder

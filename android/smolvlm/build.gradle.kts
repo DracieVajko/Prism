@@ -8,7 +8,7 @@ plugins {
 // CMakeLists already builds whisper.cpp with its own `ggml` target, and two
 // CMake projects that both define `ggml` cannot share one build tree.
 android {
-    namespace = "eu.odysseus.smolvlm"
+    namespace = "eu.dracievajko.lenswright.smolvlm"
     compileSdk = 34
     ndkVersion = "27.3.13750724"
 

@@ -41,7 +41,7 @@ Write-OK "App stopped, forwards cleared"
 
 # 2. START APP & SERVICE
 Write-Header "2. START APP & SERVICE"
-& $adb shell am start -n eu.odysseus.diffusion/.MainActivity | Out-Null
+& $adb shell am start -n eu.odysseus.diffusion/eu.dracievajko.lenswright.MainActivity | Out-Null
 Start-Sleep 3
 
 # Tap START button (coordinates from UI dump: center of [900,438][1164,558] = ~1032,498)
@@ -54,7 +54,7 @@ if ($pidVar) {
     Write-OK "Service running (PID: $($pidVar.Trim()))"
 } else {
     Write-Err "Service not running!"
-    & $adb shell am start-foreground-service -n eu.odysseus.diffusion/.DiffusionService --es mode AUTO 2>$null | Out-Null
+    & $adb shell am start-foreground-service -n eu.odysseus.diffusion/eu.dracievajko.lenswright.DiffusionService --es mode AUTO 2>$null | Out-Null
     Start-Sleep 5
     $pidVar = & $adb shell pidof eu.odysseus.diffusion 2>$null
     if ($pidVar) { Write-OK "Service started via foreground command (PID: $($pidVar.Trim()))" }

@@ -1,4 +1,4 @@
-package eu.odysseus.diffusion
+package eu.dracievajko.lenswright
 
 /** Process graph — one ModelManager for the whole app (single-resident). */
 object AppGraph {

@@ -5,7 +5,7 @@
 # therefore use a different name (libwhisper_jni.so); otherwise the two
 # overwrite each other's output and the Java_native symbols disappear.
 cmake_minimum_required(VERSION 3.22.1)
-project("odysseus-whisper")
+project("lenswright-whisper")
 
 # The AGP Debug variant passes -O0, which makes whisper.cpp ~50x slower
 # (5 s of audio = 4 min). Force optimizations in the Debug build too.
@@ -24,9 +24,9 @@ set(WHISPER_CURL OFF CACHE BOOL "" FORCE)
 set(WHISPER_SDL2 OFF CACHE BOOL "" FORCE)
 add_subdirectory(third_party/whisper.cpp whispercpp-build)
 
-add_library(odysseus_whisper_jni SHARED whisper_jni.cpp)
-set_target_properties(odysseus_whisper_jni PROPERTIES OUTPUT_NAME "whisper_jni")
-target_link_libraries(odysseus_whisper_jni PRIVATE whisper log)
+add_library(lenswright_whisper_jni SHARED whisper_jni.cpp)
+set_target_properties(lenswright_whisper_jni PROPERTIES OUTPUT_NAME "whisper_jni")
+target_link_libraries(lenswright_whisper_jni PRIVATE whisper log)
 
 # --- Real-ESRGAN upscale (ncnn Vulkan, prebuilt static libs) ---
 # The ncnn Android Vulkan package is downloaded by tools/fetch_ncnn.ps1 into
@@ -36,9 +36,9 @@ set(NCNN_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/third_party/ncnn-shared/ncnn-20261020
 if(EXISTS "${NCNN_ROOT}/lib/libncnn.so")
     set(ncnn_DIR "${NCNN_ROOT}/lib/cmake/ncnn")
     find_package(ncnn REQUIRED)
-    add_library(odysseus_realesrgan_jni SHARED realesrgan_jni.cpp)
-    set_target_properties(odysseus_realesrgan_jni PROPERTIES OUTPUT_NAME "realesrgan_jni")
-    target_link_libraries(odysseus_realesrgan_jni PRIVATE ncnn)
+    add_library(lenswright_realesrgan_jni SHARED realesrgan_jni.cpp)
+    set_target_properties(lenswright_realesrgan_jni PROPERTIES OUTPUT_NAME "realesrgan_jni")
+    target_link_libraries(lenswright_realesrgan_jni PRIVATE ncnn)
 else()
     message(STATUS "ncnn not found for ${ANDROID_ABI}; skipping realesrgan_jni")
 endif()

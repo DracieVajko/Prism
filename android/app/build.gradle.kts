@@ -9,11 +9,16 @@ plugins {
 }
 
 android {
-    namespace = "eu.odysseus.diffusion"
+    // Code namespace (Kotlin packages, R class). Renamed from the old
+    // eu.odysseus.diffusion in 0.8.0.
+    namespace = "eu.dracievajko.lenswright"
     compileSdk = 34
     ndkVersion = "27.3.13750724"
 
     defaultConfig {
+        // Deliberately NOT the namespace: keeping the old id means the new
+        // APK installs as an update, so settings and downloaded models
+        // survive. Changing it would look like a brand-new app.
         applicationId = "eu.odysseus.diffusion"
         minSdk = 29
         targetSdk = 34

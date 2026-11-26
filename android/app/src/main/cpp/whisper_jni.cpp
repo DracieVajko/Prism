@@ -1,4 +1,4 @@
-// JNI bridge for WhisperLib.kt (eu.odysseus.diffusion.WhisperLib).
+// JNI bridge for WhisperLib.kt (eu.dracievajko.lenswright.WhisperLib).
 //
 // Thin layer over the stable whisper.cpp C API (v1.9.5, verified in
 // third_party/whisper.cpp/include/whisper.h):
@@ -65,7 +65,7 @@ std::string collect_segments(struct whisper_context * ctx, int64_t offset_ms) {
 extern "C" {
 
 JNIEXPORT jlong JNICALL
-Java_eu_odysseus_diffusion_WhisperLib_initContext(JNIEnv * env, jobject /*thiz*/, jstring modelPath) {
+Java_eu_dracievajko_lenswright_WhisperLib_initContext(JNIEnv * env, jobject /*thiz*/, jstring modelPath) {
     if (modelPath == nullptr) {
         return 0;
     }
@@ -79,7 +79,7 @@ Java_eu_odysseus_diffusion_WhisperLib_initContext(JNIEnv * env, jobject /*thiz*/
 }
 
 JNIEXPORT void JNICALL
-Java_eu_odysseus_diffusion_WhisperLib_freeContext(JNIEnv * /*env*/, jobject /*thiz*/, jlong contextPtr) {
+Java_eu_dracievajko_lenswright_WhisperLib_freeContext(JNIEnv * /*env*/, jobject /*thiz*/, jlong contextPtr) {
     auto * ctx = reinterpret_cast<struct whisper_context *>(contextPtr);
     if (ctx) {
         whisper_free(ctx);
@@ -87,7 +87,7 @@ Java_eu_odysseus_diffusion_WhisperLib_freeContext(JNIEnv * /*env*/, jobject /*th
 }
 
 JNIEXPORT jstring JNICALL
-Java_eu_odysseus_diffusion_WhisperLib_fullTranscribe(
+Java_eu_dracievajko_lenswright_WhisperLib_fullTranscribe(
         JNIEnv * env, jobject /*thiz*/, jlong contextPtr, jint numThreads,
         jfloatArray samples, jstring language, jboolean translate) {
     auto * ctx = reinterpret_cast<struct whisper_context *>(contextPtr);
@@ -136,7 +136,7 @@ Java_eu_odysseus_diffusion_WhisperLib_fullTranscribe(
 // Same as fullTranscribe, but returns "start<TAB>end<TAB>text" per segment so
 // the server can build SRT/VTT. offsetMs shifts the timings of a chunk.
 JNIEXPORT jstring JNICALL
-Java_eu_odysseus_diffusion_WhisperLib_fullTranscribeSegments(
+Java_eu_dracievajko_lenswright_WhisperLib_fullTranscribeSegments(
         JNIEnv * env, jobject /*thiz*/, jlong contextPtr, jint numThreads,
         jfloatArray samples, jstring language, jboolean translate, jlong offsetMs) {
     auto * ctx = reinterpret_cast<struct whisper_context *>(contextPtr);

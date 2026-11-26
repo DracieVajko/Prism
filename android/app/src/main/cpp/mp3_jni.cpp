@@ -14,7 +14,7 @@
 #define MP3_LOGE(...) __android_log_print(ANDROID_LOG_ERROR, MP3_TAG, __VA_ARGS__)
 
 extern "C" JNIEXPORT jbyteArray JNICALL
-Java_eu_odysseus_diffusion_Mp3Encoder_nativeEncode(
+Java_eu_dracievajko_lenswright_Mp3Encoder_nativeEncode(
         JNIEnv* env, jobject /*thiz*/, jshortArray pcm, jint sample_rate,
         jint channels, jint bitrate_kbps) {
     if (pcm == nullptr || sample_rate <= 0 || (channels != 1 && channels != 2)) {

@@ -39,7 +39,7 @@ android/
   gradle.properties
   app/build.gradle.kts        # Min/LGPL deps, abiFilters
   app/src/main/AndroidManifest.xml
-  app/src/main/java/eu/odysseus/diffusion/
+  app/src/main/java/eu/dracievajko/lenswright/
     MainActivity.kt           # UI: tabs, actions, Start/Stop, download status
     ApiServer.kt              # Ktor routes, same paths as server :8101
     ModelManager.kt           # single-resident gate (mirror of pc/unified/model_manager.py)

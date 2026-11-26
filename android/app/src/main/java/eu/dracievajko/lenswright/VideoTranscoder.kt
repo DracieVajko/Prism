@@ -1,4 +1,4 @@
-package eu.odysseus.diffusion
+package eu.dracievajko.lenswright
 
 import android.media.MediaCodec
 import android.media.MediaCodecInfo

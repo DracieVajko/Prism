@@ -1,4 +1,4 @@
-package eu.odysseus.diffusion
+package eu.dracievajko.lenswright
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory

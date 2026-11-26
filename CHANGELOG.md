@@ -26,6 +26,13 @@
   `eu.odysseus.diffusion` so existing installs, settings and downloaded models
   survive; it changes at 1.0.
 - **Skill:** `skills/original/lenswright/SKILL.md` with new trigger words.
+- **Android code namespace:** Kotlin sources moved from
+  `eu.odysseus.diffusion` to `eu.dracievajko.lenswright` (27 files), including the
+  four JNI bridges and the CMake target names. `applicationId` stays
+  `eu.odysseus.diffusion`, so the APK upgrades in place. Because the class
+  package no longer matches the app id, `adb` component paths in `tests/` and
+  `tools/` now spell the full class name
+  (`eu.odysseus.diffusion/eu.dracievajko.lenswright.MainActivity`).
 - **GitHub:** repository is now `DracieVajko/lenswright`.
 
 ## 0.7.0 (2026-10-27) — Lenswright

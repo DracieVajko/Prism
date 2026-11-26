@@ -65,7 +65,7 @@ def main():
         """Force-stop and restart the Lenswright app server via adb."""
         subprocess.run([ADB, "shell", "am", "force-stop", "eu.odysseus.diffusion"], capture_output=True)
         time.sleep(2)
-        subprocess.run([ADB, "shell", "am", "start", "-n", "eu.odysseus.diffusion/.MainActivity", "--ez", "start_server", "true"], capture_output=True)
+        subprocess.run([ADB, "shell", "am", "start", "-n", "eu.odysseus.diffusion/eu.dracievajko.lenswright.MainActivity", "--ez", "start_server", "true"], capture_output=True)
         # Wait for server to come up
         for _ in range(30):
             try:

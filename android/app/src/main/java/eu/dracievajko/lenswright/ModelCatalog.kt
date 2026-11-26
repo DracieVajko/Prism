@@ -1,4 +1,4 @@
-package eu.odysseus.diffusion
+package eu.dracievajko.lenswright
 
 /**
 * Model catalog — the single source of truth for Android.

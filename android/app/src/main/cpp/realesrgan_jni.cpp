@@ -23,7 +23,7 @@ ncnn::Net* to_net(jlong handle) {
 }  // namespace
 
 extern "C" JNIEXPORT jlong JNICALL
-Java_eu_odysseus_diffusion_RealEsrganNcnnEngine_ncnnLoadNet(
+Java_eu_dracievajko_lenswright_RealEsrganNcnnEngine_ncnnLoadNet(
         JNIEnv* env, jobject /*thiz*/, jstring param_path, jstring bin_path,
         jboolean use_vulkan) {
     const char* param = env->GetStringUTFChars(param_path, nullptr);
@@ -54,13 +54,13 @@ Java_eu_odysseus_diffusion_RealEsrganNcnnEngine_ncnnLoadNet(
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_eu_odysseus_diffusion_RealEsrganNcnnEngine_ncnnReleaseNet(
+Java_eu_dracievajko_lenswright_RealEsrganNcnnEngine_ncnnReleaseNet(
         JNIEnv* /*env*/, jobject /*thiz*/, jlong handle) {
     delete to_net(handle);
 }
 
 extern "C" JNIEXPORT jbyteArray JNICALL
-Java_eu_odysseus_diffusion_RealEsrganNcnnEngine_ncnnUpscaleTile(
+Java_eu_dracievajko_lenswright_RealEsrganNcnnEngine_ncnnUpscaleTile(
         JNIEnv* env, jobject /*thiz*/, jlong handle, jbyteArray rgb, jint w, jint h) {
     ncnn::Net* net = to_net(handle);
     if (net == nullptr || w <= 0 || h <= 0) {
