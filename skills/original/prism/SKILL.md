@@ -1,17 +1,16 @@
 ---
 name: prism
-description: >
-  Operate Prism — a local, offline, OpenAI-compatible AI server that runs on a
-  PC (pc/) and a native Android app (android/). Use this skill whenever the user
-  wants to start/stop/verify the Prism server, run or debug image generation,
-  img2img, inpaint, outpaint, colorization, restoration, upscaling, OCR,
-  captioning, VLM chat, transcription, translation, text-to-speech, realtime ASR,
-  FFmpeg media jobs, batch jobs, model downloads, secrets, auto-update, outputs,
-  or attach an external OpenAI-compatible client. Covers both products, all
-  endpoints and model IDs, environment variables, honest-503 behavior, and the
-  operational gotchas learned from real device runs. Trigger on "Prism",
-  "port 8101", "the local server", "generate/colorize/OCR/transcribe with Prism",
-  "is the server running", or when an agent must drive Prism via HTTP or ADB.
+description: "Operate Prism, a local offline OpenAI-compatible AI server on PC (pc/) and Android (android/). Use for starting/stopping/verifying the server, image generation, edits, inpaint, outpaint, colorize, restore, upscale, OCR, caption, VLM chat, transcription, TTS, realtime ASR, FFmpeg, batch jobs, model downloads, secrets and client setup. Covers endpoints, model IDs, env vars, honest-503 fallbacks and ADB testing. Trigger on Prism, port 8101 or 'is the server running'."
+version: 1.0.0
+author: DracieVajko
+tags: [prism, local-ai, server, android, image-generation, ocr, asr, adb]
+category: custom
+source_repository: https://github.com/DracieVajko/Dracievajko-SkillsSet
+source_file: skills/original/prism/SKILL.md
+license: MIT
+local_modifications: original
+verification_status: verified
+authorship: original
 ---
 
 # Prism — agent operating guide
