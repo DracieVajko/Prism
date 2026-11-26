@@ -2,7 +2,7 @@
 
 Unit tests use a fake pipeline and a PIL-generated image, so they need no
 model weights, no torch and no GPU. The real-model test is opt-in through
-PRISM_RUN_MODEL_TESTS=1.
+LENSWRIGHT_RUN_MODEL_TESTS=1.
 """
 import base64
 import io
@@ -19,7 +19,7 @@ from PIL import Image
 from unified import restore as rs
 
 PC_DIR = Path(__file__).resolve().parents[1]
-RUN_MODEL_TESTS = os.environ.get("PRISM_RUN_MODEL_TESTS") == "1"
+RUN_MODEL_TESTS = os.environ.get("LENSWRIGHT_RUN_MODEL_TESTS") == "1"
 
 
 class FakePipeline:
@@ -196,7 +196,7 @@ def test_restore_api_contract(monkeypatch):
 
 @pytest.mark.integration
 @pytest.mark.skipif(not RUN_MODEL_TESTS,
-                    reason="set PRISM_RUN_MODEL_TESTS=1 to run model integration tests")
+                    reason="set LENSWRIGHT_RUN_MODEL_TESTS=1 to run model integration tests")
 def test_restore_real_model():
     if not (rs.MODEL_DIR / "model_index.json").exists():
         pytest.skip(f"InstructPix2Pix weights not found: {rs.MODEL_DIR}")

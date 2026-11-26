@@ -3,13 +3,13 @@ import unified.onnx_env as oe
 
 
 def test_override_cpu(monkeypatch):
-    monkeypatch.setenv("PRISM_ONNX_PROVIDER", "cpu")
+    monkeypatch.setenv("LENSWRIGHT_ONNX_PROVIDER", "cpu")
     monkeypatch.setattr(oe, "available_providers", lambda: ["CUDAExecutionProvider"])
     assert oe.pick_providers("generic") == ["CPUExecutionProvider"]
 
 
 def test_qdq_skips_directml(monkeypatch):
-    monkeypatch.setenv("PRISM_ONNX_PROVIDER", "auto")
+    monkeypatch.setenv("LENSWRIGHT_ONNX_PROVIDER", "auto")
     monkeypatch.setattr(oe, "available_providers", lambda: ["DmlExecutionProvider"])
     assert oe.pick_providers("qdq") == ["CPUExecutionProvider"]
     assert oe.pick_providers("generic") == [
@@ -17,7 +17,7 @@ def test_qdq_skips_directml(monkeypatch):
 
 
 def test_cuda_preferred(monkeypatch):
-    monkeypatch.setenv("PRISM_ONNX_PROVIDER", "auto")
+    monkeypatch.setenv("LENSWRIGHT_ONNX_PROVIDER", "auto")
     monkeypatch.setattr(oe, "available_providers",
                         lambda: ["CUDAExecutionProvider", "CPUExecutionProvider"])
     providers = oe.pick_providers("generic")

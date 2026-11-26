@@ -1,4 +1,4 @@
-"""OCR / document / image-understanding engines for Prism PC.
+"""OCR / document / image-understanding engines for Lenswright PC.
 
 Each entry in OCR_SPECS is a model that can be downloaded from the Models tab
 and selected on `POST /v1/images/ocr` (`model=`). Supported families:
@@ -180,7 +180,7 @@ class OCREngine:
                     self.model_dir, trust_remote_code=self.trust_remote_code)
             # auto = accelerate decides; cpu forces full CPU (works while the
             # GPU is busy with an LLM); cuda keeps everything on the GPU.
-            device = (os.environ.get("PRISM_OCR_DEVICE") or "auto").strip().lower()
+            device = (os.environ.get("LENSWRIGHT_OCR_DEVICE") or "auto").strip().lower()
             device_map = device if device in ("cpu", "cuda") else "auto"
             if self.model_class:
                 # Some checkpoints declare a generic model_type (LightOnOCR 2

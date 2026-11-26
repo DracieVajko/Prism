@@ -1,20 +1,20 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Prism Server Stop Script (Linux / macOS)
+# Lenswright Server Stop Script (Linux / macOS)
 # ============================================================================
-# Stops the Prism server running on port 8101 (or PRISM_PORT).
+# Stops the Lenswright server running on port 8101 (or LENSWRIGHT_PORT).
 # ============================================================================
 
 set -euo pipefail
 
-PORT="${PRISM_PORT:-8101}"
+PORT="${LENSWRIGHT_PORT:-8101}"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
-echo "Stopping Prism server on port $PORT..."
+echo "Stopping Lenswright server on port $PORT..."
 
 if command -v lsof &> /dev/null; then
     PIDS=$(lsof -ti:$PORT 2>/dev/null || true)
@@ -35,7 +35,7 @@ if command -v lsof &> /dev/null; then
             echo -e "  ${RED}Force-killed PID $pid${NC}"
         fi
     done
-    echo -e "${GREEN}Prism server stopped.${NC}"
+    echo -e "${GREEN}Lenswright server stopped.${NC}"
 else
     echo -e "${RED}lsof not found. Install lsof or stop the server manually.${NC}"
     exit 1

@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-Prism is developed against the latest `main` branch. Older releases are not actively patched; please upgrade to the latest release.
+Lenswright is developed against the latest `main` branch. Older releases are not actively patched; please upgrade to the latest release.
 
 ## Security model
 
@@ -19,7 +19,7 @@ Prism is developed against the latest `main` branch. Older releases are not acti
 
 Please email the maintainer (DracieVajko via GitHub) or open a private issue. Include:
 
-- Prism version (`VERSION` file / `GET /v1/settings`)
+- Lenswright version (`VERSION` file / `GET /v1/settings`)
 - Platform (PC Windows/Linux/macOS or Android version + device)
 - Steps to reproduce
 - Expected vs. actual behavior
@@ -28,6 +28,6 @@ We do not offer bounties, but we will acknowledge and fix valid reports as quick
 
 ## What is out of scope
 
-- Exposing Prism ports directly to the public internet (against the documented security model)
+- Exposing Lenswright ports directly to the public internet (against the documented security model)
 - Modifications you make to the source (custom forks, third-party models)
-- Physical access to the device running Prism
+- Physical access to the device running Lenswright

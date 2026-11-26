@@ -1,4 +1,4 @@
-# Prism test prompts
+# Lenswright test prompts
 
 ## Text-to-image
 a red cube on a wooden table, soft light, photo

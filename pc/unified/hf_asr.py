@@ -1,4 +1,4 @@
-"""Generic transformers ASR engines for Prism PC.
+"""Generic transformers ASR engines for Lenswright PC.
 
 Transformers 5.x ships the classes for these models, so one pipeline covers
 several families that would otherwise need NeMo/FunASR:
@@ -114,7 +114,7 @@ def is_installed(model_id: str | None = None) -> bool:
 
 
 def enabled() -> bool:
-    mode = (os.environ.get("PRISM_ASR_ENGINE") or "").lower()
+    mode = (os.environ.get("LENSWRIGHT_ASR_ENGINE") or "").lower()
     return mode in ("hf", "transformers") or mode.startswith("qwen3-asr")
 
 

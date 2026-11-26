@@ -15,7 +15,7 @@ from pathlib import Path
 
 PORT = sys.argv[1] if len(sys.argv) > 1 else "8101"
 BASE = f"http://127.0.0.1:{PORT}"
-OUT = str(Path(tempfile.mkdtemp(prefix="prism_safetytest_")) / "out.png")
+OUT = str(Path(tempfile.mkdtemp(prefix="lenswright_safetytest_")) / "out.png")
 
 
 def main():

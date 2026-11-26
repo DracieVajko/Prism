@@ -1,6 +1,6 @@
 <# 
 .SYNOPSIS
-    Comprehensive Android app monitoring and testing for Prism
+    Comprehensive Android app monitoring and testing for Lenswright
 .DESCRIPTION
     Runs logcat, system monitoring, health checks, and transcription tests
 #>

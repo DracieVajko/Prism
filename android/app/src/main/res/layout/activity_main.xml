@@ -3,7 +3,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/prism_bg"
+    android:background="@color/lenswright_bg"
     android:orientation="vertical">
 
     <FrameLayout
@@ -30,8 +30,8 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Prism"
-                    android:textColor="@color/prism_text"
+                    android:text="Lenswright"
+                    android:textColor="@color/lenswright_text"
                     android:textSize="24sp"
                     android:textStyle="bold" />
 
@@ -41,7 +41,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="16dp"
                     android:text="Local AI server · images · audio · upscale"
-                    android:textColor="@color/prism_muted"
+                    android:textColor="@color/lenswright_muted"
                     android:textSize="13sp" />
 
                 <!-- STATUS -->
@@ -49,10 +49,10 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="12dp"
-                    app:cardBackgroundColor="@color/prism_panel"
+                    app:cardBackgroundColor="@color/lenswright_panel"
                     app:cardCornerRadius="12dp"
                     app:cardElevation="0dp"
-                    app:strokeColor="@color/prism_border"
+                    app:strokeColor="@color/lenswright_border"
                     app:strokeWidth="1dp">
 
                     <LinearLayout
@@ -80,7 +80,7 @@
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
                                 android:text="@string/server_stopped"
-                                android:textColor="@color/prism_text"
+                                android:textColor="@color/lenswright_text"
                                 android:textSize="16sp"
                                 android:textStyle="bold" />
 
@@ -92,7 +92,7 @@
                                 android:insetTop="0dp"
                                 android:insetBottom="0dp"
                                 android:text="@string/btn_start"
-                                app:backgroundTint="@color/prism_green"
+                                app:backgroundTint="@color/lenswright_green"
                                 app:cornerRadius="8dp" />
                         </LinearLayout>
 
@@ -103,7 +103,7 @@
                             android:layout_marginTop="8dp"
                             android:fontFamily="monospace"
                             android:text="Press START to run the local API on port 8101"
-                            android:textColor="@color/prism_muted"
+                            android:textColor="@color/lenswright_muted"
                             android:textSize="12sp" />
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
@@ -113,10 +113,10 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="12dp"
-                    app:cardBackgroundColor="@color/prism_panel"
+                    app:cardBackgroundColor="@color/lenswright_panel"
                     app:cardCornerRadius="12dp"
                     app:cardElevation="0dp"
-                    app:strokeColor="@color/prism_border"
+                    app:strokeColor="@color/lenswright_border"
                     app:strokeWidth="1dp">
 
                     <LinearLayout
@@ -129,7 +129,7 @@
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:text="MODELS"
-                            android:textColor="@color/prism_muted"
+                            android:textColor="@color/lenswright_muted"
                             android:textSize="11sp"
                             android:textStyle="bold" />
 
@@ -149,7 +149,7 @@
                             android:text="@string/btn_add_model"
                             android:textSize="12sp"
                             app:cornerRadius="8dp"
-                            app:strokeColor="@color/prism_border" />
+                            app:strokeColor="@color/lenswright_border" />
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
 
@@ -158,10 +158,10 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="12dp"
-                    app:cardBackgroundColor="@color/prism_panel"
+                    app:cardBackgroundColor="@color/lenswright_panel"
                     app:cardCornerRadius="12dp"
                     app:cardElevation="0dp"
-                    app:strokeColor="@color/prism_border"
+                    app:strokeColor="@color/lenswright_border"
                     app:strokeWidth="1dp">
 
                     <LinearLayout
@@ -174,7 +174,7 @@
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:text="SETTINGS"
-                            android:textColor="@color/prism_muted"
+                            android:textColor="@color/lenswright_muted"
                             android:textSize="11sp"
                             android:textStyle="bold" />
 
@@ -192,7 +192,7 @@
                             android:layout_marginTop="8dp"
                             android:fontFamily="monospace"
                             android:text="loading..."
-                            android:textColor="@color/prism_muted"
+                            android:textColor="@color/lenswright_muted"
                             android:textSize="11sp" />
 
                         <TextView
@@ -200,7 +200,7 @@
                             android:layout_height="wrap_content"
                             android:layout_marginTop="12dp"
                             android:text="Theme"
-                            android:textColor="@color/prism_muted"
+                            android:textColor="@color/lenswright_muted"
                             android:textSize="11sp" />
 
                         <Spinner
@@ -213,7 +213,7 @@
                             android:layout_height="wrap_content"
                             android:layout_marginTop="8dp"
                             android:text="Language"
-                            android:textColor="@color/prism_muted"
+                            android:textColor="@color/lenswright_muted"
                             android:textSize="11sp" />
 
                         <Spinner
@@ -226,7 +226,7 @@
                             android:layout_height="wrap_content"
                             android:layout_marginTop="8dp"
                             android:text="Acceleration"
-                            android:textColor="@color/prism_muted"
+                            android:textColor="@color/lenswright_muted"
                             android:textSize="11sp" />
 
                         <Spinner
@@ -239,7 +239,7 @@
                             android:layout_height="wrap_content"
                             android:layout_marginTop="8dp"
                             android:text="Connection mode"
-                            android:textColor="@color/prism_muted"
+                            android:textColor="@color/lenswright_muted"
                             android:textSize="11sp" />
 
                         <Spinner
@@ -252,7 +252,7 @@
                             android:layout_height="wrap_content"
                             android:layout_marginTop="8dp"
                             android:text="PC server URL (remote mode)"
-                            android:textColor="@color/prism_muted"
+                            android:textColor="@color/lenswright_muted"
                             android:textSize="11sp" />
 
                         <EditText
@@ -276,7 +276,7 @@
                             android:layout_height="wrap_content"
                             android:layout_marginTop="4dp"
                             android:text="Local mode — offline, no PC needed"
-                            android:textColor="@color/prism_muted"
+                            android:textColor="@color/lenswright_muted"
                             android:textSize="11sp" />
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
@@ -285,10 +285,10 @@
                 <com.google.android.material.card.MaterialCardView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    app:cardBackgroundColor="@color/prism_panel"
+                    app:cardBackgroundColor="@color/lenswright_panel"
                     app:cardCornerRadius="12dp"
                     app:cardElevation="0dp"
-                    app:strokeColor="@color/prism_border"
+                    app:strokeColor="@color/lenswright_border"
                     app:strokeWidth="1dp">
 
                     <LinearLayout
@@ -307,7 +307,7 @@
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
                                 android:text="ACTIVITY"
-                                android:textColor="@color/prism_muted"
+                                android:textColor="@color/lenswright_muted"
                                 android:textSize="11sp"
                                 android:textStyle="bold" />
 
@@ -317,7 +317,7 @@
                                 android:layout_height="wrap_content"
                                 android:layout_marginEnd="16dp"
                                 android:text="copy"
-                                android:textColor="@color/prism_accent"
+                                android:textColor="@color/lenswright_accent"
                                 android:textSize="11sp" />
 
                             <TextView
@@ -326,7 +326,7 @@
                                 android:layout_height="wrap_content"
                                 android:layout_marginEnd="16dp"
                                 android:text="cleanup"
-                                android:textColor="@color/prism_accent"
+                                android:textColor="@color/lenswright_accent"
                                 android:textSize="11sp" />
 
                             <TextView
@@ -334,7 +334,7 @@
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:text="clear"
-                                android:textColor="@color/prism_accent"
+                                android:textColor="@color/lenswright_accent"
                                 android:textSize="11sp" />
                         </LinearLayout>
 
@@ -352,7 +352,7 @@
                                 android:layout_height="wrap_content"
                                 android:fontFamily="monospace"
                                 android:text="ready"
-                                android:textColor="@color/prism_muted"
+                                android:textColor="@color/lenswright_muted"
                                 android:textIsSelectable="true"
                                 android:textSize="11sp" />
                         </ScrollView>
@@ -380,17 +380,17 @@
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="12dp"
                     android:text="@string/title_generate"
-                    android:textColor="@color/prism_text"
+                    android:textColor="@color/lenswright_text"
                     android:textSize="20sp"
                     android:textStyle="bold" />
 
                 <com.google.android.material.card.MaterialCardView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    app:cardBackgroundColor="@color/prism_panel"
+                    app:cardBackgroundColor="@color/lenswright_panel"
                     app:cardCornerRadius="12dp"
                     app:cardElevation="0dp"
-                    app:strokeColor="@color/prism_border"
+                    app:strokeColor="@color/lenswright_border"
                     app:strokeWidth="1dp">
 
                     <LinearLayout
@@ -404,7 +404,7 @@
                             android:layout_height="wrap_content"
                             android:layout_marginBottom="4dp"
                             android:text="Model (image generation)"
-                            android:textColor="@color/prism_muted"
+                            android:textColor="@color/lenswright_muted"
                             android:textSize="11sp" />
 
                         <Spinner
@@ -420,8 +420,8 @@
                             android:hint="Prompt"
                             android:inputType="textMultiLine"
                             android:minLines="3"
-                            android:textColor="@color/prism_text"
-                            android:textColorHint="@color/prism_muted"
+                            android:textColor="@color/lenswright_text"
+                            android:textColorHint="@color/lenswright_muted"
                             android:textSize="13sp" />
 
                         <LinearLayout
@@ -445,7 +445,7 @@
                                 android:hint="WxH"
                                 android:inputType="text"
                                 android:text="512x512"
-                                android:textColor="@color/prism_text"
+                                android:textColor="@color/lenswright_text"
                                 android:textSize="13sp"
                                 android:visibility="gone" />
                         </LinearLayout>
@@ -455,7 +455,7 @@
                             android:layout_height="wrap_content"
                             android:layout_marginTop="8dp"
                             android:text="Quality (effort: low=4 steps, medium=6, high=8) and Repeats"
-                            android:textColor="@color/prism_muted"
+                            android:textColor="@color/lenswright_muted"
                             android:textSize="11sp" />
 
                         <LinearLayout
@@ -479,7 +479,7 @@
                                 android:hint="Repeats (1-4 images)"
                                 android:inputType="number"
                                 android:text="1"
-                                android:textColor="@color/prism_text"
+                                android:textColor="@color/lenswright_text"
                                 android:textSize="13sp" />
                         </LinearLayout>
 
@@ -491,7 +491,7 @@
                             android:hint="Negative prompt"
                             android:inputType="text"
                             android:text="blurry, low quality, distorted, watermark"
-                            android:textColor="@color/prism_text"
+                            android:textColor="@color/lenswright_text"
                             android:textSize="13sp" />
 
                         <EditText
@@ -502,7 +502,7 @@
                             android:hint="Guidance (1.0 = LCM fast; >1 uses negative prompt, slower)"
                             android:inputType="numberDecimal"
                             android:text="1.0"
-                            android:textColor="@color/prism_text"
+                            android:textColor="@color/lenswright_text"
                             android:textSize="13sp" />
 
                         <com.google.android.material.button.MaterialButton
@@ -512,7 +512,7 @@
                             android:layout_height="wrap_content"
                             android:layout_marginTop="8dp"
                             android:text="@string/btn_generate"
-                            app:backgroundTint="@color/prism_green"
+                            app:backgroundTint="@color/lenswright_green"
                             app:cornerRadius="8dp" />
 
                         <TextView
@@ -522,7 +522,7 @@
                             android:layout_marginTop="8dp"
                             android:fontFamily="monospace"
                             android:text=""
-                            android:textColor="@color/prism_muted"
+                            android:textColor="@color/lenswright_muted"
                             android:textSize="11sp" />
 
                         <ImageView
@@ -543,7 +543,7 @@
                             android:text="@string/btn_save_image"
                             android:visibility="gone"
                             app:cornerRadius="8dp"
-                            app:strokeColor="@color/prism_border" />
+                            app:strokeColor="@color/lenswright_border" />
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
             </LinearLayout>
@@ -568,17 +568,17 @@
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="12dp"
                     android:text="@string/title_transcribe"
-                    android:textColor="@color/prism_text"
+                    android:textColor="@color/lenswright_text"
                     android:textSize="20sp"
                     android:textStyle="bold" />
 
                 <com.google.android.material.card.MaterialCardView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    app:cardBackgroundColor="@color/prism_panel"
+                    app:cardBackgroundColor="@color/lenswright_panel"
                     app:cardCornerRadius="12dp"
                     app:cardElevation="0dp"
-                    app:strokeColor="@color/prism_border"
+                    app:strokeColor="@color/lenswright_border"
                     app:strokeWidth="1dp">
 
                     <LinearLayout
@@ -600,7 +600,7 @@
                                 android:layout_weight="1"
                                 android:text="Record"
                                 app:cornerRadius="8dp"
-                                app:strokeColor="@color/prism_border" />
+                                app:strokeColor="@color/lenswright_border" />
 
                             <com.google.android.material.button.MaterialButton
                                 android:id="@+id/btnPickAudio"
@@ -611,7 +611,7 @@
                                 android:layout_weight="1"
                                 android:text="@string/btn_open_audio"
                                 app:cornerRadius="8dp"
-                                app:strokeColor="@color/prism_border" />
+                                app:strokeColor="@color/lenswright_border" />
                         </LinearLayout>
 
                         <TextView
@@ -621,7 +621,7 @@
                             android:layout_marginTop="4dp"
                             android:fontFamily="monospace"
                             android:text="no file selected"
-                            android:textColor="@color/prism_muted"
+                            android:textColor="@color/lenswright_muted"
                             android:textSize="11sp" />
 
                         <LinearLayout
@@ -672,7 +672,7 @@
                             android:layout_height="wrap_content"
                             android:layout_marginTop="8dp"
                             android:text="@string/btn_transcribe"
-                            app:backgroundTint="@color/prism_green"
+                            app:backgroundTint="@color/lenswright_green"
                             app:cornerRadius="8dp" />
 
                         <ProgressBar
@@ -691,7 +691,7 @@
                             android:layout_marginTop="4dp"
                             android:fontFamily="monospace"
                             android:text=""
-                            android:textColor="@color/prism_muted"
+                            android:textColor="@color/lenswright_muted"
                             android:textSize="11sp" />
 
                         <ScrollView
@@ -699,7 +699,7 @@
                             android:layout_width="match_parent"
                             android:layout_height="400dp"
                             android:layout_marginTop="8dp"
-                            android:background="@color/prism_panel"
+                            android:background="@color/lenswright_panel"
                             android:padding="8dp">
 
                             <EditText
@@ -714,7 +714,7 @@
                                 android:inputType="textMultiLine"
                                 android:longClickable="true"
                                 android:text=""
-                                android:textColor="@color/prism_text"
+                                android:textColor="@color/lenswright_text"
                                 android:textIsSelectable="true"
                                 android:textSize="12sp" />
                         </ScrollView>
@@ -733,7 +733,7 @@
                                 android:layout_weight="1"
                                 android:text="Copy"
                                 app:cornerRadius="8dp"
-                                app:strokeColor="@color/prism_border" />
+                                app:strokeColor="@color/lenswright_border" />
 
                             <com.google.android.material.button.MaterialButton
                                 android:id="@+id/btnClearTranscript"
@@ -743,7 +743,7 @@
                                 android:layout_weight="1"
                                 android:text="Clear"
                                 app:cornerRadius="8dp"
-                                app:strokeColor="@color/prism_border" />
+                                app:strokeColor="@color/lenswright_border" />
 
                             <com.google.android.material.button.MaterialButton
                                 android:id="@+id/btnSaveTranscript"
@@ -755,7 +755,7 @@
                                 android:text="@string/btn_save_transcript"
                                 android:visibility="gone"
                                 app:cornerRadius="8dp"
-                                app:strokeColor="@color/prism_border" />
+                                app:strokeColor="@color/lenswright_border" />
                         </LinearLayout>
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
@@ -781,17 +781,17 @@
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="12dp"
                     android:text="@string/title_upscale"
-                    android:textColor="@color/prism_text"
+                    android:textColor="@color/lenswright_text"
                     android:textSize="20sp"
                     android:textStyle="bold" />
 
                 <com.google.android.material.card.MaterialCardView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    app:cardBackgroundColor="@color/prism_panel"
+                    app:cardBackgroundColor="@color/lenswright_panel"
                     app:cardCornerRadius="12dp"
                     app:cardElevation="0dp"
-                    app:strokeColor="@color/prism_border"
+                    app:strokeColor="@color/lenswright_border"
                     app:strokeWidth="1dp">
 
                     <LinearLayout
@@ -807,7 +807,7 @@
                             android:layout_height="wrap_content"
                             android:text="@string/btn_open_image"
                             app:cornerRadius="8dp"
-                            app:strokeColor="@color/prism_border" />
+                            app:strokeColor="@color/lenswright_border" />
 
                         <TextView
                             android:id="@+id/imageFileLabel"
@@ -816,7 +816,7 @@
                             android:layout_marginTop="4dp"
                             android:fontFamily="monospace"
                             android:text="no file selected"
-                            android:textColor="@color/prism_muted"
+                            android:textColor="@color/lenswright_muted"
                             android:textSize="11sp" />
 
                         <com.google.android.material.button.MaterialButton
@@ -826,7 +826,7 @@
                             android:layout_height="wrap_content"
                             android:layout_marginTop="8dp"
                             android:text="@string/btn_upscale"
-                            app:backgroundTint="@color/prism_green"
+                            app:backgroundTint="@color/lenswright_green"
                             app:cornerRadius="8dp" />
 
                         <com.google.android.material.button.MaterialButton
@@ -837,7 +837,7 @@
                             android:layout_marginTop="8dp"
                             android:text="@string/btn_colorize"
                             app:cornerRadius="8dp"
-                            app:strokeColor="@color/prism_border" />
+                            app:strokeColor="@color/lenswright_border" />
 
                         <TextView
                             android:id="@+id/visionOut"
@@ -846,7 +846,7 @@
                             android:layout_marginTop="8dp"
                             android:fontFamily="monospace"
                             android:text=""
-                            android:textColor="@color/prism_muted"
+                            android:textColor="@color/lenswright_muted"
                             android:textIsSelectable="true"
                             android:textSize="11sp" />
                     </LinearLayout>
@@ -873,17 +873,17 @@
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="12dp"
                     android:text="@string/title_caption"
-                    android:textColor="@color/prism_text"
+                    android:textColor="@color/lenswright_text"
                     android:textSize="20sp"
                     android:textStyle="bold" />
 
                 <com.google.android.material.card.MaterialCardView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    app:cardBackgroundColor="@color/prism_panel"
+                    app:cardBackgroundColor="@color/lenswright_panel"
                     app:cardCornerRadius="12dp"
                     app:cardElevation="0dp"
-                    app:strokeColor="@color/prism_border"
+                    app:strokeColor="@color/lenswright_border"
                     app:strokeWidth="1dp">
 
                     <LinearLayout
@@ -896,7 +896,7 @@
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:text="Vision-language model. On-device runtime is experimental (see docs/ONDEVICE-PLAN.md)."
-                            android:textColor="@color/prism_muted"
+                            android:textColor="@color/lenswright_muted"
                             android:textSize="12sp" />
 
                         <com.google.android.material.button.MaterialButton
@@ -907,7 +907,7 @@
                             android:layout_marginTop="8dp"
                             android:text="@string/btn_open_image"
                             app:cornerRadius="8dp"
-                            app:strokeColor="@color/prism_border" />
+                            app:strokeColor="@color/lenswright_border" />
 
                         <TextView
                             android:id="@+id/captionImageLabel"
@@ -916,7 +916,7 @@
                             android:layout_marginTop="4dp"
                             android:fontFamily="monospace"
                             android:text="no file selected"
-                            android:textColor="@color/prism_muted"
+                            android:textColor="@color/lenswright_muted"
                             android:textSize="11sp" />
 
                         <com.google.android.material.button.MaterialButton
@@ -926,7 +926,7 @@
                             android:layout_height="wrap_content"
                             android:layout_marginTop="8dp"
                             android:text="@string/btn_caption"
-                            app:backgroundTint="@color/prism_green"
+                            app:backgroundTint="@color/lenswright_green"
                             app:cornerRadius="8dp" />
 
                         <com.google.android.material.button.MaterialButton
@@ -936,7 +936,7 @@
                             android:layout_height="wrap_content"
                             android:layout_marginTop="8dp"
                             android:text="@string/btn_ocr"
-                            app:backgroundTint="@color/prism_accent"
+                            app:backgroundTint="@color/lenswright_accent"
                             app:cornerRadius="8dp" />
 
                         <TextView
@@ -946,7 +946,7 @@
                             android:layout_marginTop="8dp"
                             android:fontFamily="monospace"
                             android:text=""
-                            android:textColor="@color/prism_muted"
+                            android:textColor="@color/lenswright_muted"
                             android:textIsSelectable="true"
                             android:textSize="11sp" />
 
@@ -957,7 +957,7 @@
                             android:layout_marginTop="8dp"
                             android:fontFamily="monospace"
                             android:text=""
-                            android:textColor="@color/prism_muted"
+                            android:textColor="@color/lenswright_muted"
                             android:textIsSelectable="true"
                             android:textSize="11sp" />
                     </LinearLayout>
@@ -984,17 +984,17 @@
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="12dp"
                     android:text="@string/title_inpaint"
-                    android:textColor="@color/prism_text"
+                    android:textColor="@color/lenswright_text"
                     android:textSize="20sp"
                     android:textStyle="bold" />
 
                 <com.google.android.material.card.MaterialCardView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    app:cardBackgroundColor="@color/prism_panel"
+                    app:cardBackgroundColor="@color/lenswright_panel"
                     app:cardCornerRadius="12dp"
                     app:cardElevation="0dp"
-                    app:strokeColor="@color/prism_border"
+                    app:strokeColor="@color/lenswright_border"
                     app:strokeWidth="1dp">
 
                     <LinearLayout
@@ -1010,7 +1010,7 @@
                             android:layout_height="wrap_content"
                             android:text="@string/btn_open_image"
                             app:cornerRadius="8dp"
-                            app:strokeColor="@color/prism_border" />
+                            app:strokeColor="@color/lenswright_border" />
 
                         <TextView
                             android:id="@+id/inpaintFileLabel"
@@ -1019,7 +1019,7 @@
                             android:layout_marginTop="4dp"
                             android:fontFamily="monospace"
                             android:text="no image selected"
-                            android:textColor="@color/prism_muted"
+                            android:textColor="@color/lenswright_muted"
                             android:textSize="11sp" />
 
                         <com.google.android.material.button.MaterialButton
@@ -1030,7 +1030,7 @@
                             android:layout_marginTop="8dp"
                             android:text="@string/btn_open_mask"
                             app:cornerRadius="8dp"
-                            app:strokeColor="@color/prism_border" />
+                            app:strokeColor="@color/lenswright_border" />
 
                         <TextView
                             android:id="@+id/maskFileLabel"
@@ -1039,7 +1039,7 @@
                             android:layout_marginTop="4dp"
                             android:fontFamily="monospace"
                             android:text="no mask selected"
-                            android:textColor="@color/prism_muted"
+                            android:textColor="@color/lenswright_muted"
                             android:textSize="11sp" />
 
                         <LinearLayout
@@ -1063,7 +1063,7 @@
                                 android:hint="#0066FF"
                                 android:inputType="text"
                                 android:text="#0066FF"
-                                android:textColor="@color/prism_text"
+                                android:textColor="@color/lenswright_text"
                                 android:textSize="13sp" />
                         </LinearLayout>
 
@@ -1075,7 +1075,7 @@
                             android:hint="Prompt (what should be there)"
                             android:inputType="textMultiLine"
                             android:minLines="2"
-                            android:textColor="@color/prism_text"
+                            android:textColor="@color/lenswright_text"
                             android:textSize="13sp" />
 
                         <EditText
@@ -1086,7 +1086,7 @@
                             android:hint="Negative prompt"
                             android:inputType="text"
                             android:text="blurry, low quality, distorted"
-                            android:textColor="@color/prism_text"
+                            android:textColor="@color/lenswright_text"
                             android:textSize="13sp" />
 
                         <EditText
@@ -1097,7 +1097,7 @@
                             android:hint="Guidance (1.0 = LCM)"
                             android:inputType="numberDecimal"
                             android:text="1.0"
-                            android:textColor="@color/prism_text"
+                            android:textColor="@color/lenswright_text"
                             android:textSize="13sp" />
 
                         <TextView
@@ -1105,7 +1105,7 @@
                             android:layout_height="wrap_content"
                             android:layout_marginTop="8dp"
                             android:text="Strength (higher = more change)"
-                            android:textColor="@color/prism_muted"
+                            android:textColor="@color/lenswright_muted"
                             android:textSize="11sp" />
 
                         <SeekBar
@@ -1122,7 +1122,7 @@
                             android:layout_height="wrap_content"
                             android:layout_marginTop="8dp"
                             android:text="@string/btn_inpaint"
-                            app:backgroundTint="@color/prism_green"
+                            app:backgroundTint="@color/lenswright_green"
                             app:cornerRadius="8dp" />
 
                         <TextView
@@ -1132,7 +1132,7 @@
                             android:layout_marginTop="8dp"
                             android:fontFamily="monospace"
                             android:text=""
-                            android:textColor="@color/prism_muted"
+                            android:textColor="@color/lenswright_muted"
                             android:textSize="11sp" />
 
                         <ImageView
@@ -1153,7 +1153,7 @@
                             android:text="@string/btn_save_image"
                             android:visibility="gone"
                             app:cornerRadius="8dp"
-                            app:strokeColor="@color/prism_border" />
+                            app:strokeColor="@color/lenswright_border" />
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
             </LinearLayout>
@@ -1178,17 +1178,17 @@
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="12dp"
                     android:text="@string/title_tools"
-                    android:textColor="@color/prism_text"
+                    android:textColor="@color/lenswright_text"
                     android:textSize="20sp"
                     android:textStyle="bold" />
 
                 <com.google.android.material.card.MaterialCardView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    app:cardBackgroundColor="@color/prism_panel"
+                    app:cardBackgroundColor="@color/lenswright_panel"
                     app:cardCornerRadius="12dp"
                     app:cardElevation="0dp"
-                    app:strokeColor="@color/prism_border"
+                    app:strokeColor="@color/lenswright_border"
                     app:strokeWidth="1dp">
 
                     <LinearLayout
@@ -1201,7 +1201,7 @@
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:text="FFmpeg tools on Android are experimental (no bundled ffmpeg binary; see docs/ONDEVICE-PLAN.md)."
-                            android:textColor="@color/prism_muted"
+                            android:textColor="@color/lenswright_muted"
                             android:textSize="12sp" />
 
                         <TextView
@@ -1211,7 +1211,7 @@
                             android:layout_marginTop="8dp"
                             android:fontFamily="monospace"
                             android:text=""
-                            android:textColor="@color/prism_muted"
+                            android:textColor="@color/lenswright_muted"
                             android:textIsSelectable="true"
                             android:textSize="11sp" />
                     </LinearLayout>
@@ -1223,7 +1223,7 @@
     <HorizontalScrollView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="@color/prism_panel"
+        android:background="@color/lenswright_panel"
         android:scrollbars="none">
 
         <LinearLayout

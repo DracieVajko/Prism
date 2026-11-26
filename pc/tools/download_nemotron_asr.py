@@ -1,4 +1,4 @@
-"""Download NVIDIA Nemotron 3.5 ASR (0.6B) for the Prism PC server.
+"""Download NVIDIA Nemotron 3.5 ASR (0.6B) for the Lenswright PC server.
 
 Usage:
     python pc/tools/download_nemotron_asr.py
@@ -7,7 +7,7 @@ Fetches the bfloat16 safetensors checkpoint (~2.55 GB) plus the processor and
 tokenizer files into pc/models/nemotron-asr-0.6b/.
 
 The optional GGUF (0.74 GB) is left alone: llama.cpp / NeMo-Speech.cpp support
-for this architecture is not wired into Prism yet.
+for this architecture is not wired into Lenswright yet.
 """
 
 import sys

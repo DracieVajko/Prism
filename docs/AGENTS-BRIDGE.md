@@ -4,7 +4,7 @@ Status: proposed, not implemented. Decision log at the end.
 
 ## Problem
 
-Prism can already generate images, upscale, OCR, transcribe, describe images and
+Lenswright can already generate images, upscale, OCR, transcribe, describe images and
 run FFmpeg over an OpenAI-compatible HTTP API. Agent harnesses (Cindy, Claude
 Code, Codex, OpenCode) cannot use any of it without hand-written `curl` calls,
 because the API was shaped for a WebUI:
@@ -24,7 +24,7 @@ file path, get a file path back, and poll long jobs.
 ## Goals
 
 1. One MCP endpoint, `http://<host>:8101/mcp`, speaking streamable HTTP, served
-   by the existing Prism process (single source of truth for the contract).
+   by the existing Lenswright process (single source of truth for the contract).
 2. Tool surface an agent can operate without guessing: capability discovery,
    path-in/path-out, honest errors, async jobs with progress.
 3. First-class setup for four harnesses with one installer and one `doctor`
@@ -36,12 +36,12 @@ file path, get a file path back, and poll long jobs.
 
 ## Non-goals
 
-- Video generation (text-to-video / image-to-video). Prism has no such engine;
+- Video generation (text-to-video / image-to-video). Lenswright has no such engine;
   only `/v1/videos/upscale`. Tracked as a separate later phase with a ComfyUI
   backend, not part of this project's core.
 - Routing to the other tools under `D:\AI` (MoneyPrinterTurbo, OpenMotion,
   AI_VideoEdit). Architecturally the same place, deliberately later.
-- Android as an MCP *server*. Android stays an API-compatible Prism node; it
+- Android as an MCP *server*. Android stays an API-compatible Lenswright node; it
   may become an MCP *client* target later.
 - Replacing the REST API, the WebUI, or the OpenAI compatibility layer.
 - Multi-user, roles, or internet-facing deployment.
@@ -74,7 +74,7 @@ file path, get a file path back, and poll long jobs.
 ## Approach
 
 Mount a FastMCP app on the existing FastAPI process at `/mcp`, whose tools call
-Prism's internal functions directly instead of looping back through HTTP. That
+Lenswright's internal functions directly instead of looping back through HTTP. That
 removes base64 from the path entirely (internal calls take and return file
 paths), keeps one process and one service, and leaves `unified_server.py`'s
 route behaviour unchanged.
@@ -83,7 +83,7 @@ The one technical unknown is lifespan composition: `FastMCP.streamable_http_app(
 manages its own session manager, and mounting a sub-app does not compose
 lifespans. The existing `lifespan` must run it through an `AsyncExitStack`.
 Prove this in Phase 0; if it fights back, fall back to serving the same app on
-`:8103` from the same process (`Start-Prism.bat` gains one line) — the tool
+`:8103` from the same process (`Start-Lenswright.bat` gains one line) — the tool
 layer does not change.
 
 Blocking endpoints are `def`, not `async def`, so tool handlers must dispatch
@@ -98,17 +98,17 @@ sets, and most endpoints are one `action` value.
 
 | Tool | Actions / purpose | Notes |
 |---|---|---|
-| `prism_status` | health, device, resident model, queue depth, free disk | cheap, safe to call often |
-| `prism_models` | catalog with install state, size, licence, filter by kind | agents must not guess ids |
-| `prism_model_install` | download / verify / cancel | consent-gated, multi-GB |
-| `prism_image` | generate, edit, inpaint, outpaint, harmonize, colorize, restore, face-restore, upscale | path in, path out |
-| `prism_video` | upscale, convert, trim, compress, extract-audio, info | upscale is async |
-| `prism_audio` | transcribe, translate, speech, convert | `language` explicit |
-| `prism_document` | ocr, extract (PDF/DOCX to text/Markdown) | |
-| `prism_vision` | caption, describe, chat | VLM |
-| `prism_text` | post-processing via `/v1/text/process` | |
-| `prism_job` | list, status, cancel, wait | `wait` emits progress |
-| `prism_artifact` | metadata, thumbnail, preview URL for an output | image block only when small |
+| `lenswright_status` | health, device, resident model, queue depth, free disk | cheap, safe to call often |
+| `lenswright_models` | catalog with install state, size, licence, filter by kind | agents must not guess ids |
+| `lenswright_model_install` | download / verify / cancel | consent-gated, multi-GB |
+| `lenswright_image` | generate, edit, inpaint, outpaint, harmonize, colorize, restore, face-restore, upscale | path in, path out |
+| `lenswright_video` | upscale, convert, trim, compress, extract-audio, info | upscale is async |
+| `lenswright_audio` | transcribe, translate, speech, convert | `language` explicit |
+| `lenswright_document` | ocr, extract (PDF/DOCX to text/Markdown) | |
+| `lenswright_vision` | caption, describe, chat | VLM |
+| `lenswright_text` | post-processing via `/v1/text/process` | |
+| `lenswright_job` | list, status, cancel, wait | `wait` emits progress |
+| `lenswright_artifact` | metadata, thumbnail, preview URL for an output | image block only when small |
 
 Invariants the code enforces, not the prompt:
 
@@ -118,7 +118,7 @@ Invariants the code enforces, not the prompt:
 3. A model download requires an explicit `confirm=true` parameter.
 4. `503 will-not-load` becomes a typed error with the server's `hint` field
    preserved.
-5. File arguments must resolve inside configured roots (`PRISM_MCP_ROOTS`).
+5. File arguments must resolve inside configured roots (`LENSWRIGHT_MCP_ROOTS`).
 
 ## Harness configuration
 
@@ -126,42 +126,42 @@ One endpoint, four formats:
 
 | Harness | Where |
 |---|---|
-| Cindy / Pi | `pi mcp add prism --url http://127.0.0.1:8101/mcp` (or `~/.pi/agent/mcp.json`) |
-| Claude Code | `claude mcp add --transport http prism http://127.0.0.1:8101/mcp` |
-| Codex | `~/.codex/config.toml` → `[mcp_servers.prism]`, `url = ...` |
-| OpenCode | `~/.config/opencode/opencode.jsonc` → `mcp.prism`, `type: "remote"` |
+| Cindy / Pi | `pi mcp add lenswright --url http://127.0.0.1:8101/mcp` (or `~/.pi/agent/mcp.json`) |
+| Claude Code | `claude mcp add --transport http lenswright http://127.0.0.1:8101/mcp` |
+| Codex | `~/.codex/config.toml` → `[mcp_servers.lenswright]`, `url = ...` |
+| OpenCode | `~/.config/opencode/opencode.jsonc` → `mcp.lenswright`, `type: "remote"` |
 
-Exposure guidance: `prism_status`, `prism_models`, `prism_image`, `prism_audio`
+Exposure guidance: `lenswright_status`, `lenswright_models`, `lenswright_image`, `lenswright_audio`
 as `direct`; the rest `deferred`/`codemode` so the tool list stays small.
 
-The skill (`agents/skills/prism/SKILL.md`) carries the judgement the tools
+The skill (`agents/skills/lenswright/SKILL.md`) carries the judgement the tools
 cannot: which model for a scanned Slovak invoice, when RealESRGAN beats
-Z-Image, when to refuse an upscale on CPU, and the rule to call `prism_models`
+Z-Image, when to refuse an upscale on CPU, and the rule to call `lenswright_models`
 before naming a model.
 
 ## Phases
 
-**Phase 0 — prove the wedge.** `pc/mcp_server.py` with `prism_status` and
-`prism_models`, mounted at `/mcp`, lifespan composed, `mcp[cli]` added to
+**Phase 0 — prove the wedge.** `pc/mcp_server.py` with `lenswright_status` and
+`lenswright_models`, mounted at `/mcp`, lifespan composed, `mcp[cli]` added to
 requirements, plus `agents/` config snippets and a `doctor` that reports each
 harness's connection state.
 *Verify:* server starts; `curl` initialize against `/mcp` succeeds; Cindy, Claude
-Code, Codex and OpenCode each list `prism_status` and return real host stats.
+Code, Codex and OpenCode each list `lenswright_status` and return real host stats.
 *Risk:* lifespan composition (mitigation: `:8103` fallback above).
 
-**Phase 1 — capability surface.** `prism_image`, `prism_video`, `prism_audio`,
-`prism_document`, `prism_vision`, `prism_text`, `prism_artifact`; path-based I/O;
+**Phase 1 — capability surface.** `lenswright_image`, `lenswright_video`, `lenswright_audio`,
+`lenswright_document`, `lenswright_vision`, `lenswright_text`, `lenswright_artifact`; path-based I/O;
 base64 stripped from all results; typed errors.
 *Verify:* an agent turns a supplied `testdata/` file into an output path for each
 of the nine image actions, three audio actions, OCR and extract; results are
 byte-identical to the equivalent REST call on the same input.
 
 **Phase 2 — jobs.** Extend `_job_start`/`_job_update` coverage to video upscale
-and model install; `prism_job wait` with progress notifications; cancellation.
-*Verify:* a 900-frame upscale completes through `prism_job wait` under a 60 s
+and model install; `lenswright_job wait` with progress notifications; cancellation.
+*Verify:* a 900-frame upscale completes through `lenswright_job wait` under a 60 s
 client timeout; cancel actually stops it and frees the model.
 
-**Phase 3 — security.** Bearer token (`PRISM_TOKEN`), `PRISM_MCP_ROOTS` path
+**Phase 3 — security.** Bearer token (`LENSWRIGHT_TOKEN`), `LENSWRIGHT_MCP_ROOTS` path
 allowlist, per-tool flags for `ffmpeg/run`, and a single-heavy-job gate.
 *Verify:* wrong token is rejected; a path outside the roots is refused with a
 clear reason; a second heavy job queues instead of evicting the resident model.
@@ -172,16 +172,16 @@ clear reason; a second heavy job queues instead of evicting the resident model.
 command.
 
 **Phase 5 — video generation (separate project).** ComfyUI backend plus
-`prism_video generate`; out of scope until Phases 0–3 are green.
+`lenswright_video generate`; out of scope until Phases 0–3 are green.
 
 ## Risks
 
 | Risk | Impact | Mitigation |
 |---|---|---|
 | Lifespan composition fails | Phase 0 blocked | serve MCP on `:8103` from the same process |
-| Agent evicts the user's resident model | user-visible breakage | single-heavy-job gate, `PRISM_MCP_ALLOW_MODEL_SWITCH` |
+| Agent evicts the user's resident model | user-visible breakage | single-heavy-job gate, `LENSWRIGHT_MCP_ALLOW_MODEL_SWITCH` |
 | `ffmpeg/run` + path inputs = arbitrary file read | data exfiltration | path roots, flag allowlist, token — before LAN exposure |
-| CPU-only inference is slow | agent gives up or retries | `prism_status` reports device; tools state expected duration |
+| CPU-only inference is slow | agent gives up or retries | `lenswright_status` reports device; tools state expected duration |
 | Tool surface drifts from REST | silent divergence | one implementation, tests asserting REST/MCP parity |
 | Blocking calls on the event loop | WebUI stalls | `to_thread` dispatch |
 
@@ -189,7 +189,7 @@ command.
 
 1. Camel case or snake case for tool names? Default: `snake_case`, matching MCP
    conventions everywhere.
-2. Should `prism_artifact` inline small images as image blocks (better for
+2. Should `lenswright_artifact` inline small images as image blocks (better for
    visual verification) or always return paths? Default: inline under 1 MB.
 3. Token in Phase 3 or a minimal shared-secret check in Phase 0? Default: Phase
    3, loopback-only until then.

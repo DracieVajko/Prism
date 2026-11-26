@@ -37,7 +37,7 @@ android {
         if (f.exists()) f.inputStream().use { load(it) }
     }
     val releaseStoreFile = (keystoreProps.getProperty("storeFile")
-        ?: System.getenv("PRISM_KEYSTORE_FILE"))?.takeIf { it.isNotBlank() }?.let(::file)
+        ?: System.getenv("LENSWRIGHT_KEYSTORE_FILE"))?.takeIf { it.isNotBlank() }?.let(::file)
     val hasReleaseKey = releaseStoreFile != null && releaseStoreFile.exists()
 
     signingConfigs {
@@ -45,11 +45,11 @@ android {
             create("release") {
                 storeFile = releaseStoreFile
                 storePassword = keystoreProps.getProperty("storePassword")
-                    ?: System.getenv("PRISM_KEYSTORE_PASSWORD")
+                    ?: System.getenv("LENSWRIGHT_KEYSTORE_PASSWORD")
                 keyAlias = keystoreProps.getProperty("keyAlias")
-                    ?: System.getenv("PRISM_KEY_ALIAS")
+                    ?: System.getenv("LENSWRIGHT_KEY_ALIAS")
                 keyPassword = keystoreProps.getProperty("keyPassword")
-                    ?: System.getenv("PRISM_KEY_PASSWORD")
+                    ?: System.getenv("LENSWRIGHT_KEY_PASSWORD")
             }
         }
     }

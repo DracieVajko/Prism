@@ -27,7 +27,7 @@
         android:layout_weight="1"
         android:letterSpacing="0.02"
         android:text="Section"
-        android:textColor="@color/prism_text"
+        android:textColor="@color/lenswright_text"
         android:textSize="13sp"
         android:textStyle="bold" />
 

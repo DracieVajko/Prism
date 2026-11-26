@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Prism</title>
+<title>Lenswright</title>
 <style>
 :root {
   color-scheme: dark;
@@ -59,7 +59,7 @@ canvas#maskpad { width: 100%; border-radius: 6px; border: 1px solid var(--border
 </head>
 <body>
 <header>
-<h1>Prism</h1>
+<h1>Lenswright</h1>
 <span id="status">connecting…</span>
 <button onclick="refresh()" style="margin-left:auto;padding:6px 12px;border-radius:6px;border:1px solid var(--border2);background:var(--panel2);color:#fff;cursor:pointer">Refresh</button>
 <button id="themeBtn" onclick="toggleTheme()" style="margin-left:auto;padding:6px 12px;border-radius:6px;border:1px solid var(--border2);background:var(--panel2);color:var(--text);cursor:pointer">Light</button>
@@ -329,13 +329,13 @@ canvas#maskpad { width: 100%; border-radius: 6px; border: 1px solid var(--border
 let MODELS = [];
 function toggleTheme(){
   const light = document.documentElement.classList.toggle('light');
-  try { localStorage.setItem('prism-theme', light ? 'light' : 'dark'); } catch(e){}
+  try { localStorage.setItem('lenswright-theme', light ? 'light' : 'dark'); } catch(e){}
   const b = document.getElementById('themeBtn');
   if (b) b.textContent = light ? 'Dark' : 'Light';
 }
 (function(){
   try {
-    if (localStorage.getItem('prism-theme') === 'light') {
+    if (localStorage.getItem('lenswright-theme') === 'light') {
       document.documentElement.classList.add('light');
       const b = document.getElementById('themeBtn');
       if (b) b.textContent = 'Dark';

@@ -22,8 +22,8 @@ MODEL_FILE = MODEL_DIR / "swinir_realsr_x4.onnx"
 TILE_SIZE = 64
 OVERLAP = 8
 # Input side cap; 1024 px gives a 4096 px output. The 64 px tile keeps VRAM
-# flat, so only runtime grows. Override with PRISM_SWINIR_MAX_SIDE.
-MAX_SIDE = int(os.environ.get("PRISM_SWINIR_MAX_SIDE", "1024"))
+# flat, so only runtime grows. Override with LENSWRIGHT_SWINIR_MAX_SIDE.
+MAX_SIDE = int(os.environ.get("LENSWRIGHT_SWINIR_MAX_SIDE", "1024"))
 
 _SESSION = None
 _PROVIDER = None

@@ -42,7 +42,7 @@ Everything `[OK]`; `server: UNREACHABLE` is fine (not running yet).
 cd <path>\Odysseus-RemoteImageDiffuser
 .\install_service_admin.ps1            # NSSM service, auto-detects Tailscale IP
 .\fix_firewall_8101.ps1               # opens port 8101 for Tailscale
-Restart-Service OdysseusDiffusion
+Restart-Service Lenswright
 .\Test-Diffusion.ps1
 ```
 

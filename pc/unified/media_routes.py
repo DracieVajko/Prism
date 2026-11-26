@@ -190,7 +190,7 @@ async def video_upscale(
             "error": "will not load", "detail": "ffmpeg/ffprobe not on PATH"})
 
     suffix = Path(file.filename or "video.mp4").suffix or ".mp4"
-    tmpdir = Path(tempfile.mkdtemp(prefix="prism_video_"))
+    tmpdir = Path(tempfile.mkdtemp(prefix="lenswright_video_"))
     t0 = time.time()
     try:
         src = tmpdir / f"input{suffix}"
@@ -312,7 +312,7 @@ async def restore(req: RestoreRequest):
         "restore this old damaged photo, remove scratches, stains and fading, "
         "keep the original faces, clothing and composition, natural colors, "
         "sharp real detail")
-    engine_pref = (os.environ.get("PRISM_RESTORE_ENGINE") or "").strip().lower()
+    engine_pref = (os.environ.get("LENSWRIGHT_RESTORE_ENGINE") or "").strip().lower()
 
     # Z-Image Turbo keeps the source composition better than SDXL img2img on
     # old prints, so it is the preferred engine when installed. `strength` is
@@ -348,8 +348,8 @@ async def restore(req: RestoreRequest):
         _us()._release_sd_best_effort()
         _us()._release_vlm_best_effort()
         # SD fallback: SDXL photorealistic (Juggernaut) preserves faces better
-        # than SD 1.5. Override with PRISM_RESTORE_MODEL.
-        restore_model = (os.environ.get("PRISM_RESTORE_MODEL") or "JuggernautXL_v9").strip()
+        # than SD 1.5. Override with LENSWRIGHT_RESTORE_MODEL.
+        restore_model = (os.environ.get("LENSWRIGHT_RESTORE_MODEL") or "JuggernautXL_v9").strip()
         reg = ds.ensure_registry()
         if restore_model not in reg or reg[restore_model].get("missing"):
             restore_model = "DreamShaper_8"
@@ -545,7 +545,7 @@ def chat_completions(body: dict):
             if not cfg.get("base_url"):
                 return JSONResponse(status_code=503, content={
                     "error": "no LLM provider configured",
-                    "detail": "Set PRISM_LLM_PROVIDER + PRISM_LLM_BASE_URL (ollama/lmstudio/openai/mistral/gemini/llamacpp/custom)."})
+                    "detail": "Set LENSWRIGHT_LLM_PROVIDER + LENSWRIGHT_LLM_BASE_URL (ollama/lmstudio/openai/mistral/gemini/llamacpp/custom)."})
             instruction = (body.get("instruction") if isinstance(body, dict) else None) or "cleanup"
             target_lang = (body.get("target_lang") if isinstance(body, dict) else None) or "en"
             out_text = process_with_external_llm(
@@ -1233,7 +1233,7 @@ async def transcriptions(
         return JSONResponse(status_code=400, content={"error": "missing file or url"})
     raw_model = (model or "").strip() or "whisper-1"
     # One resolution for the optional engines: an explicit `nemotron-*` /
-    # `sherpa-*` name wins, otherwise `whisper-1` follows PRISM_ASR_ENGINE.
+    # `sherpa-*` name wins, otherwise `whisper-1` follows LENSWRIGHT_ASR_ENGINE.
     asr_engine, wanted = resolve_engine(raw_model)
     if asr_engine is None and wanted not in ALLOWED_WHISPER:
         return JSONResponse(status_code=400,
@@ -1383,7 +1383,7 @@ async def transcriptions(
         if output_format_param not in ("txt", "md", "srt", "json"):
             output_format_param = "txt"
         # OpenAI-compatible clients send response_format=json/text; honour it
-        # when the Prism-specific output_format was left at its default.
+        # when the Lenswright-specific output_format was left at its default.
         if (output_format or "txt").strip().lower() == "txt":
             if fmt in ("json", "verbose_json"):
                 output_format_param = "json"
@@ -1908,10 +1908,10 @@ async def text_process(
     """Post-process text using an external LLM provider (Ollama, LM Studio, public API, etc.).
 
     The PC server does NOT download or manage any text-generation model. Configure
-    via env vars: PRISM_LLM_PROVIDER, PRISM_LLM_BASE_URL, PRISM_LLM_API_KEY,
-    PRISM_LLM_MODEL, PRISM_LLM_ENDPOINT.
+    via env vars: LENSWRIGHT_LLM_PROVIDER, LENSWRIGHT_LLM_BASE_URL, LENSWRIGHT_LLM_API_KEY,
+    LENSWRIGHT_LLM_MODEL, LENSWRIGHT_LLM_ENDPOINT.
 
-    Default prompts per operation (overridable via PRISM_PROMPT_<OPERATION> env var):
+    Default prompts per operation (overridable via LENSWRIGHT_PROMPT_<OPERATION> env var):
       summary, cleanup, grammar, list, translate, rewrite, meeting_notes
     """
     if not text.strip():
@@ -1923,9 +1923,9 @@ async def text_process(
             operation=operation or None,
         )
         cfg = {
-            "provider": os.environ.get("PRISM_LLM_PROVIDER", "none"),
-            "model": os.environ.get("PRISM_LLM_MODEL", "gemma4:12b"),
-            "base_url": os.environ.get("PRISM_LLM_BASE_URL", ""),
+            "provider": os.environ.get("LENSWRIGHT_LLM_PROVIDER", "none"),
+            "model": os.environ.get("LENSWRIGHT_LLM_MODEL", "gemma4:12b"),
+            "base_url": os.environ.get("LENSWRIGHT_LLM_BASE_URL", ""),
         }
         return {"text": result, "original": text, "instruction": instruction,
                 "target_lang": target_lang, "operation": operation,

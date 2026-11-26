@@ -1,6 +1,6 @@
 ---
 name: Bug report
-about: Report a reproducible problem with Prism
+about: Report a reproducible problem with Lenswright
 title: "[BUG] "
 labels: ["bug"]
 assignees: ""
@@ -14,9 +14,9 @@ assignees: ""
 
 ## Environment
 
-- Prism version (`VERSION` file or `GET /v1/settings`):
+- Lenswright version (`VERSION` file or `GET /v1/settings`):
 - Platform: PC (Windows / Linux / macOS) or Android (device + Android version)
-- How Prism is running: `uvicorn unified_server:app` / `Start-Prism.bat` / service / APK
+- How Lenswright is running: `uvicorn unified_server:app` / `Start-Lenswright.bat` / service / APK
 - GPU/CPU provider (e.g. CUDA, DirectML, CPU, XNNPACK):
 - Models installed:
 

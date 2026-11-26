@@ -3,10 +3,10 @@
 ## Service
 
 ```powershell
-Get-Service OdysseusDiffusion
-Start-Service OdysseusDiffusion
-Restart-Service OdysseusDiffusion
-Stop-Service OdysseusDiffusion
+Get-Service Lenswright
+Start-Service Lenswright
+Restart-Service Lenswright
+Stop-Service Lenswright
 .\Test-Diffusion.ps1            # health + models + VRAM + log tail
 ```
 

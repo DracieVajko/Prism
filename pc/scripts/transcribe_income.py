@@ -6,7 +6,7 @@ faster-whisper as a numpy array (its PyAV path is broken in this environment).
 
 Input level handling:
     Recordings made with a very low mic gain land near -50 dB and Whisper's
-    VAD then treats the whole file as silence. Unless PRISM_ASR_GAIN_DB is set
+    VAD then treats the whole file as silence. Unless LENSWRIGHT_ASR_GAIN_DB is set
     explicitly, the peak level is measured and a gain that brings it to about
     -2 dB is applied automatically. If a transcription still comes back empty,
     it is retried once with a strong gain before being reported as EMPTY.
@@ -35,9 +35,9 @@ import numpy as np
 
 ROOT = Path(r"D:\Projekty\AI Income Challenge")
 OUT_DIR = ROOT / "_transcripts"
-MODEL_DIR = r"D:\AI\Prism\pc\models\faster-whisper-large"
+MODEL_DIR = r"D:\AI\Lenswright\pc\models\faster-whisper-large"
 FFMPEG = "ffmpeg"
-TMP_DIR = Path(os.environ.get("TEMP", ".")) / "prism_asr"
+TMP_DIR = Path(os.environ.get("TEMP", ".")) / "lenswright_asr"
 EXTS = {".mp4", ".mkv", ".mov", ".avi", ".webm", ".flv", ".wmv", ".m4v",
         ".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg", ".opus", ".wma"}
 
@@ -47,10 +47,10 @@ TARGET_PEAK_DB = -2.0
 MAX_AUTO_GAIN_DB = 50.0
 
 # Whisper options. VAD is on by default; music/very short clips sometimes need
-# PRISM_ASR_VAD=0 and PRISM_ASR_BEAM=5 to avoid a one-word VAD artifact.
-VAD_FILTER = os.environ.get("PRISM_ASR_VAD", "1").strip().lower() not in (
+# LENSWRIGHT_ASR_VAD=0 and LENSWRIGHT_ASR_BEAM=5 to avoid a one-word VAD artifact.
+VAD_FILTER = os.environ.get("LENSWRIGHT_ASR_VAD", "1").strip().lower() not in (
     "0", "false", "no", "off")
-BEAM_SIZE = int(os.environ.get("PRISM_ASR_BEAM", "1"))
+BEAM_SIZE = int(os.environ.get("LENSWRIGHT_ASR_BEAM", "1"))
 
 
 def log(msg):
@@ -86,12 +86,12 @@ def measure_peak_db(path: Path) -> float:
 
 def resolve_gain(path: Path) -> tuple[float, str]:
     """Return (gain_db, reason). Explicit env wins over auto-detection."""
-    env = os.environ.get("PRISM_ASR_GAIN_DB", "").strip()
+    env = os.environ.get("LENSWRIGHT_ASR_GAIN_DB", "").strip()
     if env:
         try:
             return float(env), "env"
         except ValueError:
-            log(f"  ignoring invalid PRISM_ASR_GAIN_DB={env!r}")
+            log(f"  ignoring invalid LENSWRIGHT_ASR_GAIN_DB={env!r}")
     peak = measure_peak_db(path)
     if peak < LOW_PEAK_DB:
         gain = round(min(MAX_AUTO_GAIN_DB, TARGET_PEAK_DB - peak), 1)

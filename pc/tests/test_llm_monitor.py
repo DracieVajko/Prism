@@ -55,10 +55,10 @@ class _FakeClock:
 
 @pytest.fixture(autouse=True)
 def provider_env(monkeypatch):
-    monkeypatch.setenv("PRISM_LLM_PROVIDER", "ollama")
-    monkeypatch.setenv("PRISM_LLM_BASE_URL", "http://localhost:11434")
-    monkeypatch.setenv("PRISM_LLM_API_KEY", "")
-    monkeypatch.setenv("PRISM_LLM_MODEL", "gemma4:12b")
+    monkeypatch.setenv("LENSWRIGHT_LLM_PROVIDER", "ollama")
+    monkeypatch.setenv("LENSWRIGHT_LLM_BASE_URL", "http://localhost:11434")
+    monkeypatch.setenv("LENSWRIGHT_LLM_API_KEY", "")
+    monkeypatch.setenv("LENSWRIGHT_LLM_MODEL", "gemma4:12b")
     monkeypatch.setattr(llm_monitor, "MAX_CONCURRENT", 1)
     monkeypatch.setattr(llm_monitor, "POLL_INTERVAL", 120)
     monkeypatch.setattr(llm_monitor, "WAIT_TIMEOUT", 3600)
@@ -83,13 +83,13 @@ def _models_backend(http, sequence):
 
 
 def test_loaded_models_disabled_provider(monkeypatch, http):
-    monkeypatch.setenv("PRISM_LLM_PROVIDER", "none")
+    monkeypatch.setenv("LENSWRIGHT_LLM_PROVIDER", "none")
     assert llm_monitor.loaded_models() == []
     assert http["calls"] == []
 
 
 def test_loaded_models_without_base_url(monkeypatch, http):
-    monkeypatch.setenv("PRISM_LLM_BASE_URL", "")
+    monkeypatch.setenv("LENSWRIGHT_LLM_BASE_URL", "")
     assert llm_monitor.loaded_models() == []
     assert http["calls"] == []
 
@@ -106,7 +106,7 @@ def test_loaded_models_ollama_accepts_model_key(http):
 
 
 def test_loaded_models_lmstudio(monkeypatch, http):
-    monkeypatch.setenv("PRISM_LLM_PROVIDER", "lmstudio")
+    monkeypatch.setenv("LENSWRIGHT_LLM_PROVIDER", "lmstudio")
     http["get"] = lambda url: _Resp({"data": [{"id": "qwen"}, {"id": ""}]})
     assert llm_monitor.loaded_models() == ["qwen"]
 
@@ -120,7 +120,7 @@ def test_loaded_models_swallows_http_errors(http):
 
 
 def test_acquire_returns_true_without_provider(monkeypatch, http):
-    monkeypatch.setenv("PRISM_LLM_PROVIDER", "none")
+    monkeypatch.setenv("LENSWRIGHT_LLM_PROVIDER", "none")
     assert llm_monitor.acquire("gemma4:12b") is True
     assert http["calls"] == []
 
@@ -174,7 +174,7 @@ def test_release_unloads_ollama_model(http):
 
 
 def test_release_unloads_lmstudio_model(monkeypatch, http):
-    monkeypatch.setenv("PRISM_LLM_PROVIDER", "lmstudio")
+    monkeypatch.setenv("LENSWRIGHT_LLM_PROVIDER", "lmstudio")
     llm_monitor.release_model("qwen")
     posts = [c for c in http["calls"] if c[0] == "POST"]
     assert len(posts) == 1
@@ -182,7 +182,7 @@ def test_release_unloads_lmstudio_model(monkeypatch, http):
 
 
 def test_release_ignores_generic_provider(monkeypatch, http):
-    monkeypatch.setenv("PRISM_LLM_PROVIDER", "openai")
+    monkeypatch.setenv("LENSWRIGHT_LLM_PROVIDER", "openai")
     llm_monitor.release_model("gpt-4o-mini")
     assert http["calls"] == []
 

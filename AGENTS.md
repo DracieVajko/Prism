@@ -1,4 +1,4 @@
-# Project instructions (Prism)
+# Project instructions (Lenswright)
 
 Language: **English only.** All responses, code comments, documentation, commit
 messages, UI strings, log messages and error messages must be in English. No
@@ -9,7 +9,7 @@ Exception: Android UI translations live in `res/values-sk`, `values-cs`,
 
 ## Architecture (locked)
 
-Prism is **two independent products**:
+Lenswright is **two independent products**:
 
 1. **Android app** — native UI only, **no WebUI**. By default every feature runs
    **on the phone, locally and offline**: generate, edits, inpaint, harmonize,

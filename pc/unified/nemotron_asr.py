@@ -3,7 +3,7 @@
 Model: nvidia/nemotron-3.5-asr-streaming-0.6b (FastConformer-RNNT, 40 languages
 with native punctuation and capitalisation, ~2.5 GB in bfloat16).
 
-Enabled with PRISM_ASR_ENGINE=nemotron, or per-request with
+Enabled with LENSWRIGHT_ASR_ENGINE=nemotron, or per-request with
 `model=nemotron-asr-0.6b` on /v1/audio/transcriptions.
 """
 
@@ -53,7 +53,7 @@ def _total_ram_gb() -> float:
 
 
 def enabled() -> bool:
-    return os.environ.get("PRISM_ASR_ENGINE", "").strip().lower() == "nemotron"
+    return os.environ.get("LENSWRIGHT_ASR_ENGINE", "").strip().lower() == "nemotron"
 
 
 _processor = None
@@ -101,7 +101,7 @@ def init(model_id: str | None = None) -> bool:
             from transformers import AutoModelForRNNT as _ModelCls
 
         d = str(_model_dir(mid))
-        _device = (os.environ.get("PRISM_NEMOTRON_DEVICE") or _auto_device()).strip().lower()
+        _device = (os.environ.get("LENSWRIGHT_NEMOTRON_DEVICE") or _auto_device()).strip().lower()
         dtype = torch.float32
         _processor = _ProcessorCls.from_pretrained(d)
         _model = _ModelCls.from_pretrained(d, dtype=dtype, device_map=_device)

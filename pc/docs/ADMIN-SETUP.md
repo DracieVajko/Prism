@@ -6,26 +6,26 @@ from the user's Startup folder.
 
 ---
 
-## 1. Turn Prism into a real Windows service and retire the legacy pair
+## 1. Turn Lenswright into a real Windows service and retire the legacy pair
 
 ```powershell
 cd D:\AI\DiffusionServer
-powershell -ExecutionPolicy Bypass -File .\pc\scripts\install-prism-service.ps1 -RemoveLegacy
+powershell -ExecutionPolicy Bypass -File .\pc\scripts\install-lenswright-service.ps1 -RemoveLegacy
 ```
 
 This does, in order:
 
 | Step | Effect |
 |---|---|
-| `nssm install Prism C:\Python314\python.exe` | new service entry |
+| `nssm install Lenswright C:\Python314\python.exe` | new service entry |
 | `AppParameters = -m uvicorn unified_server:app --host 127.0.0.1 --port 8101` | one endpoint for everything (default; use `-Remote` for LAN) |
 | `AppDirectory = D:\AI\DiffusionServer\pc` | imports `unified_server` |
 | `Start = SERVICE_AUTO_START` | starts at boot, before logon |
 | `AppStdout/AppStderr = pc\logs\service-*.log`, 10 MB rotation | logs you can read |
-| `Stop-Service` + `Set-Service -StartupType Disabled` on `OdysseusDiffusion` and `whisper-api` | no port conflicts, no second whisper |
+| `Stop-Service` + `Set-Service -StartupType Disabled` on `Lenswright` and `whisper-api` | no port conflicts, no second whisper |
 
 The legacy `whisper-api` had `StartMode = Auto` and would keep binding port 4444
-on every boot; Prism has faster-whisper built in, so it is redundant.
+on every boot; Lenswright has faster-whisper built in, so it is redundant.
 
 ### Remove the non-elevated autostart afterwards
 
@@ -33,17 +33,17 @@ Once the service exists, delete the Startup shortcut so you do not run two
 servers:
 
 ```powershell
-Remove-Item "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup\Prism.vbs" -ErrorAction SilentlyContinue
+Remove-Item "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup\Lenswright.vbs" -ErrorAction SilentlyContinue
 ```
 
 ## 2. Verify
 
 ```powershell
-Get-Service Prism, OdysseusDiffusion, whisper-api | Format-Table Name, Status, StartType
+Get-Service Lenswright, Lenswright, whisper-api | Format-Table Name, Status, StartType
 Invoke-RestMethod http://127.0.0.1:8101/health | Select-Object status, current_model, audio_loaded
 ```
 
-Expected: `Prism = Running/Automatic`, the two legacy ones `Stopped/Disabled`,
+Expected: `Lenswright = Running/Automatic`, the two legacy ones `Stopped/Disabled`,
 `current_model = $null`, `audio_loaded = False` (nothing loaded until a request
 arrives).
 
@@ -57,7 +57,7 @@ Everything the old two services served is here:
 
 | Old | New |
 |---|---|
-| `OdysseusDiffusion` :8101 images | `POST /v1/images/generations`, `/edits`, `/inpaint`, `/outpaint`, `/upscale` |
+| `Lenswright` :8101 images | `POST /v1/images/generations`, `/edits`, `/inpaint`, `/outpaint`, `/upscale` |
 | `whisper-api` :4444 | `POST /v1/audio/transcriptions` (`model=small|turbo|large|nemotron-asr-0.6b`), `/translations` |
 
 ## 4. Later: drop the FP8 variant once NVFP4 is proven
@@ -73,13 +73,13 @@ the `nemotron-transcribe-30b-a4b-fp8` block so the Models tab stops offering it.
 ## 5. Service control cheatsheet
 
 ```powershell
-Restart-Service Prism
-Stop-Service Prism
+Restart-Service Lenswright
+Stop-Service Lenswright
 Get-Content D:\AI\DiffusionServer\pc\logs\service-err.log -Tail 50
 ```
 
 To uninstall everything:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\pc\scripts\install-prism-service.ps1 -Uninstall
+powershell -ExecutionPolicy Bypass -File .\pc\scripts\install-lenswright-service.ps1 -Uninstall
 ```

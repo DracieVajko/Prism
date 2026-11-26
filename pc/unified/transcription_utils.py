@@ -1,5 +1,5 @@
 """
-Transcription utilities for Prism PC server.
+Transcription utilities for Lenswright PC server.
 
 Provides:
 - Multi-format output formatting (txt, md, srt, json)

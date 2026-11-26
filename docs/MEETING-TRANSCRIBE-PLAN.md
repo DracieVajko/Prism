@@ -1,4 +1,4 @@
-# Prism Feature Plan: Auto-Update & Meeting Transcription
+# Lenswright Feature Plan: Auto-Update & Meeting Transcription
 
 ## 1. Auto-Update from GitHub
 
@@ -52,7 +52,7 @@
 - Webhook integration (n8n, Zapier, CRMs)
 - MCP auto-triggering
 
-### Prism Already Has
+### Lenswright Already Has
 - `/v1/audio/transcriptions` - file-based transcription
 - `/v1/audio/translations` - translation
 - `/v1/realtime` - WebSocket realtime transcription

@@ -605,7 +605,7 @@ def main():
                     help="Civitai API token (or CIVITAI_TOKEN env)")
     args = ap.parse_args()
 
-    # Pick up HF_TOKEN / PRISM_LLM_* saved from the WebUI Settings tab so a
+    # Pick up HF_TOKEN / LENSWRIGHT_LLM_* saved from the WebUI Settings tab so a
     # gated repo works from the CLI without exporting anything manually.
     try:
         from unified import secrets as _secrets

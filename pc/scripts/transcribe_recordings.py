@@ -36,7 +36,7 @@ from unified.meeting_digest import render_digest  # noqa: E402
 from unified.transcription_utils import assess_transcript_quality  # noqa: E402
 
 # Decoding attempts, cheapest first: (label, beam, vad, extra gain in dB).
-# The base attempt uses whatever PRISM_ASR_BEAM / PRISM_ASR_VAD say.
+# The base attempt uses whatever LENSWRIGHT_ASR_BEAM / LENSWRIGHT_ASR_VAD say.
 ATTEMPTS = (
     ("base", ti.BEAM_SIZE, ti.VAD_FILTER, 0.0),
     ("beam5", 5, ti.VAD_FILTER, 0.0),

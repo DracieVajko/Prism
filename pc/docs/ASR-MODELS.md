@@ -1,12 +1,12 @@
 # ASR models — languages, speed, size, status
 
-Prism's PC server can transcribe with several engines. Pick one per request
+Lenswright's PC server can transcribe with several engines. Pick one per request
 with `model=` on `POST /v1/audio/transcriptions` (multipart). `whisper-1`
-follows `PRISM_ASR_ENGINE` or defaults to `turbo`.
+follows `LENSWRIGHT_ASR_ENGINE` or defaults to `turbo`.
 
 Sizes are the Hugging Face repository sizes; some apps quote smaller numbers
 because they ship ONNX/GGUF/int8 builds. Speeds are the figures published by
-the model/app vendors; Prism has not benchmarked every model yet and the real
+the model/app vendors; Lenswright has not benchmarked every model yet and the real
 time depends on GPU/CPU.
 
 | Model id | Languages | Speed (claimed) | Size | Licence | Status |
@@ -66,7 +66,7 @@ Models tab can download them.
   transformers offloads what does not fit, which is slower but works.
 - `underdog-bark-3.0` is CC-BY-NC-4.0 (non-commercial), so it is documented but
   not offered for download.
-- Granite Speech needs `torchaudio` (installed in the Prism Python env); the
+- Granite Speech needs `torchaudio` (installed in the Lenswright Python env); the
   other transformers ASR models do not.
 - CC-BY-4.0 Parakeet models require attribution if you redistribute outputs or
   build a product on them.

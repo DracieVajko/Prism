@@ -6,7 +6,7 @@ Scope: PC product only (`pc/`); Android unchanged.
 
 ## Intent
 
-Real-ESRGAN is the only upscale engine in Prism today. It is fast and
+Real-ESRGAN is the only upscale engine in Lenswright today. It is fast and
 deterministic, but it cannot rebuild detail that the source does not contain.
 The user wants two optional engines beside it:
 
@@ -57,7 +57,7 @@ getting Real-ESRGAN with identical output.
 - Reuse `unified/swinir.py` (ONNX, Apache-2.0, 64 px tiles, 8 px overlap).
 - It is x4 only; scale 2/3 is produced by downscaling the x4 result, the same
   rule Real-ESRGAN already follows.
-- Raise the input cap from 512 px to 1024 px (`PRISM_SWINIR_MAX_SIDE`
+- Raise the input cap from 512 px to 1024 px (`LENSWRIGHT_SWINIR_MAX_SIDE`
   override). A 1024 px input produces 4096 px output; the endpoint's 8192 px
   cap still applies.
 - Report `engine = "swinir-realsr-x4"`.

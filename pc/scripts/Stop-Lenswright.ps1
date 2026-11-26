@@ -1,22 +1,22 @@
-# Stop the Prism server (Windows).
+# Stop the Lenswright server (Windows).
 #
-# 1. Stops the Prism Windows service if it exists.
-# 2. Stops a Prism started from the Startup shortcut.
+# 1. Stops the Lenswright Windows service if it exists.
+# 2. Stops a Lenswright started from the Startup shortcut.
 # 3. Falls back to killing whatever listens on the port.
 #
 # Usage:
-#   powershell -ExecutionPolicy Bypass -File pc\scripts\Stop-Prism.ps1
-#   powershell -ExecutionPolicy Bypass -File pc\scripts\Stop-Prism.ps1 -Port 8102
+#   powershell -ExecutionPolicy Bypass -File pc\scripts\Stop-Lenswright.ps1
+#   powershell -ExecutionPolicy Bypass -File pc\scripts\Stop-Lenswright.ps1 -Port 8102
 
 [CmdletBinding()]
 param(
     [int]$Port = 8101,
-    [string]$ServiceName = "Prism"
+    [string]$ServiceName = "Lenswright"
 )
 
 $ErrorActionPreference = "Continue"
 
-Write-Host "Stopping Prism..."
+Write-Host "Stopping Lenswright..."
 
 # 1. Windows service
 $svc = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
@@ -32,7 +32,7 @@ if ($svc) {
 
 # 2. Autostart launcher process
 $runners = Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" -ErrorAction SilentlyContinue |
-    Where-Object { $_.CommandLine -and $_.CommandLine -match "start-prism-autostart\.ps1" }
+    Where-Object { $_.CommandLine -and $_.CommandLine -match "start-lenswright-autostart\.ps1" }
 foreach ($r in $runners) {
     Write-Host "  stopping autostart runner PID $($r.ProcessId)"
     Stop-Process -Id $r.ProcessId -Force -ErrorAction SilentlyContinue
@@ -58,5 +58,5 @@ $still = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction Silent
 if ($still) {
     Write-Warning "Port $Port is still listening. Run this script from an elevated shell if the process belongs to a service."
 } else {
-    Write-Host "Prism stopped; port $Port is free."
+    Write-Host "Lenswright stopped; port $Port is free."
 }

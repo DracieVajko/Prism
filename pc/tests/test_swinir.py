@@ -1,7 +1,7 @@
 """Tests for unified/swinir.py — SwinIR super-resolution.
 
 Unit tests use a fake ONNX session, so no weights and no GPU are required.
-The real-model test is opt-in via PRISM_RUN_MODEL_TESTS=1.
+The real-model test is opt-in via LENSWRIGHT_RUN_MODEL_TESTS=1.
 """
 import base64
 import io
@@ -14,7 +14,7 @@ import pytest
 from PIL import Image
 from unified import swinir as sw
 
-RUN_MODEL_TESTS = os.environ.get("PRISM_RUN_MODEL_TESTS") == "1"
+RUN_MODEL_TESTS = os.environ.get("LENSWRIGHT_RUN_MODEL_TESTS") == "1"
 
 
 class FakeSession:
@@ -93,7 +93,7 @@ def test_upscale_b64_empty_raises():
 
 @pytest.mark.integration
 @pytest.mark.skipif(not RUN_MODEL_TESTS,
-                    reason="set PRISM_RUN_MODEL_TESTS=1 to run model integration tests")
+                    reason="set LENSWRIGHT_RUN_MODEL_TESTS=1 to run model integration tests")
 def test_upscale_real_model():
     if not sw.MODEL_FILE.exists():
         pytest.skip(f"SwinIR weights not found: {sw.MODEL_FILE}")

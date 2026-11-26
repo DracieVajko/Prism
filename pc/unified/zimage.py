@@ -51,9 +51,9 @@ MODEL_DIR = _model_dir()
 DEFAULT_PROMPT = "high quality, sharp natural detail, clean edges"
 DEFAULT_STRENGTH = 0.33
 DEFAULT_STEPS = 9
-TILE = int(os.environ.get("PRISM_ZIMAGE_TILE", "1024"))
-OVERLAP = int(os.environ.get("PRISM_ZIMAGE_OVERLAP", "96"))
-MAX_TILES = int(os.environ.get("PRISM_ZIMAGE_MAX_TILES", "9"))
+TILE = int(os.environ.get("LENSWRIGHT_ZIMAGE_TILE", "1024"))
+OVERLAP = int(os.environ.get("LENSWRIGHT_ZIMAGE_OVERLAP", "96"))
+MAX_TILES = int(os.environ.get("LENSWRIGHT_ZIMAGE_MAX_TILES", "9"))
 
 _pipe = None
 _lock = threading.Lock()
@@ -238,7 +238,7 @@ def _refine_tiled(pipe, img: Image.Image, prompt: str, strength: float,
     if len(xs) * len(ys) > MAX_TILES:
         raise ValueError(
             f"generative refine would need {len(xs) * len(ys)} tiles for "
-            f"{w}x{h}; use a smaller scale (PRISM_ZIMAGE_MAX_TILES="
+            f"{w}x{h}; use a smaller scale (LENSWRIGHT_ZIMAGE_MAX_TILES="
             f"{MAX_TILES}, tile={TILE})")
     logger.info("Z-Image tiled refine %dx%d in %dx%d tiles", w, h, len(xs), len(ys))
     for iy, y in enumerate(ys):

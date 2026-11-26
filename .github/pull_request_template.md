@@ -1,6 +1,6 @@
 ---
 name: Pull request template
-about: Template for contributing to Prism
+about: Template for contributing to Lenswright
 title: "[FEATURE/FIX] "
 labels: ""
 assignees: ""

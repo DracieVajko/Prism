@@ -2,8 +2,8 @@
 
 Date: 2026-11-19
 Machine: RTX 3060 Laptop 6 GB, 32 GB RAM, Windows.
-This run: LM Studio models unloaded (22 GB free RAM, GPU idle), Prism on
-`127.0.0.1:8101` with `WHISPER_DEVICE=cuda`, `PRISM_OCR_DEVICE=auto`.
+This run: LM Studio models unloaded (22 GB free RAM, GPU idle), Lenswright on
+`127.0.0.1:8101` with `WHISPER_DEVICE=cuda`, `LENSWRIGHT_OCR_DEVICE=auto`.
 
 Inputs: the AI Income slide (OCR), `testdata/audio/jfk.wav` (ASR), a 384x512
 photo (upscale/restoration/caption), a 256 px thumbnail (Z-Image).
@@ -61,7 +61,7 @@ languages/features.
 ## Fixes that made this run pass
 
 - `ocr_engine.py`: missing `os` import (broke every OCR load after the
-  `PRISM_OCR_DEVICE` change); one OCR model resident at a time; release on
+  `LENSWRIGHT_OCR_DEVICE` change); one OCR model resident at a time; release on
   reset; `transcribe()` delegates to `transcribe_pil()`.
 - `ocr_engine.py`: added the `native-vl` family. GLM-OCR, PaddleOCR-VL,
   LightOnOCR 2 and Qianfan-OCR take the PIL image inside the chat message and

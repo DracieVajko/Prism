@@ -1,6 +1,6 @@
 # FFmpeg recipes (flags only)
 
-Prism does **not** bundle ffmpeg as a tool. Media processing on Android runs
+Lenswright does **not** bundle ffmpeg as a tool. Media processing on Android runs
 on the platform's `MediaCodec` / `MediaMuxer` / `MediaExtractor` (+ LAME for
 MP3). On the PC side, ffmpeg is an **optional external binary** invoked with
 the flags below — nothing in the codebase requires it except `ffmpeg_pre.py`
@@ -85,6 +85,6 @@ ffprobe -v quiet -print_format json -show_format -show_streams INPUT
 
 ## Notes
 - These are the flags used by `pc/unified/ffmpeg_tools.py` presets. Keep ffmpeg on
-  `PATH`; Prism detects it via `shutil.which("ffmpeg")` and degrades gracefully
+  `PATH`; Lenswright detects it via `shutil.which("ffmpeg")` and degrades gracefully
   (passthrough) when absent.
 - Android: no ffmpeg needed — `MediaTools` (MediaCodec) covers the same ops.

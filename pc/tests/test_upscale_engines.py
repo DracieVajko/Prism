@@ -18,7 +18,7 @@ def _png_b64(size):
 
 
 def test_unknown_model_is_rejected(monkeypatch):
-    monkeypatch.setenv("PRISM_UPSCALE_ENGINE", "pillow")
+    monkeypatch.setenv("LENSWRIGHT_UPSCALE_ENGINE", "pillow")
     with pytest.raises(ValueError, match="unknown upscale model"):
         upscale_image_b64(_img_b64(8), 2, "totally-not-a-model")
 
@@ -40,14 +40,14 @@ def test_swinir_dispatch(monkeypatch):
 
 
 def test_zimage_requires_installed_model(monkeypatch):
-    monkeypatch.setenv("PRISM_UPSCALE_ENGINE", "pillow")
+    monkeypatch.setenv("LENSWRIGHT_UPSCALE_ENGINE", "pillow")
     monkeypatch.setattr("unified.zimage.is_installed", lambda: False)
     with pytest.raises(RuntimeError, match="not installed"):
         upscale_image_b64(_img_b64(8), 2, "z-image-turbo")
 
 
 def test_zimage_dispatch(monkeypatch):
-    monkeypatch.setenv("PRISM_UPSCALE_ENGINE", "pillow")
+    monkeypatch.setenv("LENSWRIGHT_UPSCALE_ENGINE", "pillow")
     seen = {}
 
     def fake_refine(image_b64, prompt="", strength=0.33, seed=0):

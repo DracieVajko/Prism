@@ -25,11 +25,11 @@ _LOCK = threading.Lock()
 # Field name -> environment variable. Nested groups use "group.field".
 _ENV_MAP = {
     "hf_token": "HF_TOKEN",
-    "llm.provider": "PRISM_LLM_PROVIDER",
-    "llm.base_url": "PRISM_LLM_BASE_URL",
-    "llm.api_key": "PRISM_LLM_API_KEY",
-    "llm.model": "PRISM_LLM_MODEL",
-    "llm.endpoint": "PRISM_LLM_ENDPOINT",
+    "llm.provider": "LENSWRIGHT_LLM_PROVIDER",
+    "llm.base_url": "LENSWRIGHT_LLM_BASE_URL",
+    "llm.api_key": "LENSWRIGHT_LLM_API_KEY",
+    "llm.model": "LENSWRIGHT_LLM_MODEL",
+    "llm.endpoint": "LENSWRIGHT_LLM_ENDPOINT",
 }
 
 SECRET_FIELDS = {"hf_token", "llm.api_key"}

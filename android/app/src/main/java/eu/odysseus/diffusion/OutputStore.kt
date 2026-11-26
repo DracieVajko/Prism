@@ -25,7 +25,7 @@ data class OutputFile(
  *
  * Files live under `Android/data/<pkg>/files/output/<kind>/` so the server can
  * list and serve them, and "Save to Downloads" copies them into the public
- * `Download/Prism` folder where any file manager can open them.
+ * `Download/Lenswright` folder where any file manager can open them.
  */
 object OutputStore {
     private const val TAG = "OutputStore"
@@ -50,14 +50,14 @@ object OutputStore {
             n++
         }
         target.writeBytes(data)
-        // Auto-publish to the public Download/Prism folder so the user can
+        // Auto-publish to the public Download/Lenswright folder so the user can
         // open the result from any file manager without a separate "Save".
         try {
             val values = ContentValues().apply {
                 put(MediaStore.MediaColumns.DISPLAY_NAME, target.name)
                 put(MediaStore.MediaColumns.MIME_TYPE, mimeOf(target))
                 put(MediaStore.MediaColumns.RELATIVE_PATH,
-                    "${android.os.Environment.DIRECTORY_DOWNLOADS}/Prism")
+                    "${android.os.Environment.DIRECTORY_DOWNLOADS}/Lenswright")
             }
             val uri: Uri? = ctx.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
             if (uri != null) {
@@ -121,7 +121,7 @@ object OutputStore {
         return files.size to files.sumOf { it.size }
     }
 
-    /** Copy every output (or only those of a given kind) into the public Download/Prism folder via MediaStore. */
+    /** Copy every output (or only those of a given kind) into the public Download/Lenswright folder via MediaStore. */
     fun saveAllToDownloads(ctx: Context, kind: String? = null): Int {
         var saved = 0
         for (f in list(ctx, kind, 1000, "date")) {
@@ -132,7 +132,7 @@ object OutputStore {
                     put(MediaStore.MediaColumns.DISPLAY_NAME, f.name)
                     put(MediaStore.MediaColumns.MIME_TYPE, mimeOf(outFile))
                     put(MediaStore.MediaColumns.RELATIVE_PATH,
-                        "${android.os.Environment.DIRECTORY_DOWNLOADS}/Prism")
+                        "${android.os.Environment.DIRECTORY_DOWNLOADS}/Lenswright")
                 }
                 val uri: Uri? = ctx.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
                 if (uri != null) {

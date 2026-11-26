@@ -1,4 +1,4 @@
-"""Live feature suite for the on-device Prism server.
+"""Live feature suite for the on-device Lenswright server.
 
 Run with the phone connected and the server started in the app:
 
@@ -25,7 +25,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parents[2]
 TD = ROOT / "testdata"
-OUT = Path(__import__("os").environ.get("TEMP", ".")) / "prism_android_live"
+OUT = Path(__import__("os").environ.get("TEMP", ".")) / "lenswright_android_live"
 OUT.mkdir(parents=True, exist_ok=True)
 
 RESULTS = []
@@ -62,7 +62,7 @@ def main():
     ADB = shutil.which("adb") or r"C:\Users\DracieVajko\AppData\Local\Android\Sdk\platform-tools\adb.exe"
 
     def restart_server():
-        """Force-stop and restart the Prism app server via adb."""
+        """Force-stop and restart the Lenswright app server via adb."""
         subprocess.run([ADB, "shell", "am", "force-stop", "eu.odysseus.diffusion"], capture_output=True)
         time.sleep(2)
         subprocess.run([ADB, "shell", "am", "start", "-n", "eu.odysseus.diffusion/.MainActivity", "--ez", "start_server", "true"], capture_output=True)
@@ -321,7 +321,7 @@ def main():
             font = ImageFont.load_default(size=150)
         except TypeError:
             font = ImageFont.load_default()
-        d.text((60, 120), "PRISM", fill="black", font=font)
+        d.text((60, 120), "LENSWRIGHT", fill="black", font=font)
         d.text((60, 480), "OCR", fill="black", font=font)
         d.text((60, 840), "2026", fill="black", font=font)
         buf = io.BytesIO()
@@ -338,7 +338,7 @@ def main():
         text = (r.json().get("text") or "").strip()
         assert len(text) >= 10, f"too short: {text!r}"
         low = text.lower()
-        assert "prism" in low, f"missing PRISM: {text[:80]}"
+        assert "lenswright" in low, f"missing LENSWRIGHT: {text[:80]}"
         assert "ocr" in low, f"missing OCR: {text[:80]}"
         out = (r.json().get("outputs") or [{}])[0]
         assert out.get("url", "").startswith("/v1/outputs/text/"), out

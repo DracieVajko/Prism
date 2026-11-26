@@ -5,7 +5,7 @@ import android.util.Log
 import java.io.File
 
 /**
- * Sherpa-ONNX streaming ASR wrapper for Prism Android.
+ * Sherpa-ONNX streaming ASR wrapper for Lenswright Android.
  *
  * Replaces whisper.cpp JNI with causal streaming ASR (Zipformer/Conformer
  * models) providing ~80-320ms latency vs whisper.cpp's 500-1500ms per chunk.

@@ -311,7 +311,7 @@ def upscale_image_b64(image_b64: str, scale: int = 2,
             "swinir-realsr-x4 or z-image-turbo")
 
     engine = "pillow"
-    pref = (os.environ.get("PRISM_UPSCALE_ENGINE") or "auto").strip().lower()
+    pref = (os.environ.get("LENSWRIGHT_UPSCALE_ENGINE") or "auto").strip().lower()
     want_torch = pref in ("auto", "torch")
     want_onnx = pref in ("auto", "onnx")
     weight_torch = find_weight() if want_torch else None

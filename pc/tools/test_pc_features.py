@@ -8,7 +8,7 @@ import httpx
 BASE = "http://127.0.0.1:8200"
 c = httpx.Client(base_url=BASE, timeout=900.0)
 TD = Path(__file__).resolve().parents[2] / "testdata"
-OUT = Path(tempfile.mkdtemp(prefix="prism_pc_test_"))
+OUT = Path(tempfile.mkdtemp(prefix="lenswright_pc_test_"))
 results = []
 
 

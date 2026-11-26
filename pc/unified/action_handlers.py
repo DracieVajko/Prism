@@ -48,7 +48,7 @@ class CalendarHandler(ActionHandler):
     def __init__(self, name: str = "calendar", calendar_file: str | None = None):
         super().__init__(name)
         self.calendar_file = calendar_file or str(
-            Path.home() / ".prism" / "calendar.ics"
+            Path.home() / ".lenswright" / "calendar.ics"
         )
         self._ensure_calendar_dir()
 
@@ -129,9 +129,9 @@ class CalendarHandler(ActionHandler):
 
         ics_content = f"""BEGIN:VCALENDAR
 VERSION:2.0
-PRODID:-//Prism//Calendar//EN
+PRODID:-//Lenswright//Calendar//EN
 BEGIN:VEVENT
-UID:{action.action_type}-{abs(hash(action.title or ""))}@prism.local
+UID:{action.action_type}-{abs(hash(action.title or ""))}@lenswright.local
 DTSTART:{start.replace("-", "").replace(":", "").replace(".", "")}Z
 DTEND:{end.replace("-", "").replace(":", "").replace(".", "")}Z
 SUMMARY:{action.title or "Untitled Event"}
@@ -165,7 +165,7 @@ class TodoHandler(ActionHandler):
 
     def __init__(self, name: str = "todo", todo_file: str | None = None):
         super().__init__(name)
-        self.todo_file = todo_file or str(Path.home() / ".prism" / "todos.txt")
+        self.todo_file = todo_file or str(Path.home() / ".lenswright" / "todos.txt")
         Path(self.todo_file).parent.mkdir(parents=True, exist_ok=True)
 
     def can_handle(self, action: Action) -> bool:
@@ -314,7 +314,7 @@ class ReminderHandler(ActionHandler):
     def __init__(self, name: str = "reminder", reminders_file: str | None = None):
         super().__init__(name)
         self.reminders_file = reminders_file or str(
-            Path.home() / ".prism" / "reminders.txt"
+            Path.home() / ".lenswright" / "reminders.txt"
         )
         Path(self.reminders_file).parent.mkdir(parents=True, exist_ok=True)
 
@@ -344,7 +344,7 @@ class NoteHandler(ActionHandler):
     def __init__(self, name: str = "note", notes_file: str | None = None):
         super().__init__(name)
         self.notes_file = str(
-            Path.home() / ".prism" / "notes.txt"
+            Path.home() / ".lenswright" / "notes.txt"
         )
         Path(self.notes_file).parent.mkdir(parents=True, exist_ok=True)
 

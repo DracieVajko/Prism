@@ -1,6 +1,6 @@
 # Tokens, API keys and provider settings
 
-Prism keeps local credentials in **`pc/settings.local.json`**. The file is
+Lenswright keeps local credentials in **`pc/settings.local.json`**. The file is
 git-ignored and is never returned unmasked by the API.
 
 ## Where to set it
@@ -35,11 +35,11 @@ Environment variables written at startup:
 | Field | Env var |
 |---|---|
 | `hf_token` | `HF_TOKEN` (and `HUGGING_FACE_HUB_TOKEN`) |
-| `llm.provider` | `PRISM_LLM_PROVIDER` |
-| `llm.base_url` | `PRISM_LLM_BASE_URL` |
-| `llm.model` | `PRISM_LLM_MODEL` |
-| `llm.api_key` | `PRISM_LLM_API_KEY` |
-| `llm.endpoint` | `PRISM_LLM_ENDPOINT` |
+| `llm.provider` | `LENSWRIGHT_LLM_PROVIDER` |
+| `llm.base_url` | `LENSWRIGHT_LLM_BASE_URL` |
+| `llm.model` | `LENSWRIGHT_LLM_MODEL` |
+| `llm.api_key` | `LENSWRIGHT_LLM_API_KEY` |
+| `llm.endpoint` | `LENSWRIGHT_LLM_ENDPOINT` |
 
 ## Endpoints
 

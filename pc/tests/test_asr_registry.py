@@ -16,14 +16,14 @@ def test_explicit_model_selects_engine():
 
 
 def test_whisper_alias_is_turbo_when_no_engine_enabled(monkeypatch):
-    monkeypatch.delenv("PRISM_ASR_ENGINE", raising=False)
+    monkeypatch.delenv("LENSWRIGHT_ASR_ENGINE", raising=False)
     engine, model_id = asr.resolve_engine("whisper-1")
     assert engine is None
     assert model_id == "turbo"
 
 
 def test_env_gate_selects_engine_for_alias(monkeypatch):
-    monkeypatch.setenv("PRISM_ASR_ENGINE", "sherpa")
+    monkeypatch.setenv("LENSWRIGHT_ASR_ENGINE", "sherpa")
     engine, model_id = asr.resolve_engine("whisper-1")
     assert engine is not None and engine.module is sherpa_asr
     assert model_id == sherpa_asr.MODEL_ID

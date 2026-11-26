@@ -275,23 +275,23 @@ class MainActivity : AppCompatActivity() {
         }
         btnCopyLog.setOnClickListener {
             val cm = getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-            cm.setPrimaryClip(android.content.ClipData.newPlainText("Prism log", logLines.joinToString("\n")))
+            cm.setPrimaryClip(android.content.ClipData.newPlainText("Lenswright log", logLines.joinToString("\n")))
             toast("Full log copied (${logLines.size} lines)")
         }
         btnSaveImage.setOnClickListener {
             val bmp = lastBitmap
             if (bmp == null) { toast("No image"); return@setOnClickListener }
-            if (saveBitmapToGallery(bmp)) toast("Saved to Pictures/Prism") else toast("Save failed")
+            if (saveBitmapToGallery(bmp)) toast("Saved to Pictures/Lenswright") else toast("Save failed")
         }
         btnSaveTranscript.setOnClickListener {
             if (lastTranscript.isBlank()) { toast("No transcript"); return@setOnClickListener }
             val title = lastTranscriptTitle.ifBlank { null }
-            if (saveTextToDownloads(lastTranscript, title)) toast("Saved to Download/Prism") else toast("Save failed")
+            if (saveTextToDownloads(lastTranscript, title)) toast("Saved to Download/Lenswright") else toast("Save failed")
         }
         btnCopyTranscript.setOnClickListener {
             if (lastTranscript.isBlank()) { toast("No transcript"); return@setOnClickListener }
             val cm = getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-            cm.setPrimaryClip(android.content.ClipData.newPlainText("Prism transcript", lastTranscript))
+            cm.setPrimaryClip(android.content.ClipData.newPlainText("Lenswright transcript", lastTranscript))
             toast("Transcript copied (${lastTranscript.length} chars)")
         }
 
@@ -454,7 +454,7 @@ class MainActivity : AppCompatActivity() {
         btnDownloadAll.setOnClickListener {
             Thread {
                 val n = OutputStore.saveAllToDownloads(this)
-                handler.post { toast("Saved $n file(s) to Download/Prism") }
+                handler.post { toast("Saved $n file(s) to Download/Lenswright") }
             }.start()
         }
 
@@ -1027,7 +1027,7 @@ class MainActivity : AppCompatActivity() {
         btnInpaint.setOnClickListener { runInpaint() }
         btnSaveInpaint.setOnClickListener {
             val bmp = lastInpaintBitmap
-            if (bmp == null) toast("No image") else if (saveBitmapToGallery(bmp)) toast("Saved to Pictures/Prism") else toast("Save failed")
+            if (bmp == null) toast("No image") else if (saveBitmapToGallery(bmp)) toast("Saved to Pictures/Lenswright") else toast("Save failed")
         }
 
 
@@ -1709,11 +1709,11 @@ class MainActivity : AppCompatActivity() {
 
     private fun saveBitmapToGallery(bmp: android.graphics.Bitmap): Boolean {
         return try {
-            val name = "prism_${System.currentTimeMillis()}.png"
+            val name = "lenswright_${System.currentTimeMillis()}.png"
             val values = android.content.ContentValues().apply {
                 put(android.provider.MediaStore.Images.Media.DISPLAY_NAME, name)
                 put(android.provider.MediaStore.Images.Media.MIME_TYPE, "image/png")
-                put(android.provider.MediaStore.Images.Media.RELATIVE_PATH, "Pictures/Prism")
+                put(android.provider.MediaStore.Images.Media.RELATIVE_PATH, "Pictures/Lenswright")
             }
             val uri = contentResolver.insert(
                 android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values
@@ -1731,12 +1731,12 @@ class MainActivity : AppCompatActivity() {
     private fun saveTextToDownloads(text: String, title: String? = null): Boolean {
         return try {
             val safeTitle = title?.replace(Regex("[^A-Za-z0-9 _-]"), "")?.trim()?.replace(" ", "_")
-            val base = if (safeTitle.isNullOrBlank()) "prism_${System.currentTimeMillis()}" else safeTitle
+            val base = if (safeTitle.isNullOrBlank()) "lenswright_${System.currentTimeMillis()}" else safeTitle
             val name = "$base.md"
             val values = android.content.ContentValues().apply {
                 put(android.provider.MediaStore.Downloads.DISPLAY_NAME, name)
                 put(android.provider.MediaStore.Downloads.MIME_TYPE, "text/markdown")
-                put(android.provider.MediaStore.Downloads.RELATIVE_PATH, "Download/Prism")
+                put(android.provider.MediaStore.Downloads.RELATIVE_PATH, "Download/Lenswright")
             }
             val uri = contentResolver.insert(
                 android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, values
@@ -1872,7 +1872,7 @@ class MainActivity : AppCompatActivity() {
         fileBytes: ByteArray,
     ): String? {
         return try {
-            val boundary = "----PrismBoundary" + System.currentTimeMillis()
+            val boundary = "----LenswrightBoundary" + System.currentTimeMillis()
             val conn = URL(url).openConnection() as HttpURLConnection
             conn.requestMethod = "POST"
             conn.connectTimeout = 10_000

@@ -1,13 +1,13 @@
 """Local AI resource monitor for external LLM providers.
 
-Before a Prism job asks an external LLM (Ollama, LM Studio, ...) to do work,
+Before a Lenswright job asks an external LLM (Ollama, LM Studio, ...) to do work,
 this module checks how many models are currently resident on that provider and
 decides whether we may load our needed model:
 
-* If fewer than ``PRISM_LLM_MAX_CONCURRENT`` (default 1) models are loaded,
+* If fewer than ``LENSWRIGHT_LLM_MAX_CONCURRENT`` (default 1) models are loaded,
   we are free to load/preload our model.
-* Otherwise we wait and re-check every ``PRISM_LLM_POLL_INTERVAL`` seconds
-  (default 120) for up to ``PRISM_LLM_WAIT_TIMEOUT`` seconds (default 3600).
+* Otherwise we wait and re-check every ``LENSWRIGHT_LLM_POLL_INTERVAL`` seconds
+  (default 120) for up to ``LENSWRIGHT_LLM_WAIT_TIMEOUT`` seconds (default 3600).
   Only after the timeout do we fall back (caller handles fallback).
 * When the job is finished we release/unload the model we loaded, so the
   provider is left clean.
@@ -26,17 +26,17 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-MAX_CONCURRENT = int(os.environ.get("PRISM_LLM_MAX_CONCURRENT", "1") or 1)
-POLL_INTERVAL = int(os.environ.get("PRISM_LLM_POLL_INTERVAL", "120") or 120)
-WAIT_TIMEOUT = int(os.environ.get("PRISM_LLM_WAIT_TIMEOUT", "3600") or 3600)
+MAX_CONCURRENT = int(os.environ.get("LENSWRIGHT_LLM_MAX_CONCURRENT", "1") or 1)
+POLL_INTERVAL = int(os.environ.get("LENSWRIGHT_LLM_POLL_INTERVAL", "120") or 120)
+WAIT_TIMEOUT = int(os.environ.get("LENSWRIGHT_LLM_WAIT_TIMEOUT", "3600") or 3600)
 
 
 def _cfg() -> dict:
     return {
-        "provider": os.environ.get("PRISM_LLM_PROVIDER", "none").strip().lower(),
-        "base_url": os.environ.get("PRISM_LLM_BASE_URL", "").strip().rstrip("/"),
-        "api_key": os.environ.get("PRISM_LLM_API_KEY", "").strip(),
-        "model": os.environ.get("PRISM_LLM_MODEL", "gemma4:12b").strip(),
+        "provider": os.environ.get("LENSWRIGHT_LLM_PROVIDER", "none").strip().lower(),
+        "base_url": os.environ.get("LENSWRIGHT_LLM_BASE_URL", "").strip().rstrip("/"),
+        "api_key": os.environ.get("LENSWRIGHT_LLM_API_KEY", "").strip(),
+        "model": os.environ.get("LENSWRIGHT_LLM_MODEL", "gemma4:12b").strip(),
     }
 
 

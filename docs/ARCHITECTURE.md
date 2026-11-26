@@ -1,6 +1,6 @@
-# Prism — Architecture and Operation Guide
+# Lenswright — Architecture and Operation Guide
 
-This document explains how Prism works end to end on the **PC server** and on the
+This document explains how Lenswright works end to end on the **PC server** and on the
 **Android app**: processes, components, request lifecycles, model handling,
 acceleration, UI, and the differences between the two.
 
@@ -8,7 +8,7 @@ acceleration, UI, and the differences between the two.
 
 ## 1. Overview
 
-Prism is **two independent products** that share one API contract:
+Lenswright is **two independent products** that share one API contract:
 
 | Product | Runtime | UI | Dependencies |
 |---|---|---|---|

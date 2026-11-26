@@ -32,10 +32,10 @@ downloaded automatically.
 
 Notes:
 
-- `PRISM_LLM_MODEL` (default `gemma4:12b`) is only a **model name sent to an
+- `LENSWRIGHT_LLM_MODEL` (default `gemma4:12b`) is only a **model name sent to an
   external provider** (Ollama/LM Studio). It does not load local weights.
   LM Studio currently serves `gemma-4-26B-A4B-it-QAT-GGUF`; set
-  `PRISM_LLM_MODEL` to that ID when LM Studio is the provider.
+  `LENSWRIGHT_LLM_MODEL` to that ID when LM Studio is the provider.
 - `pc/tools/download_gemma4.py` downloads `google/gemma-4-E2B-it` into
   `models/gemma-4-E2B-it`; that directory is **not present** on this machine.
 
@@ -60,7 +60,7 @@ Notes:
 
 ## Removed on 2026-11-11
 
-- `gemma-4-12B-it` (22.31 GB, safetensors) — no Prism code path loaded it.
+- `gemma-4-12B-it` (22.31 GB, safetensors) — no Lenswright code path loaded it.
 - `gemma-4-12B-it-q4` (6.63 GB, GGUF) — same; LM Studio has its own Gemma 4 26B.
 - `faster-whisper-small` (0.45 GB) and `faster-whisper-tiny` (0.07 GB) — now
   optional downloads; turbo + large stay installed.

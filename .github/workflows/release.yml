@@ -10,10 +10,10 @@ name: Release
 #   Without secrets the release APK is signed with the debug key (fine for
 #   side-loading, not for Play Store). To sign properly, add these repository
 #   secrets:
-#     PRISM_KEYSTORE_BASE64   base64 of the .jks file
-#     PRISM_KEYSTORE_PASSWORD
-#     PRISM_KEY_ALIAS
-#     PRISM_KEY_PASSWORD
+#     LENSWRIGHT_KEYSTORE_BASE64   base64 of the .jks file
+#     LENSWRIGHT_KEYSTORE_PASSWORD
+#     LENSWRIGHT_KEY_ALIAS
+#     LENSWRIGHT_KEY_PASSWORD
 #
 # NOTE: the `secrets` context is not available inside `if:`. Secrets are mapped
 # to job-level `env` first, and the condition tests `env.*`. That is a hard
@@ -33,10 +33,10 @@ jobs:
     runs-on: ubuntu-latest
     env:
       # Job-level env is the only place secrets can be read for an `if:` test.
-      PRISM_KEYSTORE_BASE64: ${{ secrets.PRISM_KEYSTORE_BASE64 }}
-      PRISM_KEYSTORE_PASSWORD: ${{ secrets.PRISM_KEYSTORE_PASSWORD }}
-      PRISM_KEY_ALIAS: ${{ secrets.PRISM_KEY_ALIAS }}
-      PRISM_KEY_PASSWORD: ${{ secrets.PRISM_KEY_PASSWORD }}
+      LENSWRIGHT_KEYSTORE_BASE64: ${{ secrets.LENSWRIGHT_KEYSTORE_BASE64 || secrets.PRISM_KEYSTORE_BASE64 }}
+      LENSWRIGHT_KEYSTORE_PASSWORD: ${{ secrets.LENSWRIGHT_KEYSTORE_PASSWORD || secrets.PRISM_KEYSTORE_PASSWORD }}
+      LENSWRIGHT_KEY_ALIAS: ${{ secrets.LENSWRIGHT_KEY_ALIAS || secrets.PRISM_KEY_ALIAS }}
+      LENSWRIGHT_KEY_PASSWORD: ${{ secrets.LENSWRIGHT_KEY_PASSWORD || secrets.PRISM_KEY_PASSWORD }}
     steps:
       - uses: actions/checkout@v5
 
@@ -89,11 +89,11 @@ jobs:
              android/app/src/main/cpp/third_party/ncnn-jni/arm64-v8a/
 
       - name: Restore keystore (optional)
-        if: env.PRISM_KEYSTORE_BASE64 != ''
+        if: env.LENSWRIGHT_KEYSTORE_BASE64 != ''
         run: |
-          echo "$PRISM_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/prism-release.jks"
+          echo "$LENSWRIGHT_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/lenswright-release.jks"
           {
-            echo "PRISM_KEYSTORE_FILE=$RUNNER_TEMP/prism-release.jks"
+            echo "LENSWRIGHT_KEYSTORE_FILE=$RUNNER_TEMP/lenswright-release.jks"
           } >> "$GITHUB_ENV"
 
       - name: Assemble release APK
@@ -112,15 +112,15 @@ jobs:
           VERSION="${GITHUB_REF_NAME:-dev}"
           mkdir -p "$RUNNER_TEMP/out"
           if [ -f release/app-release.apk ]; then
-            cp release/app-release.apk "$RUNNER_TEMP/out/prism-${VERSION}-release.apk"
+            cp release/app-release.apk "$RUNNER_TEMP/out/lenswright-${VERSION}-release.apk"
           fi
-          cp debug/app-debug.apk "$RUNNER_TEMP/out/prism-${VERSION}-debug.apk"
+          cp debug/app-debug.apk "$RUNNER_TEMP/out/lenswright-${VERSION}-debug.apk"
           ls -lh "$RUNNER_TEMP/out"
 
       - name: Upload workflow artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: prism-apk
+          name: lenswright-apk
           path: ${{ runner.temp }}/out/*.apk
           if-no-files-found: error
 
@@ -131,11 +131,11 @@ jobs:
           files: ${{ runner.temp }}/out/*.apk
           generate_release_notes: true
           body: |
-            ## Prism ${{ github.ref_name }}
+            ## Lenswright ${{ github.ref_name }}
 
             ### Android (APK)
 
-            1. Download `prism-${{ github.ref_name }}-release.apk`
+            1. Download `lenswright-${{ github.ref_name }}-release.apk`
                (fall back to `-debug.apk` if that file is missing).
             2. Allow "Install unknown apps" for your file manager or browser.
             3. Open the APK and install. Android 10+ (arm64-v8a).
@@ -148,7 +148,7 @@ jobs:
 
             ```bash
             git clone https://github.com/${{ github.repository }}.git
-            cd Prism/pc
+            cd Lenswright/pc
             python -m venv .venv && . .venv/bin/activate
             pip install -r requirements.txt
             python download_models.py --preset odysseus-default   # optional
@@ -159,9 +159,9 @@ jobs:
 
             ```bash
             # Linux / macOS
-            ./pc/scripts/install-prism-service.sh
+            ./pc/scripts/install-lenswright-service.sh
             # Windows (elevated PowerShell)
-            powershell -ExecutionPolicy Bypass -File pc\scripts\install-prism-service.ps1 -RemoveLegacy
+            powershell -ExecutionPolicy Bypass -File pc\scripts\install-lenswright-service.ps1 -RemoveLegacy
             ```
 
             WebUI: `http://127.0.0.1:8101/webui`
@@ -195,9 +195,9 @@ jobs:
       - name: Start script is executable and parses
         run: |
           chmod +x pc/scripts/*.sh
-          bash -n pc/scripts/start-prism.sh
-          bash -n pc/scripts/stop-prism.sh
-          bash -n pc/scripts/install-prism-service.sh
+          bash -n pc/scripts/start-lenswright.sh
+          bash -n pc/scripts/stop-lenswright.sh
+          bash -n pc/scripts/install-lenswright-service.sh
 
       - name: Server answers /health
         run: |

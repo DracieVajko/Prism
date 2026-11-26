@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Prism</string>
+    <string name="app_name">Lenswright</string>
     <string name="tab_server">Server</string>
     <string name="tab_generate">Generate</string>
     <string name="tab_transcribe">Transcribe</string>
