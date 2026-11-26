@@ -3,7 +3,7 @@
 ## 1. Auto-Update from GitHub
 
 ### Current State
-- Git remote: `https://github.com/DracieVajko/Prism.git`
+- Git remote: `https://github.com/DracieVajko/lenswright.git`
 - No update mechanism exists
 - Models are downloaded separately via `download_models.py`
 
@@ -12,7 +12,7 @@
 **Endpoint:** `GET /v1/update/check` and `POST /v1/update/apply`
 
 **Check flow:**
-1. Fetch latest commit SHA from `https://api.github.com/repos/DracieVajko/Prism/commits/main`
+1. Fetch latest commit SHA from `https://api.github.com/repos/DracieVajko/lenswright/commits/main`
 2. Compare with local `git rev-parse HEAD`
 3. If different, return `{update_available: true, current: <sha>, latest: <sha>, commits_behind: N}`
 4. Fetch commit messages between current and latest for changelog

@@ -5,7 +5,7 @@ On-device AI server for image generation, transcription, OCR and upscaling — w
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Version: 0.8.0](https://img.shields.io/badge/version-0.8.0-blue.svg)](CHANGELOG.md)
 [![Sponsor on GitHub](https://img.shields.io/badge/Sponsor-GitHub-ea4aaa?logo=github)](https://github.com/sponsors/DracieVajko)
-[![PC CI](https://img.shields.io/github/actions/workflow/status/DracieVajko/Prism/ci.yml?label=PC%20CI)](.github/workflows/ci.yml)
+[![PC CI](https://img.shields.io/github/actions/workflow/status/DracieVajko/lenswright/ci.yml?label=PC%20CI)](.github/workflows/ci.yml)
 
 ## What Lenswright is
 

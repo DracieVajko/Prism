@@ -1,6 +1,6 @@
 [Unit]
 Description=Lenswright unified server (images, audio, OCR, VLM, ffmpeg)
-Documentation=https://github.com/DracieVajko/Prism
+Documentation=https://github.com/DracieVajko/lenswright
 After=network-online.target
 Wants=network-online.target
 

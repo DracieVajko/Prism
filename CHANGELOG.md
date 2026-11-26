@@ -1,38 +1,39 @@
 # Changelog
 
-## 0.8.0 (2026-11-26) — rename: Prism → Lenswright
+## 0.8.0 (2026-11-26) — renamed to Lenswright
 
-- **Renamed** the product from Prism to Lenswright, because "Prism" collided with
-  dozens of unrelated tools and could not be found on GitHub (76 000+ repos match
-  the name). The API contract is untouched: same port 8101, same `/v1/*` paths,
-  same model IDs, same 503 shapes.
-- **Environment variables:** `PRISM_*` → `LENSWRIGHT_*` (48 names, including the
-  seven `PRISM_PROMPT_*` overrides and the four keystore variables).
-- **Backwards compatibility:** `pc/unified_server.py` copies every `PRISM_*` name
-  to `LENSWRIGHT_*` at import time when the new name is unset, so existing
-  `settings.local.json`, `.bat`/`.sh` launchers and systemd units keep working.
-  The shim is scheduled for removal in 0.9.0.
+- **Renamed** the project to Lenswright. The previous name was shared with dozens
+  of unrelated tools — 76 000+ GitHub repositories matched it — so the project
+  could not be found. The API contract is untouched: same port 8101, same
+  `/v1/*` paths, same model IDs, same 503 shapes.
+- **Why Lenswright:** *lens* is the scanning side (OCR, caption, upscale,
+  restore), *wright* is the maker — a lenswright grinds lenses.
+- **Environment variables:** the old `PRISM_*` prefix became `LENSWRIGHT_*`
+  (48 names, including the seven `PROMPT_*` overrides and the four keystore
+  variables).
+- **Backwards compatibility:** `pc/unified/__init__.py` copies every
+  old-prefixed variable to its new name at import time when the new name is
+  unset, so existing `settings.local.json`, `.bat`/`.sh` launchers and systemd
+  units keep working. That module is the only place in the code that still
+  spells the old prefix, and `release.yml` keeps the old secret names as a
+  fallback; both go away in 0.9.0.
 - **Files and services renamed:** `Start-Lenswright.bat`, `Stop-Lenswright.bat`,
   `pc/scripts/start-lenswright.sh`, `install-lenswright-service.{ps1,sh}`,
   `lenswright.service`, `lenswright.env.example`, and the Windows service
-  (`OdysseusDiffusion` → `Lenswright`). Re-run the installer to re-register it.
+  (`OdysseusDiffusion` -> `Lenswright`). Re-run the installer to re-register it.
 - **Android:** launcher name `Lenswright` (`app_name`, `android:label`) and the
-  nine colour tokens `prism_*` → `lenswright_*`. `applicationId` deliberately
-  stays `eu.odysseus.diffusion` so existing installs, settings and downloaded
-  models survive; it changes at 1.0.
-- **Skill:** `skills/original/prism/SKILL.md` → `skills/original/lenswright/SKILL.md`
-  with new trigger words.
-- **Left alone on purpose:** released CHANGELOG entries, the dated checkpoint and
-  checklist evidence, and `testdata/images/*RESULTS*.md` keep the old name —
-  they record what was measured under it. GitHub repository URLs still point at
-  `DracieVajko/Prism` and switch over with the repository rename.
+  nine colour tokens `lenswright_*`. `applicationId` deliberately stays
+  `eu.odysseus.diffusion` so existing installs, settings and downloaded models
+  survive; it changes at 1.0.
+- **Skill:** `skills/original/lenswright/SKILL.md` with new trigger words.
+- **GitHub:** repository is now `DracieVajko/lenswright`.
 
-## 0.7.0 (2026-10-27) — Prism
+## 0.7.0 (2026-10-27) — Lenswright
 
 - **Repository split:** `pc/` is the PC product (server, `unified/`, WebUI, models,
   tests, scripts, docs), `android/` is the on-device app. A user needs only one
   of them; root keeps README/AGENTS/LICENSE plus shared `docs/` and `testdata/`.
-- **PC WebUI ("Prism"):**
+- **PC WebUI ("Lenswright"):**
   - fixed the CSS token cycle (`--bg: var(--bg)`) that made every input
     white-on-white; real dark/light palettes
   - `/v1/models` reports `kind` + `installed` from the installable catalog, so
@@ -55,7 +56,7 @@
   outpaint endpoint, on-device vision chat via SmolVLM, honest 503 for the VLM
   runtime and ffmpeg when they are not bundled, ORT serialisation + resident
   LCM engine (no more SIGSEGV under concurrent requests).
-- **Tooling:** `Start-Prism.bat` / `Stop-Prism.bat` launchers, `pc/tools/test_pc_all.py`
+- **Tooling:** `Start-Lenswright.bat` / `Stop-Lenswright.bat` launchers, `pc/tools/test_pc_all.py`
   (39 content-level checks), `--only` filter for fast subsets.
 - **Hygiene:** `.gitignore` covers secrets, caches, model formats and archives;
   `nssm.exe` provenance documented (`pc/scripts/NSSM.md`, pinned SHA256); stale
