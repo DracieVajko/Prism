@@ -88,6 +88,10 @@ android/
 | POST | `/v1/chat/completions` | VLM chat |
 | POST | `/v1/audio/transcriptions` | speech to text |
 | POST | `/v1/audio/translations` | speech to English |
+| POST | `/v1/live/sessions` | create a live session + two empty text files |
+| POST | `/v1/live/sessions/{sid}/append` | append one transcript line (`mic`/`device`) |
+| POST | `/v1/live/sessions/{sid}/close` | flush and close both files |
+| GET | `/v1/live/sessions/{sid}` | status, per-source line counts, descriptors |
 | GET | `/v1/ffmpeg/presets` | preset catalog |
 | POST | `/v1/ffmpeg/{op}` | convert/trim/compress/extract/info |
 | GET | `/v1/settings` | runtime info |
@@ -371,6 +375,40 @@ upload → faster-whisper (local, chunked) or WhisperApi :4444
 → text → response
 ```
 
+### 6.6 Live transcription (both platforms)
+
+```
+capture (mic / device) → PCM16 16 kHz held in client memory
+→ POST /v1/live/sessions → two empty .txt files + descriptors
+→ one /v1/realtime socket per source (session.update, append, commit)
+→ on ...transcription.completed:
+    POST /v1/live/sessions/{sid}/append {source, text, item_id, elapsed_ms}
+→ server writes "[mm:ss] <text>" to that source's file and flushes it
+→ Stop: session.finish, drain in-flight commits, POST .../close
+→ files stay under output/text/ and are listed by GET /v1/outputs
+```
+
+Each session owns **two separate files** — `mic` and `device` — under
+`pc/output/text/` (PC) and `files/output/text/` (Android). Descriptors match the
+other outputs: `{name, kind:"text", size, path:"text/<name>",
+url:"/v1/outputs/text/<name>"}`. **No audio is persisted anywhere**: capture stays
+in client memory, audio crosses the existing `/v1/realtime` socket, and neither
+client nor server creates a `MediaRecorder` or audio file. Cindy's realtime
+protocol is unchanged — live sessions are a separate HTTP layer beside it.
+
+Limits:
+- **PC live capture is localhost-only.** `getUserMedia`, `getDisplayMedia` and
+  `AudioWorklet` require a secure context and the WebUI uses plain HTTP (no TLS),
+  so Live works only at `localhost`/`127.0.0.1`; over LAN/Tailscale both source
+  controls are disabled. File-based transcription still works over LAN.
+- **PC device audio is a shared browser tab**, chosen with `getDisplayMedia` —
+  not whole-system loopback.
+- **Android device audio** uses `MediaProjection` playback capture (no
+  `VirtualDisplay`); apps that disallow playback capture yield silence, which
+  the UI states up front and which produces no transcript line.
+- **Android bypasses Local/Remote/Auto forwarding** for every `/v1/live/*` call
+  and for live sockets, so the session always runs against the local server.
+
 ---
 
 ## 7. Model lifecycle
@@ -445,6 +483,9 @@ curl -F "file=@audio.wav" -F "language=en" http://<host>:8101/v1/audio/transcrip
   `onnxruntime-gpu` (CUDA) or `onnxruntime-directml` for GPU.
 - **PC without torch**: SDXL/absolute reality/animagine/juggernaut cannot run;
   only the LCM ONNX model is available.
+- **Live capture**: PC WebUI Live is localhost-only (secure context, no TLS) and
+  shares a browser tab, not system audio; Android device audio via
+  `MediaProjection` is silent for apps that disallow playback capture. See §6.6.
 - **MP3 192/320** on a 16 kHz mono source are capped by libmp3lame (~160 kbps).
 
 ---

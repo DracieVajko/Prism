@@ -41,6 +41,10 @@ Legacy: the old `WhisperApi :4444/v1/audio/*` remains as a shim to `:8101/v1/aud
 | POST | `/v1/ffmpeg/{convert-video\|convert-audio\|extract-audio\|trim\|compress\|info}` | multipart | `{file\|info, filename, request_id, info:{duration,size,format}}` |
 | POST | `/v1/audio/transcriptions` | multipart `file|audio + model, device, language` | `{text, language}` or `text/plain` |
 | POST | `/v1/audio/translations` | same | `{text}` |
+| POST | `/v1/live/sessions` | JSON `{language?, model?, label?}` (defaults `""`, `"turbo"`, `""`) | `{id, sources:["mic","device"], created, language, model, label, closed, descriptors:{mic:<descriptor>, device:<descriptor>}}` |
+| POST | `/v1/live/sessions/{sid}/append` | JSON `{source:"mic"\|"device", text, item_id?, elapsed_ms?}` | `{ok, duplicate, bytes, line}`; `400` bad source, `404` unknown session, `409` closed |
+| POST | `/v1/live/sessions/{sid}/close` | — | `{ok, closed, mic:<descriptor>, device:<descriptor>, descriptors:{mic,device}, lines:{mic,device}}`; idempotent |
+| GET | `/v1/live/sessions/{sid}` | — | `{id, language, model, label, created, sources, descriptors:{mic,device}, lines:{mic,device}, closed, open_sockets, last_activity}` |
 | WS | `/v1/realtime` | OpenAI transcription events (see below) | `session.updated`, `input_audio_buffer.committed`, `conversation.item.input_audio_transcription.completed` |
 | GET | `/webui` | — | unified HTML (Generate/Edit-Upscale/Transcribe) |
 
@@ -83,6 +87,35 @@ Server to client:
 
 Audio is resampled from the announced rate (24 kHz) to 16 kHz. V1 returns the
 final transcript per commit; it does not send partial deltas.
+
+## Live transcription sessions
+
+The four `/v1/live/*` routes above own an in-memory session with **two separate
+append-only `.txt` files**, one for `mic` and one for `device`, under `output/text/`
+(PC) and `files/output/text/` (Android). Both files are created at open time with
+a one-line header and appear in `GET /v1/outputs`. A descriptor has the shape
+`{name, kind:"text", size, path:"text/<name>", url:"/v1/outputs/text/<name>"}`.
+Appends are flushed immediately as `[mm:ss] <text>` and deduplicated by
+`item_id` (a retry returns `{"ok":true,"duplicate":true}` without a second line).
+`close` flushes both files; a session idle for 30 minutes with no open socket is
+closed automatically.
+
+Captured audio stays in the client's memory and travels through the existing
+**`/v1/realtime` WebSocket, whose protocol is unchanged** (Cindy needs no change).
+Nothing records audio: no `MediaRecorder` in the browser, no audio file on the
+server, and no `.wav`/`.m4a` artifact in `/v1/outputs`.
+
+- **PC localhost-only:** microphone (`getUserMedia`), shared-tab audio
+  (`getDisplayMedia`) and `AudioWorklet` need a secure context. The WebUI is served
+  over plain HTTP with no TLS, so Live works only at `localhost`/`127.0.0.1`; over
+  LAN or Tailscale both source controls are disabled with an explanation. File-based
+  transcription still works over LAN. PC tab audio is the **selected browser tab
+  only**, not whole-system loopback.
+- **Android:** mic uses `AudioRecord`, device audio uses `MediaProjection` playback
+  capture with no `VirtualDisplay`. Apps that disallow playback capture yield
+  silence — no transcript line is invented. Every `/v1/live/*` call and live socket
+  **bypasses Local/Remote/Auto forwarding**, so the session always runs on the
+  phone.
 
 ## Client compatibility
 

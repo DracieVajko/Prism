@@ -121,6 +121,13 @@ def should_idle_unload(mm, limit: int) -> bool:
 async def _idle_unloader():
     while True:
         await asyncio.sleep(30)
+        # Close abandoned live transcription sessions (idle > 1800s, no open
+        # sockets). Guarded so a sweep failure cannot stop the unloader.
+        try:
+            from unified.media_routes import get_live_store
+            get_live_store().sweep_idle()
+        except Exception as e:
+            logger.warning("idle sweep: %s", e)
         try:
             if not should_idle_unload(_manager, IDLE_UNLOAD_SECONDS):
                 continue

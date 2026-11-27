@@ -18,6 +18,8 @@ class DiffusionService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        // Live capture is owned by this service so it survives backgrounding.
+        LiveCapture.attach(applicationContext)
         val ch = NotificationChannel("srv", "Diffusion server", NotificationManager.IMPORTANCE_LOW)
         (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).createNotificationChannel(ch)
         try {
@@ -50,8 +52,18 @@ class DiffusionService : Service() {
     }
 
     override fun onDestroy() {
-        server?.stop()
+        // LiveCapture.stop() drains in-flight commits (bounded ~5 s) and issues
+        // the session-close POST, so it must never run on the main thread (ANR
+        // risk). The local API server has to stay up until that close POST has
+        // been sent, so the whole teardown runs on one background thread in the
+        // original order: drain/close first, then server shutdown. Thread { }.start()
+        // is the same off-main pattern used in MainActivity.
+        val api = server
         server = null
+        Thread {
+            LiveCapture.stop()
+            api?.stop()
+        }.start()
         super.onDestroy()
     }
 

@@ -122,3 +122,7 @@ MODELS-KEEP.md
 
 # Desloppify local state
 .desloppify/
+
+# SDD scratch workspaces
+.superpowers/
+

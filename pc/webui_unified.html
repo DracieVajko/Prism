@@ -199,6 +199,29 @@ canvas#maskpad { width: 100%; border-radius: 6px; border: 1px solid var(--border
 </div>
 <button class="go" id="btnTr" onclick="generateTr()">Transcribe</button>
 <div class="hint" id="trjob"><span id="trjobText"></span> <a href="#" id="trstop" style="display:none;color:#ff7b72" onclick="cancelJob();return false">stop</a></div>
+
+<hr style="border:0;border-top:1px solid var(--border2);margin:16px 0 8px">
+<label style="font-size:14px;font-weight:600;color:var(--text)">Live transcription (localhost only)</label>
+<div class="hint" id="liveHelp">Captures microphone and shared-tab audio continuously and writes two text files. Browser audio capture needs a secure context, so this works only when the page is opened on localhost; no TLS is configured and no audio is ever saved.</div>
+<div class="row">
+<div><label><input type="checkbox" id="liveMic" checked> Microphone</label></div>
+<div><label><input type="checkbox" id="liveDevice" checked> Shared tab audio</label></div>
+<div><label>Language (empty = auto)</label><select id="liveLang"><option value="">auto</option><option value="sk">sk</option><option value="cs">cs</option><option value="en">en</option></select></div>
+</div>
+<div class="row" style="margin-top:8px">
+<button class="go" id="btnLiveStart" onclick="startLive()" style="margin-top:0">Start live</button>
+<button class="go" id="btnLiveStop" onclick="stopLive()" style="margin-top:0;background:#b62324" disabled>Stop live</button>
+</div>
+<div class="hint" id="liveStatus" role="status" aria-live="polite">Idle.</div>
+<div class="row">
+<div><label>Microphone tail</label><div id="liveTailMic" class="hint" style="min-height:18px">…</div></div>
+<div><label>Device tail</label><div id="liveTailDevice" class="hint" style="min-height:18px">…</div></div>
+</div>
+<div class="row">
+<div><a href="#" id="liveLinkMic" style="display:none;color:#58a6ff;font-size:12px" target="_blank" rel="noopener">Open microphone transcript</a></div>
+<div><a href="#" id="liveLinkDevice" style="display:none;color:#58a6ff;font-size:12px" target="_blank" rel="noopener">Open device transcript</a></div>
+</div>
+
 <div id="txtout">transcript appears here…</div>
 <a href="#" id="trsave" style="display:none;color:#58a6ff;font-size:12px" onclick="saveTranscript();return false">Save transcript</a>
 </div>
@@ -863,6 +886,462 @@ async function generateTr(){
     refresh();
   }
 }
+
+// ---- Live transcription (localhost only) ----
+// Back-pressure policy: capture never pauses, at most two commits are in
+// flight per source, and the oldest unprocessed chunk is dropped with a logged
+// warning when the queue is full. Only transcript text is persisted (POSTed to
+// the live session append endpoint); captured PCM stays in memory as base64 on
+// the realtime WebSocket. No browser audio-recording API and no audio file is
+// used anywhere.
+const LIVE_COMMIT_MS = 5000;     // buffer length / commit cadence
+const LIVE_MAX_INFLIGHT = 2;     // at most two commits in flight per source
+const LIVE_MAX_QUEUE = 2;        // max waiting chunks; drop the oldest beyond this
+const LIVE_DRAIN_MS = 10000;     // bounded wait for pending completions on Stop
+const LIVE_MODEL = 'turbo';      // Whisper model announced to /v1/realtime
+let LIVE = null;                 // active session state, or null when idle
+let LIVE_STARTING = false;       // synchronous claim held until the session is created
+
+// Inline AudioWorklet processor: forwards float frames to the main thread,
+// where they are downsampled to 16 kHz int16. Loaded from a Blob URL so the
+// WebUI stays a single self-contained HTML file.
+const LIVE_WORKLET_SOURCE = `
+class LivePcmProcessor extends AudioWorkletProcessor {
+  process(inputs) {
+    const input = inputs[0];
+    const channel = input && input[0];
+    if (channel && channel.length) {
+      const copy = new Float32Array(channel);
+      this.port.postMessage(copy, [copy.buffer]);
+    }
+    return true;
+  }
+}
+registerProcessor('live-pcm-processor', LivePcmProcessor);
+`;
+
+function setLiveStatus(msg){
+  const el = document.getElementById('liveStatus');
+  if (el) el.textContent = msg;
+  log('live: ' + msg);
+}
+function setLiveButtons(running){
+  const secure = window.isSecureContext;
+  const start = document.getElementById('btnLiveStart');
+  const stop = document.getElementById('btnLiveStop');
+  if (start) start.disabled = running || !secure;
+  if (stop) stop.disabled = !running || !secure;
+  for (const id of ['liveMic','liveDevice','liveLang']) {
+    const el = document.getElementById(id);
+    if (el) el.disabled = running || !secure;
+  }
+}
+function initLiveControls(){
+  // Over LAN / Tailscale plain HTTP there is no secure context: browser audio
+  // capture is impossible, so disable the controls and explain why up front.
+  if (!window.isSecureContext) {
+    setLiveStatus('Live capture needs localhost');
+    const h = document.getElementById('liveHelp');
+    if (h) h.textContent = 'Live capture is disabled: browser audio capture needs a secure context. Open this page on localhost (127.0.0.1). No TLS is configured.';
+  }
+  setLiveButtons(false);
+}
+function resetLiveLinks(){
+  for (const id of ['liveLinkMic','liveLinkDevice']) {
+    const a = document.getElementById(id);
+    if (a) { a.style.display = 'none'; a.removeAttribute('href'); }
+  }
+  for (const id of ['liveTailMic','liveTailDevice']) {
+    const t = document.getElementById(id);
+    if (t) t.textContent = '…';
+  }
+}
+function enableLiveLinks(descriptors){
+  const map = {mic: 'liveLinkMic', device: 'liveLinkDevice'};
+  for (const source of Object.keys(map)) {
+    const a = document.getElementById(map[source]);
+    const d = descriptors && descriptors[source];
+    if (!a) continue;
+    if (d && d.url) {
+      a.href = d.url;
+      a.style.display = 'inline';
+      a.textContent = 'Open ' + (source === 'mic' ? 'microphone' : 'device') +
+        ' transcript (' + (d.name || 'file') + ')';
+    }
+  }
+}
+function fmtLiveTime(ms){
+  const s = Math.max(0, Math.floor((ms || 0) / 1000));
+  return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+}
+function pcmToBase64(samples){
+  const bytes = new Uint8Array(samples.buffer, samples.byteOffset, samples.byteLength);
+  let binary = '';
+  const step = 0x8000;
+  for (let i = 0; i < bytes.length; i += step) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + step));
+  }
+  return btoa(binary);
+}
+
+// Incremental linear resampler: float frames at ctx.sampleRate -> 16 kHz int16.
+// st.buf holds unconsumed input samples and st.pos is the fractional read index.
+function feedFloat(st, input){
+  if (st.stopped || !input || !input.length) return;
+  const ratio = st.inRate / 16000;
+  for (let i = 0; i < input.length; i++) st.buf.push(input[i]);
+  let pos = st.pos;
+  while (true) {
+    const i0 = Math.floor(pos), i1 = i0 + 1;
+    if (i1 >= st.buf.length) break;       // need one following sample to interpolate
+    let v = st.buf[i0] + (st.buf[i1] - st.buf[i0]) * (pos - i0);
+    if (v > 1) v = 1; else if (v < -1) v = -1;
+    st.pcm.push(v < 0 ? Math.round(v * 0x8000) : Math.round(v * 0x7FFF));
+    pos += ratio;
+  }
+  const consumed = Math.floor(pos);
+  if (consumed > 0) { st.buf = st.buf.slice(consumed); pos -= consumed; }
+  st.pos = pos;
+}
+
+function cutLiveChunk(st){
+  if (!st.pcm.length) return;
+  const samples = new Int16Array(st.pcm);
+  st.pcm = [];
+  enqueueLiveChunk(st, {samples: samples, elapsedMs: Date.now() - st.startTime});
+}
+function enqueueLiveChunk(st, chunk){
+  st.queue.push(chunk);
+  while (st.queue.length > LIVE_MAX_QUEUE) {
+    const dropped = st.queue.shift();
+    st.state.loss = true;
+    log('live: ' + st.source + ' queue full, dropped oldest unprocessed ' +
+        (dropped.samples.length / 16000).toFixed(1) + ' s chunk');
+    setLiveStatus('Live: busy, dropped an old ' + st.source + ' chunk (see log).');
+  }
+  pumpLive(st);
+}
+function pumpLive(st){
+  if (st.finishSent) return;
+  if (!st.ws || st.ws.readyState !== WebSocket.OPEN) return;
+  while (st.inFlight < LIVE_MAX_INFLIGHT && st.queue.length) {
+    sendLiveCommit(st, st.queue.shift());
+  }
+}
+function sendLiveCommit(st, chunk){
+  try {
+    const appendMsg = JSON.stringify({type: 'input_audio_buffer.append',
+                                      audio: pcmToBase64(chunk.samples)});
+    const commitMsg = JSON.stringify({type: 'input_audio_buffer.commit'});
+    st.ws.send(appendMsg);
+    st.ws.send(commitMsg);
+    st.inFlight++;
+    st.awaitingCommitted.push(chunk.elapsedMs);
+  } catch (e) {
+    log('live: ' + st.source + ' commit send failed: ' + e);
+  }
+}
+function handleLiveMessage(st, ev){
+  let msg;
+  try { msg = JSON.parse(ev.data); } catch (e) { return; }
+  const t = msg.type || '';
+  if (t === 'input_audio_buffer.committed') {
+    const elapsed = st.awaitingCommitted.length
+      ? st.awaitingCommitted.shift() : (Date.now() - st.startTime);
+    st.itemElapsed[msg.item_id] = elapsed;
+  } else if (t === 'conversation.item.input_audio_transcription.completed') {
+    onLiveCompleted(st, msg);
+  } else if (t === 'conversation.item.input_audio_transcription.failed') {
+    onLiveFailed(st, msg);
+  } else if (t === 'session.finished') {
+    // The server acknowledged Stop; the socket closes next.
+  } else if (t === 'error') {
+    log('live: ' + st.source + ' server error: ' + JSON.stringify(msg.error || {}));
+  }
+}
+function onLiveCompleted(st, msg){
+  st.inFlight = Math.max(0, st.inFlight - 1);
+  const elapsed = st.itemElapsed[msg.item_id];
+  delete st.itemElapsed[msg.item_id];
+  const at = elapsed == null ? (Date.now() - st.startTime) : elapsed;
+  const text = msg.transcript || '';
+  const p = appendLive(st.sid, st.source, text, msg.item_id, at);
+  st.appends.add(p);
+  p.then(() => { st.appends.delete(p); });
+  if (text.trim()) {
+    const tail = document.getElementById(st.source === 'mic' ? 'liveTailMic' : 'liveTailDevice');
+    if (tail) tail.textContent = '[' + fmtLiveTime(at) + '] ' + text.trim().slice(-200);
+  }
+  pumpLive(st);   // a slot just freed; send any queued chunk
+}
+function onLiveFailed(st, msg){
+  st.inFlight = Math.max(0, st.inFlight - 1);
+  const err = (msg.error && msg.error.message) || 'unknown error';
+  log('live: ' + st.source + ' transcription failed: ' + err);
+  pumpLive(st);
+}
+function appendLive(sid, source, text, itemId, elapsedMs){
+  return fetch('/v1/live/sessions/' + encodeURIComponent(sid) + '/append', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      source: source,
+      text: text,
+      item_id: itemId || '',
+      elapsed_ms: Math.max(0, Math.round(elapsedMs || 0)),
+    })
+  }).then(function(r){
+    if (!r.ok) log('live: append ' + source + ' failed: HTTP ' + r.status);
+    return r;
+  }).catch(function(e){ log('live: append ' + source + ' error: ' + e); });
+}
+
+async function setupLiveAudio(st, srcNode, ctx){
+  // A silent gain keeps the processing graph pulled (so the worklet/processor
+  // runs) without playing the captured audio back to the speakers.
+  const silent = ctx.createGain();
+  silent.gain.value = 0;
+  silent.connect(ctx.destination);
+  try {
+    if (ctx.audioWorklet) {
+      const url = URL.createObjectURL(
+        new Blob([LIVE_WORKLET_SOURCE], {type: 'application/javascript'}));
+      try { await ctx.audioWorklet.addModule(url); }
+      finally { URL.revokeObjectURL(url); }
+      const node = new AudioWorkletNode(ctx, 'live-pcm-processor');
+      node.port.onmessage = function(ev){ feedFloat(st, ev.data); };
+      srcNode.connect(node);
+      node.connect(silent);
+      st.node = node;
+      return;
+    }
+  } catch (e) {
+    log('live: AudioWorklet unavailable, falling back to ScriptProcessor: ' + e);
+  }
+  // Fallback for browsers without AudioWorklet.
+  const proc = ctx.createScriptProcessor(4096, 1, 1);
+  proc.onaudioprocess = function(ev){ feedFloat(st, ev.inputBuffer.getChannelData(0)); };
+  srcNode.connect(proc);
+  proc.connect(silent);
+  st.node = proc;
+}
+function stopLiveAudio(st){
+  st.stopped = true;
+  try {
+    if (st.node) {
+      st.node.disconnect();
+      if (st.node.port) st.node.port.onmessage = null;
+      if ('onaudioprocess' in st.node) st.node.onaudioprocess = null;
+    }
+  } catch(e){}
+  try { if (st.srcNode) st.srcNode.disconnect(); } catch(e){}
+  try { if (st.stream) st.stream.getTracks().forEach(function(t){ t.stop(); }); } catch(e){}
+  try { if (st.ctx && st.ctx.state !== 'closed') st.ctx.close(); } catch(e){}
+}
+function teardownLiveSource(st){
+  try { if (st.timer) clearInterval(st.timer); } catch(e){}
+  try { if (st.ws) { st.ws.onclose = null; st.ws.close(); } } catch(e){}
+}
+function liveSleep(ms){ return new Promise(function(r){ setTimeout(r, ms); }); }
+
+// Stop helper: drain queued chunks, send session.finish (all commits were sent
+// before it, so the server replies to them before closing), then wait boundedly
+// for every in-flight completion and append POST. Returns false on timeout.
+async function drainLive(state){
+  const deadline = Date.now() + LIVE_DRAIN_MS;
+  const sources = Object.values(state.sources);
+  // Phase A: keep queued chunks moving as completions free in-flight slots.
+  while (Date.now() < deadline) {
+    let queued = 0;
+    for (const st of sources) { pumpLive(st); queued += st.queue.length; }
+    if (queued === 0) break;
+    await liveSleep(50);
+  }
+  if (sources.some(function(st){ return st.queue.length > 0; })) state.loss = true;
+  // Phase B: finish, then wait for pending completions and append POSTs.
+  for (const st of sources) {
+    st.finishSent = true;
+    try {
+      if (st.ws && st.ws.readyState === WebSocket.OPEN)
+        st.ws.send(JSON.stringify({type: 'session.finish'}));
+    } catch(e){ log('live: finish send failed: ' + e); }
+  }
+  while (Date.now() < deadline) {
+    const pending = sources.reduce(
+      function(n, st){ return n + st.inFlight + st.appends.size; }, 0);
+    if (pending === 0) return !state.loss;
+    await liveSleep(50);
+  }
+  state.loss = true;
+  log('live: drain timed out; some transcripts may be missing');
+  return false;
+}
+
+async function startLiveSource(state, source, lang){
+  let stream;
+  try {
+    if (source === 'mic') {
+      stream = await navigator.mediaDevices.getUserMedia({audio: true});
+    } else {
+      stream = await navigator.mediaDevices.getDisplayMedia({video: true, audio: true});
+      // Only the audio track is needed; stop the shared video immediately.
+      stream.getVideoTracks().forEach(function(t){ t.stop(); });
+      if (stream.getAudioTracks().length === 0) {
+        stream.getTracks().forEach(function(t){ t.stop(); });
+        setLiveStatus('Device audio: no tab audio was shared (the shared tab/screen had no audio track).');
+        log('live: device source returned no audio track');
+        return;   // per-source error; the other source keeps running
+      }
+    }
+  } catch (e) {
+    setLiveStatus(source + ' capture failed: ' + (e && e.name ? e.name : e));
+    log('live: ' + source + ' capture failed: ' + e);
+    return;
+  }
+  stream.getAudioTracks().forEach(function(t){
+    t.addEventListener('ended', function(){ log('live: ' + source + ' audio track ended'); });
+  });
+  let ctx;
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    ctx = new Ctx();
+    await ctx.resume();
+  } catch (e) {
+    stream.getTracks().forEach(function(t){ t.stop(); });
+    setLiveStatus(source + ' audio context failed: ' + e);
+    log('live: ' + source + ' AudioContext failed: ' + e);
+    return;
+  }
+  const srcNode = ctx.createMediaStreamSource(stream);
+  const st = {
+    state: state, source: source, sid: state.sid,
+    stream: stream, ctx: ctx, srcNode: srcNode, node: null, ws: null, timer: null,
+    inRate: ctx.sampleRate, buf: [], pos: 0, pcm: [],
+    queue: [], inFlight: 0, awaitingCommitted: [], itemElapsed: {}, appends: new Set(),
+    startTime: state.startTime, stopped: false, finishSent: false,
+  };
+  const wsUrl = (location.protocol === 'https:' ? 'wss://' : 'ws://') +
+    location.host + '/v1/realtime';
+  const ws = new WebSocket(wsUrl);
+  st.ws = ws;
+  state.sources[source] = st;
+  ws.onopen = function(){
+    ws.send(JSON.stringify({type: 'session.update', session: {
+      type: 'transcription',
+      audio: {input: {
+        format: {type: 'audio/pcm', rate: 16000},
+        transcription: {model: LIVE_MODEL, language: lang || undefined},
+        turn_detection: null,
+      }},
+    }}));
+    pumpLive(st);   // send any chunks buffered while the socket was opening
+  };
+  ws.onmessage = function(ev){ handleLiveMessage(st, ev); };
+  ws.onerror = function(){ log('live: ' + source + ' WebSocket error'); };
+  ws.onclose = function(){
+    if (!state.stopping) log('live: ' + source + ' WebSocket closed unexpectedly');
+  };
+  await setupLiveAudio(st, srcNode, ctx);
+  st.timer = setInterval(function(){ cutLiveChunk(st); }, LIVE_COMMIT_MS);
+}
+
+async function startLive(){
+  if (!window.isSecureContext) { setLiveStatus('Live capture needs localhost'); return; }
+  if (LIVE || LIVE_STARTING) { setLiveStatus('A live session is already starting or running.'); return; }
+  const mic = document.getElementById('liveMic').checked;
+  const dev = document.getElementById('liveDevice').checked;
+  if (!mic && !dev) { setLiveStatus('Select at least one live source.'); return; }
+  const lang = document.getElementById('liveLang').value;
+
+  // Claim the session synchronously, before the first await (the create POST),
+  // and disable Start. A second click during the fetch or permission prompts
+  // must not open a second session whose capture, socket and 5 s timer would
+  // be orphaned (no handle left to stop them).
+  LIVE_STARTING = true;
+  const startBtn = document.getElementById('btnLiveStart');
+  if (startBtn) startBtn.disabled = true;
+  setLiveStatus('Starting live session…');
+  resetLiveLinks();
+
+  let session;
+  try {
+    const r = await fetch('/v1/live/sessions', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({language: lang, model: LIVE_MODEL, label: 'webui'}),
+    });
+    if (!r.ok) { throw new Error('HTTP ' + r.status); }
+    session = await r.json();
+  } catch (e) {
+    // Fetch/parse failure: release the claim and restore the controls so the
+    // user can retry. No session was created, so there is nothing to close.
+    LIVE_STARTING = false;
+    setLiveButtons(false);
+    setLiveStatus('Could not start: ' + (e && e.message ? e.message : e));
+    return;
+  }
+
+  const state = {
+    sid: session.id, startTime: Date.now(), descriptors: session.descriptors || {},
+    sources: {}, stopping: false, loss: false,
+  };
+  LIVE = state;
+  LIVE_STARTING = false;
+  setLiveButtons(true);
+  const wanted = [];
+  if (mic) wanted.push('mic');
+  if (dev) wanted.push('device');
+  for (const source of wanted) {
+    await startLiveSource(state, source, lang);
+  }
+  const active = Object.keys(state.sources);
+  if (!active.length) {
+    // No capture source started (permission denied / no audio track). stopLive
+    // clears LIVE and restores buttons, so the user can retry.
+    setLiveStatus('No live source could start; closing the session.');
+    await stopLive();
+    return;
+  }
+  setLiveStatus('Live: ' + active.join(' + ') + ' capturing (commit every 5 s).');
+  log('live: session ' + state.sid + ' started with ' + active.join(', '));
+}
+
+async function stopLive(){
+  const state = LIVE;
+  if (!state) { setLiveStatus('No live session is running.'); return; }
+  if (state.stopping) return;
+  state.stopping = true;
+  setLiveStatus('Stopping live capture…');
+  // 1. Freeze capture: stop the commit timer, ignore further audio samples and
+  //    flush the final partial (< 5 s) chunk so the last utterance is kept.
+  for (const st of Object.values(state.sources)) {
+    clearInterval(st.timer);
+    st.stopped = true;
+    cutLiveChunk(st);
+  }
+  // 2. Drain queued chunks, send session.finish and wait (bounded) for the
+  //    in-flight completions / append POSTs before the files are closed.
+  const drained = await drainLive(state);
+  // 3. Close the session on the server and enable the two file links.
+  let closed = false, descriptors = state.descriptors;
+  try {
+    const r = await fetch('/v1/live/sessions/' + encodeURIComponent(state.sid) + '/close',
+                          {method: 'POST'});
+    closed = r.ok;
+    if (r.ok) { const j = await r.json(); descriptors = j.descriptors || descriptors; }
+    else log('live: close HTTP ' + r.status);
+  } catch (e) { log('live: close error: ' + e); }
+  enableLiveLinks(descriptors);
+  // 4. Stop streams, close audio contexts and sockets.
+  for (const st of Object.values(state.sources)) { stopLiveAudio(st); teardownLiveSource(st); }
+  LIVE = null;
+  setLiveButtons(false);
+  if (!drained || state.loss) {
+    setLiveStatus('Stopped with warnings: some audio may not have been transcribed (see log).');
+  } else {
+    setLiveStatus(closed ? 'Stopped. Transcripts saved.' : 'Stopped (close failed).');
+  }
+}
+
 async function generateCap(){
   const btn = document.getElementById('btnCap');
   const f = document.getElementById('capimg').files[0];
@@ -1390,6 +1869,7 @@ async function testLlm(){
 }
 
 refresh();
+initLiveControls();
 try {
   for (const id of ['model','prompt','prompt2','prompt3','size','size2','quality','quality2']) {
     const el = document.getElementById(id);

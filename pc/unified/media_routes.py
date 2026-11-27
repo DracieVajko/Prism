@@ -2493,6 +2493,95 @@ def cancel_job(rid: str):
     return {"id": rid, "state": "cancelling", "cancelled": True}
 
 
+# ---------- live transcription sessions ----------
+
+# Imported here, next to the routes that use them.
+from unified.live_session import (  # noqa: E402
+    SOURCES, BadSource, SessionClosed, UnknownSession,
+)
+
+
+class LiveSessionCreate(BaseModel):
+    language: str = ""
+    model: str = "turbo"
+    label: str = ""
+
+
+class LiveAppend(BaseModel):
+    source: str
+    text: str = ""
+    item_id: str = ""
+    elapsed_ms: int = 0
+
+
+_LIVE_STORE = None
+
+
+def get_live_store():
+    """Return the process-wide live session store.
+
+    The store is rebound whenever the server's OUTPUT_DIR changes, so it never
+    writes transcript files to a stale location (and tests that monkeypatch
+    OUTPUT_DIR stay independent of each other).
+    """
+    global _LIVE_STORE
+    from unified.live_session import LiveSessionStore
+    output_dir = Path(_us().OUTPUT_DIR)
+    if _LIVE_STORE is None or Path(_LIVE_STORE.output_dir) != output_dir:
+        _LIVE_STORE = LiveSessionStore(output_dir)
+    return _LIVE_STORE
+
+
+def _live_error(exc: Exception):
+    """Map live-session exceptions to ``{"error", "detail"}`` HTTP responses."""
+    if isinstance(exc, UnknownSession):
+        status, code = 404, "unknown session"
+    elif isinstance(exc, BadSource):
+        status, code = 400, "bad source"
+    elif isinstance(exc, SessionClosed):
+        status, code = 409, "session closed"
+    else:
+        raise exc
+    return JSONResponse(status_code=status,
+                        content={"error": code, "detail": str(exc)})
+
+
+@router.post("/v1/live/sessions")
+def live_session_create(body: LiveSessionCreate):
+    return get_live_store().create(
+        language=body.language, model=body.model, label=body.label)
+
+
+@router.post("/v1/live/sessions/{sid}/append")
+def live_session_append(sid: str, body: LiveAppend):
+    try:
+        return get_live_store().append(
+            sid, body.source, body.text, body.item_id, body.elapsed_ms)
+    except (UnknownSession, BadSource, SessionClosed) as e:
+        return _live_error(e)
+
+
+@router.post("/v1/live/sessions/{sid}/close")
+def live_session_close(sid: str):
+    try:
+        result = get_live_store().close(sid)
+    except (UnknownSession, BadSource, SessionClosed) as e:
+        return _live_error(e)
+    # create()/status() expose descriptors under "descriptors", but the store's
+    # close() still returns them at top level. Normalise for the API so
+    # descriptors also appear under "descriptors" (the flat keys are kept too).
+    result["descriptors"] = {source: result[source] for source in SOURCES}
+    return result
+
+
+@router.get("/v1/live/sessions/{sid}")
+def live_session_status(sid: str):
+    try:
+        return get_live_store().status(sid)
+    except (UnknownSession, BadSource, SessionClosed) as e:
+        return _live_error(e)
+
+
 # ---------- outputs ----------
 
 MAX_OUTPUT_REL_BYTES = 1024
