@@ -9,29 +9,38 @@
   color-scheme: dark;
   --bg: #0d1117; --panel: #161b22; --panel2: #21262d; --input: #0d1117;
   --text: #e6edf3; --muted: #8b949e; --border: #30363d; --border2: #3d444d;
+  --accent: #2f81f7; --ok: #7ee787; --warn: #d29922; --danger: #ff7b72;
+  --skeleton: #21262d;
 }
 :root.light {
   color-scheme: light;
   --bg: #f6f8fa; --panel: #ffffff; --panel2: #eaeef2; --input: #ffffff;
   --text: #1f2328; --muted: #57606a; --border: #d0d7de; --border2: #d0d7de;
+  --accent: #0969da; --ok: #1a7f37; --warn: #9a6700; --danger: #cf222e;
+  --skeleton: #eaeef2;
 }
 body { font-family: system-ui, Segoe UI, Arial, sans-serif; background: var(--bg); color: var(--text); margin: 0; }
 header { padding: 12px 16px; background: var(--panel); border-bottom: 1px solid var(--border); display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
 header h1 { font-size: 18px; margin: 0; }
-#status { font-size: 13px; color: var(--muted); }
-#status b.ok { color: #7ee787; } #status b.bad { color: #ff7b72; }
-main { display: grid; grid-template-columns: 400px 1fr; gap: 16px; padding: 16px; }
+#status { font-size: 13px; color: var(--muted); line-height: 1.5; }
+#status b.ok { color: var(--ok); } #status b.bad { color: var(--danger); }
+main { display: grid; grid-template-columns: minmax(420px, 560px) minmax(0, 1fr); gap: 16px; padding: 16px; align-items: start; }
+@media (max-width: 1024px) { main { grid-template-columns: minmax(360px, 480px) minmax(0, 1fr); } }
 @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+/* One icon family: 24-unit grid, 1.75 stroke, no fill, currentColor. */
+.ico { width: 14px; height: 14px; flex: 0 0 auto; vertical-align: -2px; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+button.ico-btn, a.ico-btn { display: inline-flex; align-items: center; gap: 6px; }
 .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 14px; }
 .tabs { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
 .tabs button { flex: 1; min-width: 70px; padding: 8px 4px; font-size: 12px; border-radius: 6px; border: 1px solid var(--border2); background: var(--panel2); color: var(--text); cursor: pointer; }
-.tabs button.active { background: #2f81f7; border-color: #2f81f7; }
+.tabs button.active { background: var(--panel2); color: var(--text); border-color: var(--accent); border-bottom: 3px solid var(--accent); font-weight: 600; }
 button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid #2f81f7; outline-offset: 2px; }
 label { display: block; font-size: 13px; margin: 10px 0 4px; color: var(--muted); }
 input[type=text], input[type=number], textarea, select { width: 100%; box-sizing: border-box; background: var(--input); color: var(--text); border: 1px solid var(--border2); border-radius: 6px; padding: 8px; }
 select option { background: var(--panel); color: var(--text); }
 textarea { min-height: 70px; resize: vertical; }
 .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-start; } .row > div { flex: 1; min-width: 120px; }
+.row-between { display: flex; gap: 8px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
 .modelrow { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; max-width: 100%; }
 .modelrow select { flex: 1; min-width: 0; }
 button.dl { padding: 8px 10px; font-size: 12px; border-radius: 6px; border: 1px solid var(--border2); background: #1f6feb; color: #fff; cursor: pointer; white-space: nowrap; transition: background .15s, transform .1s; }
@@ -49,6 +58,21 @@ figcaption a { color: #2f81f7; }
 img.preview { max-width: 100%; border-radius: 6px; border: 1px solid var(--border2); margin-top: 6px; }
 canvas#maskpad { width: 100%; border-radius: 6px; border: 1px solid var(--border2); cursor: crosshair; touch-action: none; }
 #txtout { font-size: 14px; background: var(--input); border: 1px solid var(--border); border-radius: 6px; padding: 10px; margin-top: 10px; white-space: pre-wrap; min-height: 40px; }
+/* State primitives: shape and text carry meaning, not colour alone. */
+.console-panel { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+.console-panel #log { flex: 1; min-height: 160px; }
+.empty { font-size: 12px; color: var(--muted); border: 1px dashed var(--border2); border-radius: 6px; padding: 14px; text-align: center; }
+.skeleton { background: var(--skeleton); color: var(--muted); border-radius: 4px; animation: pulse 1.4s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .55; } }
+.state { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; text-transform: uppercase; letter-spacing: .04em; padding: 2px 7px; border: 1px solid var(--border2); border-radius: 4px; }
+.state[data-state="running"] { color: var(--ok); }
+.state[data-state="starting"] { color: var(--warn); }
+.state[data-state="error"] { color: var(--danger); }
+.state[data-state="idle"] { color: var(--muted); }
+button:disabled, a[aria-disabled="true"] { cursor: not-allowed; opacity: .5; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
 
 @media (max-width: 520px) {
   .tabs button { font-size: 10px; min-width: 56px; padding: 7px 2px; }
@@ -60,9 +84,9 @@ canvas#maskpad { width: 100%; border-radius: 6px; border: 1px solid var(--border
 <body>
 <header>
 <h1>Lenswright</h1>
-<span id="status">connecting…</span>
-<button onclick="refresh()" style="margin-left:auto;padding:6px 12px;border-radius:6px;border:1px solid var(--border2);background:var(--panel2);color:#fff;cursor:pointer">Refresh</button>
-<button id="themeBtn" onclick="toggleTheme()" style="margin-left:auto;padding:6px 12px;border-radius:6px;border:1px solid var(--border2);background:var(--panel2);color:var(--text);cursor:pointer">Light</button>
+<span id="status" class="skeleton" role="status" aria-live="polite">Connecting to server…</span>
+<button class="ico-btn" onclick="refresh()" title="Reload server status and models" style="margin-left:auto;padding:6px 12px;border-radius:6px;border:1px solid var(--border2);background:var(--panel2);color:var(--text);cursor:pointer"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg>Refresh</button>
+<button id="themeBtn" class="ico-btn" onclick="toggleTheme()" title="Switch colour theme" style="padding:6px 12px;border-radius:6px;border:1px solid var(--border2);background:var(--panel2);color:var(--text);cursor:pointer"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>Light</button>
 </header>
 <main>
 <div class="panel">
@@ -83,7 +107,7 @@ canvas#maskpad { width: 100%; border-radius: 6px; border: 1px solid var(--border
 <div id="imagemodelwrap">
 <label>Image model</label>
 <div class="modelrow">
-<select id="model" onchange="try{localStorage.setItem('u_model',this.value)}catch(e){}; syncDownloads()"><option value="">(loading…)</option></select>
+<select id="model" aria-label="Image model" onchange="try{localStorage.setItem('u_model',this.value)}catch(e){}; syncDownloads()"><option value="">Loading models…</option></select>
 <button class="dl" id="dlImage" onclick="downloadSelected('image')" style="display:none">Download</button>
 </div>
 <div class="hint" id="dlImageHint"></div>
@@ -104,7 +128,7 @@ canvas#maskpad { width: 100%; border-radius: 6px; border: 1px solid var(--border
 <input type="number" id="guidance" value="1.0" min="1" max="3" step="0.1" style="width:100%">
 <label>Repeats (number of images, 1-4)</label>
 <input type="number" id="repeats" value="1" min="1" max="4" step="1" style="width:100%">
-<button class="go" id="btnTxt" onclick="generateTxt()">Generate</button>
+<button class="go ico-btn" id="btnTxt" onclick="generateTxt()" style="justify-content:center"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/><circle cx="12" cy="12" r="3.5"/></svg>Generate</button>
 </div>
 
 <div id="formImg" style="display:none">
@@ -197,11 +221,11 @@ canvas#maskpad { width: 100%; border-radius: 6px; border: 1px solid var(--border
 <div><label>Post-process (Gemma4 E2B, loads on first use)</label><select id="trpp"><option value="" selected>none</option><option value="cleanup">cleanup (fix spelling/punctuation)</option><option value="translate">translate</option><option value="summarize">summarize</option><option value="rewrite">rewrite</option></select></div>
 <div><label>Post-process target language</label><select id="trpplang"><option value="sk" selected>sk</option><option value="cs">cs</option><option value="en">en</option><option value="de">de</option><option value="pl">pl</option><option value="uk">uk</option><option value="hu">hu</option></select></div>
 </div>
-<button class="go" id="btnTr" onclick="generateTr()">Transcribe</button>
+<button class="go ico-btn" id="btnTr" onclick="generateTr()" style="justify-content:center"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>Transcribe</button>
 <div class="hint" id="trjob"><span id="trjobText"></span> <a href="#" id="trstop" style="display:none;color:#ff7b72" onclick="cancelJob();return false">stop</a></div>
 
 <hr style="border:0;border-top:1px solid var(--border2);margin:16px 0 8px">
-<label style="font-size:14px;font-weight:600;color:var(--text)">Live transcription (localhost only)</label>
+<div class="row-between"><label style="font-size:14px;font-weight:600;color:var(--text);margin:0">Live transcription (localhost only)</label><span id="liveState" class="state" data-state="idle" role="status" aria-live="polite">Idle</span></div>
 <div class="hint" id="liveHelp">Captures microphone and shared-tab audio continuously and writes two text files. Browser audio capture needs a secure context, so this works only when the page is opened on localhost; no TLS is configured and no audio is ever saved.</div>
 <div class="row">
 <div><label><input type="checkbox" id="liveMic" checked> Microphone</label></div>
@@ -209,10 +233,11 @@ canvas#maskpad { width: 100%; border-radius: 6px; border: 1px solid var(--border
 <div><label>Language (empty = auto)</label><select id="liveLang"><option value="">auto</option><option value="sk">sk</option><option value="cs">cs</option><option value="en">en</option></select></div>
 </div>
 <div class="row" style="margin-top:8px">
-<button class="go" id="btnLiveStart" onclick="startLive()" style="margin-top:0">Start live</button>
-<button class="go" id="btnLiveStop" onclick="stopLive()" style="margin-top:0;background:#b62324" disabled>Stop live</button>
+<button class="go ico-btn" id="btnLiveStart" onclick="startLive()" style="margin-top:0;justify-content:center"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>Start live</button>
+<button class="go ico-btn" id="btnLiveStop" onclick="stopLive()" style="margin-top:0;background:var(--danger);justify-content:center" disabled><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>Stop live</button>
 </div>
-<div class="hint" id="liveStatus" role="status" aria-live="polite">Idle.</div>
+<div class="hint" id="liveStatus" role="status" aria-live="polite">Idle. Select a source, then start live capture.</div>
+<div class="hint" id="liveSkip" role="status">Skipped sources: none.</div>
 <div class="row">
 <div><label>Microphone tail</label><div id="liveTailMic" class="hint" style="min-height:18px">…</div></div>
 <div><label>Device tail</label><div id="liveTailDevice" class="hint" style="min-height:18px">…</div></div>
@@ -270,9 +295,9 @@ canvas#maskpad { width: 100%; border-radius: 6px; border: 1px solid var(--border
 <label>Output folder (every job writes its result here)</label>
 <div class="modelrow">
 <input id="outputsDir" type="text" readonly style="flex:1" value="…">
-<button class="dl" onclick="openOutputsFolder()">Open folder</button>
-<button class="dl" style="background:#30363d" onclick="loadOutputs()">Refresh</button>
-<button class="dl" style="background:#da3633" onclick="cleanupOutputs()">Cleanup all</button>
+<button class="dl ico-btn" onclick="openOutputsFolder()"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h6l2 2h10v9H3z"/></svg>Open folder</button>
+<button class="dl ico-btn" style="background:var(--panel2);color:var(--text)" onclick="loadOutputs()"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg>Refresh</button>
+<button class="dl ico-btn" style="background:var(--danger)" onclick="cleanupOutputs()"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>Delete all</button>
 </div>
 <div class="hint" id="outputsHint"></div>
 <div id="outputsList"></div>
@@ -299,7 +324,7 @@ canvas#maskpad { width: 100%; border-radius: 6px; border: 1px solid var(--border
 
 <div id="formSettings" style="display:none">
 <label>Server</label>
-<div id="settingsBox" style="font-size:12px;background:var(--input);border:1px solid var(--border);border-radius:6px;padding:10px;white-space:pre-wrap">loading…</div>
+<div id="settingsBox" class="skeleton" style="font-size:12px;background:var(--input);border:1px solid var(--border);border-radius:6px;padding:10px;white-space:pre-wrap">Loading server settings…</div>
 
 <label style="margin-top:14px">HuggingFace token</label>
 <input id="hfToken" type="password" placeholder="hf_..." autocomplete="off">
@@ -335,16 +360,19 @@ canvas#maskpad { width: 100%; border-radius: 6px; border: 1px solid var(--border
 <div style="font-size:11px;color:#7d8590;margin-top:8px">Stored locally in <code>pc/settings.local.json</code> (git-ignored). Secrets are never returned by the API.</div>
 </div>
 
-<div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px">
-<span style="font-size:11px;color:#7d8590;font-weight:bold">CONSOLE</span>
-<span>
-<a href="#" onclick="copyLog();return false" style="color:#58a6ff;font-size:11px;margin-right:12px">copy</a>
-<a href="#" onclick="clearLog();return false" style="color:#58a6ff;font-size:11px">clear</a>
-</span>
-</div>
-<div id="log"></div>
 </div>
 <div>
+<div class="panel console-panel">
+<div class="row-between" style="margin-bottom:8px">
+<span style="font-size:11px;color:var(--muted);font-weight:bold">CONSOLE</span>
+<span>
+<a class="ico-btn" href="#" onclick="copyLog();return false" style="color:var(--accent);font-size:11px;margin-right:12px"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5h10"/></svg>copy</a>
+<a class="ico-btn" href="#" onclick="clearLog();return false" style="color:var(--accent);font-size:11px"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>clear</a>
+</span>
+</div>
+<div id="log" role="log" aria-live="polite">No activity yet. Actions and their results appear here.</div>
+</div>
+<div id="galleryEmpty" class="empty">No outputs yet. Generate an image or run a job to see results here.</div>
 <div id="gallery"></div>
 </div>
 </main>
@@ -365,9 +393,18 @@ function toggleTheme(){
     }
   } catch(e){}
 })();
-function log(m){ const el=document.getElementById('log'); el.textContent = new Date().toLocaleTimeString()+' '+m+'\n'+el.textContent; }
-function copyLog(){ const t=document.getElementById('log').textContent||''; navigator.clipboard.writeText(t); }
-function clearLog(){ document.getElementById('log').textContent=''; }
+const LOG_EMPTY = 'No activity yet. Actions and their results appear here.';
+function log(m){
+  const el=document.getElementById('log');
+  const line = new Date().toLocaleTimeString()+' '+m;
+  el.textContent = el.textContent === LOG_EMPTY ? line : line+'\n'+el.textContent;
+}
+async function copyLog(){
+  const t=document.getElementById('log').textContent||'';
+  try { await navigator.clipboard.writeText(t); log('console copied to clipboard'); }
+  catch(e){ log('clipboard unavailable: '+e+' — select the console text and copy manually'); }
+}
+function clearLog(){ document.getElementById('log').textContent = LOG_EMPTY; }
 async function cancelModel(id){ try { await fetch('/v1/models/cancel',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})}); log('stop requested: '+id); setTimeout(loadCatalog, 800); } catch(e){ log('cancel error: '+e); } }
 function saveTranscript(){ const t=document.getElementById('txtout').textContent||''; const blob=new Blob([t],{type:'text/plain'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='transcript_'+Date.now()+'.txt'; a.click(); }
 const TABS = ['txt','img','paint','up','tr','cap','tools','outputs','models','settings'];
@@ -530,10 +567,21 @@ async function refresh(){
     const w = document.getElementById('warn');
     if (miss.length && !localStorage.getItem('hideMissing')) { w.style.display='block'; w.innerHTML = 'Missing model files: '+esc(miss.join(', '))+' <button onclick="localStorage.setItem(\'hideMissing\',\'1\');document.getElementById(\'warn\').style.display=\'none\'" style="background:none;border:none;color:#79c0ff;cursor:pointer;font-size:11px">hide</button>'; }
     else { w.style.display='none'; }
-    st.innerHTML = 'server <b class="ok">OK</b> · img models: '+imageModels.length+' · loaded: '+esc(h.current_model||h.model||'none (lazy)')
-      +' · audio: '+esc(h.audio_model||m.default_audio_model||'?')+(h.audio_loaded?' (loaded)':'')
+    const configuredAudio = h.audio_model || m.default_audio_model || '?';
+    const audioEntry = MODELS.find(x => x.id === configuredAudio);
+    const audioState = audioEntry ? (audioEntry.installed ? 'installed' : 'NOT INSTALLED')
+      : 'install state unknown';
+    const audioLoaded = h.audio_loaded ? (h.audio_model || configuredAudio) : 'none';
+    st.innerHTML = 'server <b class="ok">OK</b> · img models: '+imageModels.length
+      +' · image loaded: '+esc(h.current_model||h.model||'none (lazy)')
+      +' · audio configured: '+esc(configuredAudio)+' ('+audioState+')'
+      +' · audio loaded: '+esc(audioLoaded)
       + (h.busy ? ' · <b class="bad">BUSY</b> (queue: '+(h.queue||0)+')' : '');
-  } catch(e){ st.innerHTML = 'server <b class="bad">UNREACHABLE</b> · '+esc(e); }
+    st.classList.remove('skeleton');
+  } catch(e){
+    st.innerHTML = 'server <b class="bad">UNREACHABLE</b> · '+esc(e);
+    st.classList.remove('skeleton');
+  }
 }
 function rid(){ return Math.random().toString(16).slice(2)+Date.now().toString(16); }
 function addCard(src, caption, fname){
@@ -545,6 +593,8 @@ function addCard(src, caption, fname){
   cap.textContent = caption+' ';
   cap.appendChild(a); fig.appendChild(img); fig.appendChild(cap);
   g.prepend(fig);
+  const empty = document.getElementById('galleryEmpty');
+  if (empty) empty.style.display = 'none';
 }
 async function pollProgress(id, btn, label){
   const t0 = Date.now();
@@ -920,9 +970,35 @@ class LivePcmProcessor extends AudioWorkletProcessor {
 registerProcessor('live-pcm-processor', LivePcmProcessor);
 `;
 
+function setLivePhase(phase){
+  const el = document.getElementById('liveState');
+  if (!el) return;
+  el.dataset.state = phase;
+  el.textContent = phase.charAt(0).toUpperCase() + phase.slice(1);
+}
+function setLiveSkip(source, reason){
+  const el = document.getElementById('liveSkip');
+  if (!el) return;
+  const lines = (el.dataset.skip || '').split('|').filter(Boolean);
+  const line = (source === 'mic' ? 'Microphone' : 'Shared tab audio') + ': ' + reason;
+  const idx = lines.findIndex(function(x){ return x.indexOf(line.split(':')[0] + ':') === 0; });
+  if (idx >= 0) lines[idx] = line; else lines.push(line);
+  el.dataset.skip = lines.join('|');
+  el.textContent = 'Skipped sources: ' + lines.join(' · ');
+}
+function resetLiveSkip(){
+  const el = document.getElementById('liveSkip');
+  if (el) { el.dataset.skip = ''; el.textContent = 'Skipped sources: none.'; }
+}
 function setLiveStatus(msg){
   const el = document.getElementById('liveStatus');
   if (el) el.textContent = msg;
+  let phase = 'idle';
+  if (/fail|error|denied|could not|no live source|warning|unavailable|needs localhost/i.test(msg)) phase = 'error';
+  else if (/start|creating|connecting/i.test(msg)) phase = 'starting';
+  else if (/captur|live:/i.test(msg)) phase = 'running';
+  else if (/stopp|stopped|idle|select at least/i.test(msg)) phase = 'idle';
+  setLivePhase(phase);
   log('live: ' + msg);
 }
 function setLiveButtons(running){
@@ -1189,12 +1265,14 @@ async function startLiveSource(state, source, lang){
       if (stream.getAudioTracks().length === 0) {
         stream.getTracks().forEach(function(t){ t.stop(); });
         setLiveStatus('Device audio: no tab audio was shared (the shared tab/screen had no audio track).');
+        setLiveSkip('device', 'no tab audio was shared');
         log('live: device source returned no audio track');
         return;   // per-source error; the other source keeps running
       }
     }
   } catch (e) {
     setLiveStatus(source + ' capture failed: ' + (e && e.name ? e.name : e));
+    setLiveSkip(source, (e && e.name ? e.name : String(e)) + ' — permission denied or capture unavailable');
     log('live: ' + source + ' capture failed: ' + e);
     return;
   }
@@ -1209,6 +1287,7 @@ async function startLiveSource(state, source, lang){
   } catch (e) {
     stream.getTracks().forEach(function(t){ t.stop(); });
     setLiveStatus(source + ' audio context failed: ' + e);
+    setLiveSkip(source, 'audio context unavailable');
     log('live: ' + source + ' AudioContext failed: ' + e);
     return;
   }
@@ -1262,6 +1341,7 @@ async function startLive(){
   if (startBtn) startBtn.disabled = true;
   setLiveStatus('Starting live session…');
   resetLiveLinks();
+  resetLiveSkip();
 
   let session;
   try {
@@ -1442,7 +1522,7 @@ async function cleanupOutputs(){
 async function loadOutputs(){
   const box = document.getElementById('outputsList');
   const hint = document.getElementById('outputsHint');
-  box.innerHTML = '<div class="hint">loading…</div>';
+  box.innerHTML = '<div class="skeleton" style="height:36px"></div>';
   try {
     const j = await (await fetch('/v1/outputs?limit=200')).json();
     document.getElementById('outputsDir').value = j.dir || '';
@@ -1799,8 +1879,10 @@ async function loadSettings(){
       + '  ffmpeg: '+(e.ffmpeg||'not found')+'\n'
       + '  ffprobe: '+(e.ffprobe||'not found')+'\n'
       + '  yt-dlp: '+(e.ytdlp||'not installed (pip install yt-dlp)');
+    document.getElementById('settingsBox').classList.remove('skeleton');
   } catch(e){
     document.getElementById('settingsBox').textContent = 'settings error: '+e;
+    document.getElementById('settingsBox').classList.remove('skeleton');
   }
   loadSecrets();
 }
@@ -1868,6 +1950,19 @@ async function testLlm(){
   } catch(e){ if (el) el.textContent = 'test failed: '+e; }
 }
 
+function initTabs(){
+  for (const x of TABS) {
+    const suffix = x[0].toUpperCase()+x.slice(1);
+    const tab = document.getElementById('tab'+suffix);
+    const panel = document.getElementById('form'+suffix);
+    if (tab && panel) {
+      tab.setAttribute('aria-controls', panel.id);
+      panel.setAttribute('role', 'tabpanel');
+      panel.setAttribute('aria-labelledby', tab.id);
+    }
+  }
+}
+initTabs();
 refresh();
 initLiveControls();
 try {

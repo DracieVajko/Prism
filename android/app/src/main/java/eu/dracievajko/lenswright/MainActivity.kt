@@ -788,11 +788,11 @@ class MainActivity : AppCompatActivity() {
         val host = AppConfig.remoteHost.trim()
         val mode = AppConfig.connectionMode
         textRemoteStatus.text = when (mode) {
-            "remote" -> if (host.isBlank()) "Remote mode — no host set"
-                       else "Remote — forwarding to $host"
-            "auto" -> if (host.isBlank()) "Auto mode — no host set (local only)"
-                      else "Auto — local first, then $host"
-            else -> "Local mode — offline, no PC needed"
+            "remote" -> if (host.isBlank()) "Remote mode — no PC URL set, jobs cannot be forwarded"
+                       else "Remote mode — this PC is the server: $host"
+            "auto" -> if (host.isBlank()) "Auto mode — no PC URL set, phone server only"
+                      else "Auto mode — PC server at $host first, then phone fallback"
+            else -> "Local mode — this phone is the server (offline)"
         }
     }
 

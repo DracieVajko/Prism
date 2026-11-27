@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- MaterialComponents theme: required for MaterialCardView/MaterialButton
-         (AppCompat theme crashuje na ThemeEnforcement.checkMaterialTheme). -->
+    <!-- MaterialComponents is required by MaterialCardView and MaterialButton. -->
     <style name="Theme.Odysseus" parent="Theme.MaterialComponents.DayNight.NoActionBar">
-        <item name="colorPrimary">#2F81F7</item>
-        <item name="colorPrimaryVariant">#1F6FEB</item>
-        <item name="colorSecondary">#238636</item>
-        <item name="android:statusBarColor">#0F1114</item>
-        <item name="android:navigationBarColor">#0F1114</item>
-        <item name="android:windowBackground">#0F1114</item>
+        <item name="colorPrimary">@color/lenswright_accent</item>
+        <item name="colorPrimaryVariant">@color/lenswright_accent</item>
+        <item name="colorSecondary">@color/lenswright_green</item>
+        <item name="android:statusBarColor">@color/lenswright_chrome</item>
+        <item name="android:navigationBarColor">@color/lenswright_chrome</item>
+        <item name="android:windowBackground">@color/lenswright_bg</item>
+        <item name="android:colorControlNormal">@color/lenswright_text</item>
     </style>
 </resources>

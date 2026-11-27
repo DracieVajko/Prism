@@ -9,5 +9,7 @@
     <color name="lenswright_accent">#0969DA</color>
     <color name="lenswright_green">#1A7F37</color>
     <color name="lenswright_red">#CF222E</color>
+    <color name="lenswright_warn">#9A6700</color>
+    <color name="lenswright_chrome">#0F1114</color>
     <color name="lenswright_white">#FFFFFF</color>
 </resources>

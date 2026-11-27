@@ -50,7 +50,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="12dp"
                     app:cardBackgroundColor="@color/lenswright_panel"
-                    app:cardCornerRadius="12dp"
+                    app:cardCornerRadius="8dp"
                     app:cardElevation="0dp"
                     app:strokeColor="@color/lenswright_border"
                     app:strokeWidth="1dp">
@@ -93,6 +93,7 @@
                                 android:insetBottom="0dp"
                                 android:text="@string/btn_start"
                                 app:backgroundTint="@color/lenswright_green"
+                                app:icon="@drawable/ic_server"
                                 app:cornerRadius="8dp" />
                         </LinearLayout>
 
@@ -114,7 +115,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="12dp"
                     app:cardBackgroundColor="@color/lenswright_panel"
-                    app:cardCornerRadius="12dp"
+                    app:cardCornerRadius="8dp"
                     app:cardElevation="0dp"
                     app:strokeColor="@color/lenswright_border"
                     app:strokeWidth="1dp">
@@ -148,6 +149,7 @@
                             android:layout_marginTop="10dp"
                             android:text="@string/btn_add_model"
                             android:textSize="12sp"
+                            app:icon="@drawable/ic_download"
                             app:cornerRadius="8dp"
                             app:strokeColor="@color/lenswright_border" />
                     </LinearLayout>
@@ -159,7 +161,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="12dp"
                     app:cardBackgroundColor="@color/lenswright_panel"
-                    app:cardCornerRadius="12dp"
+                    app:cardCornerRadius="8dp"
                     app:cardElevation="0dp"
                     app:strokeColor="@color/lenswright_border"
                     app:strokeWidth="1dp">
@@ -275,7 +277,15 @@
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="4dp"
-                            android:text="Local mode — offline, no PC needed"
+                            android:text="Local mode — this phone is the server (offline)"
+                            android:textColor="@color/lenswright_text"
+                            android:textSize="11sp" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="8dp"
+                            android:text="Server role: Local runs generation and transcription on the phone. Remote forwards requests to the PC at the URL above. Auto tries the PC first, then falls back to the phone. External harnesses can call the same API on port 8101: /v1/images/generations, /v1/images/edits, /v1/audio/transcriptions and /v1/models."
                             android:textColor="@color/lenswright_muted"
                             android:textSize="11sp" />
                     </LinearLayout>
@@ -286,7 +296,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     app:cardBackgroundColor="@color/lenswright_panel"
-                    app:cardCornerRadius="12dp"
+                    app:cardCornerRadius="8dp"
                     app:cardElevation="0dp"
                     app:strokeColor="@color/lenswright_border"
                     app:strokeWidth="1dp">
@@ -388,7 +398,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     app:cardBackgroundColor="@color/lenswright_panel"
-                    app:cardCornerRadius="12dp"
+                    app:cardCornerRadius="8dp"
                     app:cardElevation="0dp"
                     app:strokeColor="@color/lenswright_border"
                     app:strokeWidth="1dp">
@@ -513,6 +523,7 @@
                             android:layout_marginTop="8dp"
                             android:text="@string/btn_generate"
                             app:backgroundTint="@color/lenswright_green"
+                            app:icon="@drawable/ic_play"
                             app:cornerRadius="8dp" />
 
                         <TextView
@@ -542,6 +553,7 @@
                             android:layout_marginTop="8dp"
                             android:text="@string/btn_save_image"
                             android:visibility="gone"
+                            app:icon="@drawable/ic_download"
                             app:cornerRadius="8dp"
                             app:strokeColor="@color/lenswright_border" />
                     </LinearLayout>
@@ -576,7 +588,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     app:cardBackgroundColor="@color/lenswright_panel"
-                    app:cardCornerRadius="12dp"
+                    app:cardCornerRadius="8dp"
                     app:cardElevation="0dp"
                     app:strokeColor="@color/lenswright_border"
                     app:strokeWidth="1dp">
@@ -766,6 +778,7 @@
                             android:layout_marginTop="8dp"
                             android:text="@string/btn_transcribe"
                             app:backgroundTint="@color/lenswright_green"
+                            app:icon="@drawable/ic_mic"
                             app:cornerRadius="8dp" />
 
                         <ProgressBar
@@ -825,6 +838,7 @@
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
                                 android:text="Copy"
+                                app:icon="@drawable/ic_copy"
                                 app:cornerRadius="8dp"
                                 app:strokeColor="@color/lenswright_border" />
 
@@ -882,7 +896,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     app:cardBackgroundColor="@color/lenswright_panel"
-                    app:cardCornerRadius="12dp"
+                    app:cardCornerRadius="8dp"
                     app:cardElevation="0dp"
                     app:strokeColor="@color/lenswright_border"
                     app:strokeWidth="1dp">
@@ -974,7 +988,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     app:cardBackgroundColor="@color/lenswright_panel"
-                    app:cardCornerRadius="12dp"
+                    app:cardCornerRadius="8dp"
                     app:cardElevation="0dp"
                     app:strokeColor="@color/lenswright_border"
                     app:strokeWidth="1dp">
@@ -1085,7 +1099,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     app:cardBackgroundColor="@color/lenswright_panel"
-                    app:cardCornerRadius="12dp"
+                    app:cardCornerRadius="8dp"
                     app:cardElevation="0dp"
                     app:strokeColor="@color/lenswright_border"
                     app:strokeWidth="1dp">
@@ -1279,7 +1293,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     app:cardBackgroundColor="@color/lenswright_panel"
-                    app:cardCornerRadius="12dp"
+                    app:cardCornerRadius="8dp"
                     app:cardElevation="0dp"
                     app:strokeColor="@color/lenswright_border"
                     app:strokeWidth="1dp">
