@@ -115,7 +115,14 @@ object LiveCapture {
         HttpClient(OkHttp) { install(WebSockets) }
     }
     private val postClient: OkHttpClient by lazy {
-        OkHttpClient.Builder().connectTimeout(5, TimeUnit.SECONDS).build()
+        OkHttpClient.Builder()
+            .connectTimeout(5, TimeUnit.SECONDS)
+            // Total-call timeout bounds the entire append/close POST (connect,
+            // write, read) so a stalled localhost call cannot extend teardown.
+            // append POSTs run on IO coroutines; the close POST runs during the
+            // off-main stop() teardown.
+            .callTimeout(5, TimeUnit.SECONDS)
+            .build()
     }
     private val ioScope: CoroutineScope by lazy {
         CoroutineScope(SupervisorJob() + Dispatchers.IO)

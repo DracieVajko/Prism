@@ -52,10 +52,18 @@ class DiffusionService : Service() {
     }
 
     override fun onDestroy() {
-        // Drain any in-flight live commits before the process goes away.
-        LiveCapture.stop()
-        server?.stop()
+        // LiveCapture.stop() drains in-flight commits (bounded ~5 s) and issues
+        // the session-close POST, so it must never run on the main thread (ANR
+        // risk). The local API server has to stay up until that close POST has
+        // been sent, so the whole teardown runs on one background thread in the
+        // original order: drain/close first, then server shutdown. Thread { }.start()
+        // is the same off-main pattern used in MainActivity.
+        val api = server
         server = null
+        Thread {
+            LiveCapture.stop()
+            api?.stop()
+        }.start()
         super.onDestroy()
     }
 
