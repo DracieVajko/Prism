@@ -100,10 +100,11 @@ object LiveCapture {
 
     @Volatile private var running = false
     @Volatile private var loss = false
-    private var sessionId: String = ""
+    @Volatile private var sessionId: String = ""
     private var startMs = 0L
     private var appContext: Context? = null
-    private var projection: MediaProjection? = null
+    @Volatile private var projection: MediaProjection? = null
+    @Volatile private var sourceSkipReasons: Map<String, String> = emptyMap()
 
     // Active sources, keyed by source name. Concurrent because Stop/Start and
     // the IO coroutines may touch it from different threads.
@@ -190,6 +191,7 @@ object LiveCapture {
         loss = false
         running = true
         this.sources.clear()
+        this.sourceSkipReasons = emptyMap()
 
         // MediaProjection is only needed for device audio. The consent dialog
         // started by MediaProjectionManager.createScreenCaptureIntent() returns
@@ -209,17 +211,33 @@ object LiveCapture {
 
         // Build one AudioRecord per requested source. Permission gating is done
         // by the Activity before start() is called.
+        val skipReasons = LinkedHashMap<String, String>()
         for (source in wanted) {
-            val record = buildRecord(source, proj) ?: continue
+            if (source == SOURCE_DEVICE && proj == null) {
+                skipReasons[source] = "media projection consent denied or unavailable"
+                continue
+            }
+            val record = buildRecord(source, proj)
+            if (record == null) {
+                skipReasons[source] = "audio record unavailable"
+                continue
+            }
             val st = SourceState(source, sid)
             st.record = record
             this.sources[source] = st
         }
+        this.sourceSkipReasons = skipReasons
         if (this.sources.isEmpty()) {
             Log.w(TAG, "no usable audio source; nothing started")
             running = false
             proj?.stop()
             projection = null
+            val ctx = appContext
+            val sid = this.sessionId
+            if (ctx != null && sid.isNotEmpty()) {
+                try { LiveSessionStore.close(ctx, sid) } catch (_: Exception) { }
+            }
+            this.sessionId = ""
             return
         }
 
@@ -280,6 +298,7 @@ object LiveCapture {
             "running" to running,
             "session_id" to sessionId,
             "sources" to sources.keys.toList().sorted(),
+            "source_reasons" to sourceSkipReasons,
             "pending" to pending,
             "loss" to loss,
         )

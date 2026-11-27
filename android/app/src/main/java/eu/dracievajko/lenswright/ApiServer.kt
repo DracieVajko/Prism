@@ -548,7 +548,8 @@ private val batchState = ConcurrentHashMap<String, BatchState>()
         // PC that has no such session.
         if (RemoteProxy.isRemoteMode() || RemoteProxy.isAutoMode()) {
             intercept(io.ktor.server.application.ApplicationCallPipeline.Call) {
-                if (!call.request.path().startsWith("/v1/live/") && RemoteProxy.forward(call)) {
+                val path = call.request.path()
+                if (!path.startsWith("/v1/live/") && !path.startsWith("/v1/realtime") && RemoteProxy.forward(call)) {
                     finish()
                 }
             }
@@ -1020,7 +1021,7 @@ private val batchState = ConcurrentHashMap<String, BatchState>()
             post("/v1/live/sessions") {
                 val ctx = appContext ?: run {
                     call.respond(HttpStatusCode.InternalServerError,
-                        jsonOf("error" to "no app context"))
+                        jsonOf("error" to "no app context", "detail" to "no app context"))
                     return@post
                 }
                 val body = try {
@@ -1065,7 +1066,7 @@ private val batchState = ConcurrentHashMap<String, BatchState>()
             post("/v1/live/sessions/{sid}/close") {
                 val ctx = appContext ?: run {
                     call.respond(HttpStatusCode.InternalServerError,
-                        jsonOf("error" to "no app context"))
+                        jsonOf("error" to "no app context", "detail" to "no app context"))
                     return@post
                 }
                 val sid = call.parameters["sid"] ?: ""

@@ -603,7 +603,7 @@ class MainActivity : AppCompatActivity() {
                 val sources = mutableListOf<String>()
                 if (switchLiveMic.isChecked) sources.add("mic")
                 if (switchLiveDevice.isChecked) sources.add("device")                // create session
-                val body = org.json.JSONObject().put("language", lang).toString()
+                val body = org.json.JSONObject().put("language", lang).put("model", model).toString()
                 val resp = httpPostJson("http://127.0.0.1:8101/v1/live/sessions", body)
                 val sid = if (resp != null) org.json.JSONObject(resp).optString("id") else ""
                 if (sid.isBlank()) {
@@ -626,7 +626,11 @@ class MainActivity : AppCompatActivity() {
     private fun updateLiveUi() {
         val st = LiveCapture.status()
         val running = st["running"] == true
-        liveStatus.text = if (running) "running: ${st["session_id"]}" else "idle"
+        val reasons = st["source_reasons"] as? Map<*, *>
+        val reasonText = reasons?.entries?.joinToString("; ") { "${it.key}: ${it.value}" } ?: ""
+        liveStatus.text = if (running) {
+            if (reasonText.isBlank()) "running: ${st["session_id"]}" else "running: ${st["session_id"]} (skipped: $reasonText)"
+        } else "idle"
         btnLiveStart.isEnabled = !running
         btnLiveStop.isEnabled = running
         if (!running || liveSessionId.isBlank()) {

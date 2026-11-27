@@ -87,7 +87,13 @@ object OutputStore {
      * the caller appends the header and transcript lines. Only text is written.
      */
     fun liveFile(ctx: Context, sessionId: String, source: String): File {
-        val stamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date())
+        val stamp = run {
+            // Prefer the stamp embedded in the session id (live_YYYYMMDD-HHmmss_...)
+            // so the filename matches the session; fall back to now() otherwise.
+            val embedded = sessionId.removePrefix("live_").substringBefore("_", "")
+            if (embedded.matches(Regex("\\d{8}-\\d{6}"))) embedded
+            else SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date())
+        }
         val safeSid = sessionId
             .filter { it.isLetterOrDigit() || it == '-' || it == '_' }
             .take(24).trim('-', '_')
