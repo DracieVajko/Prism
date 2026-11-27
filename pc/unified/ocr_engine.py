@@ -18,6 +18,8 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
+import time
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -157,6 +159,14 @@ class OCREngine:
         self.processor = None
         self.model = None
         self._loaded = False
+        # Serialises init(): a warm-up call and a real request must not load
+        # the same multi-GB checkpoint twice.
+        self._init_lock = threading.Lock()
+        # Idle-unload bookkeeping (see ocr_idle_seconds).
+        self.last_used = 0.0
+        self.in_flight = 0
+        # Human-readable reason when init() refuses or fails.
+        self.last_error = ""
 
     def is_installed(self) -> bool:
         return _has_weights(Path(self.model_dir))
@@ -165,46 +175,68 @@ class OCREngine:
         if self._loaded:
             return True
         if not _TORCH_AVAILABLE:
+            self.last_error = "transformers/torch not installed"
             logger.error("transformers/torch not installed - cannot load OCR model")
             return False
         if not self.is_installed():
+            self.last_error = f"weights missing at {self.model_dir}"
             logger.warning("OCR model not installed at %s", self.model_dir)
             return False
-        try:
-            if self.processor_class:
-                import transformers as _tf
-                processor_cls = getattr(_tf, self.processor_class)
-                self.processor = processor_cls.from_pretrained(self.model_dir)
-            else:
-                self.processor = AutoProcessor.from_pretrained(
-                    self.model_dir, trust_remote_code=self.trust_remote_code)
-            # auto = accelerate decides; cpu forces full CPU (works while the
-            # GPU is busy with an LLM); cuda keeps everything on the GPU.
-            device = (os.environ.get("LENSWRIGHT_OCR_DEVICE") or "auto").strip().lower()
-            device_map = device if device in ("cpu", "cuda") else "auto"
-            if self.model_class:
-                # Some checkpoints declare a generic model_type (LightOnOCR 2
-                # says "mistral3"), so the auto class builds the wrong module
-                # and half the weights are dropped. Use the dedicated class.
-                import transformers as _tf
-                loader = getattr(_tf, self.model_class)
-            else:
-                loader = _AutoVLM
-            self.model = loader.from_pretrained(
-                self.model_dir,
-                torch_dtype="auto",
-                device_map=device_map,
-                trust_remote_code=self.trust_remote_code,
-            )
-            self._loaded = True
-            if hasattr(self.model, "eval"):
-                self.model.eval()
-            logger.info("OCR model %s loaded from %s", self.model_id, self.model_dir)
-            return True
-        except Exception as e:
-            logger.error("OCR model %s init failed: %s", self.model_id, e)
-            self._loaded = False
-            return False
+        with self._init_lock:
+            # Another thread may have finished the load while we waited.
+            if self._loaded:
+                return True
+            # Loading materialises ~2x the checkpoint in RAM. On a box that
+            # already runs a big LLM this used to end in an access violation
+            # inside torch_cpu.dll that killed the whole server; refuse loudly
+            # instead and keep the API alive.
+            need = load_ram_requirement_gb(self.model_id)
+            free = _free_ram_gb()
+            if need is not None and free is not None and free < need:
+                self.last_error = (
+                    f"not enough free RAM for {self.model_id}: {free:.1f} GB "
+                    f"available, ~{need:.1f} GB needed. Stop another model "
+                    f"(LLM/vision) and retry.")
+                logger.error("OCR model %s not loaded: %s", self.model_id, self.last_error)
+                return False
+            self.last_error = ""
+            try:
+                if self.processor_class:
+                    import transformers as _tf
+                    processor_cls = getattr(_tf, self.processor_class)
+                    self.processor = processor_cls.from_pretrained(self.model_dir)
+                else:
+                    self.processor = AutoProcessor.from_pretrained(
+                        self.model_dir, trust_remote_code=self.trust_remote_code)
+                # auto = accelerate decides; cpu forces full CPU (works while the
+                # GPU is busy with an LLM); cuda keeps everything on the GPU.
+                device = (os.environ.get("LENSWRIGHT_OCR_DEVICE") or "auto").strip().lower()
+                device_map = device if device in ("cpu", "cuda") else "auto"
+                if self.model_class:
+                    # Some checkpoints declare a generic model_type (LightOnOCR 2
+                    # says "mistral3"), so the auto class builds the wrong module
+                    # and half the weights are dropped. Use the dedicated class.
+                    import transformers as _tf
+                    loader = getattr(_tf, self.model_class)
+                else:
+                    loader = _AutoVLM
+                self.model = loader.from_pretrained(
+                    self.model_dir,
+                    torch_dtype="auto",
+                    device_map=device_map,
+                    trust_remote_code=self.trust_remote_code,
+                )
+                self._loaded = True
+                self.last_used = time.time()
+                if hasattr(self.model, "eval"):
+                    self.model.eval()
+                logger.info("OCR model %s loaded from %s", self.model_id, self.model_dir)
+                return True
+            except Exception as e:
+                logger.error("OCR model %s init failed: %s", self.model_id, e)
+                self.last_error = str(e)[:300]
+                self._loaded = False
+                return False
 
     def release(self) -> bool:
         had = self._loaded or self.model is not None or self.processor is not None
@@ -298,6 +330,17 @@ class OCREngine:
 
         if image.mode != "RGB":
             image = image.convert("RGB")
+        # Idle unload must never pull weights out from under a running call.
+        self.in_flight += 1
+        try:
+            return self._generate_locked(image, prompt, max_new_tokens, torch)
+        finally:
+            self.in_flight -= 1
+            self.last_used = time.time()
+
+    def _generate_locked(self, image, prompt: str,
+                         max_new_tokens: int | None, torch) -> str:
+        """Body of generate_pil; caller holds the in-flight counter."""
 
         def _run_once():
             # Ensure model is in eval mode before each inference
@@ -341,12 +384,22 @@ class OCREngine:
         try:
             return _run_once()
         except Exception as e:
-            logger.warning("OCR generate failed (%s): %s - re-initialising model", self.model_id, e)
-            # Reset and retry once
-            self.release()
-            if not self.init():
-                raise RuntimeError(f"{self.model_id} failed to re-load after error")
+            logger.warning("OCR generate failed (%s): %s - retrying once",
+                           self.model_id, e)
+        # One in-place retry: cheap. A full reload costs minutes on a cold
+        # page cache and cannot fix a deterministic error, so it only runs
+        # when explicitly asked for (LENSWRIGHT_OCR_RELOAD_ON_ERROR=1).
+        try:
             return _run_once()
+        except Exception as e:
+            if (os.environ.get("LENSWRIGHT_OCR_RELOAD_ON_ERROR") or "").strip() in ("1", "true", "yes"):
+                logger.warning("OCR generate failed twice (%s): %s - reloading model "
+                               "(LENSWRIGHT_OCR_RELOAD_ON_ERROR)", self.model_id, e)
+                self.release()
+                if not self.init():
+                    raise RuntimeError(f"{self.model_id} failed to re-load after error")
+                return _run_once()
+            raise
 
     def transcribe_pil(self, image, language: str = "auto",
                        task: str = "ocr") -> str:
@@ -386,3 +439,74 @@ def reset_ocr_engine(model_id: str | None = None):
         eng = _engines.pop(model_id, None)
         if eng is not None:
             eng.release()
+
+
+def ocr_resident() -> list[str]:
+    """OCR models whose weights are in memory right now."""
+    return sorted(mid for mid, eng in _engines.items()
+                  if eng._loaded and eng.model is not None)
+
+
+def ocr_in_flight() -> int:
+    """Running OCR/VLM generations across resident engines."""
+    return sum(eng.in_flight for eng in _engines.values())
+
+
+def ocr_idle_seconds() -> float | None:
+    """Seconds since the last finished generation, or None if nothing is loaded."""
+    if not ocr_resident():
+        return None
+    last = max((eng.last_used for eng in _engines.values() if eng._loaded),
+               default=0.0)
+    if not last:
+        return None
+    return max(0.0, time.time() - last)
+
+
+def ocr_ready(model_id: str = "auto") -> bool:
+    """True when this model's weights are already loaded (no cold start)."""
+    try:
+        mid = resolve_ocr_model(model_id)
+    except Exception:
+        return False
+    eng = _engines.get(mid)
+    return bool(eng is not None and eng._loaded and eng.model is not None)
+
+
+def _free_ram_gb() -> float | None:
+    """Free physical memory in GB, or None when it cannot be measured."""
+    try:
+        import ctypes
+
+        class _MemStatus(ctypes.Structure):
+            _fields_ = [("dwLength", ctypes.c_ulong),
+                        ("dwMemoryLoad", ctypes.c_ulong),
+                        ("ullTotalPhys", ctypes.c_ulonglong),
+                        ("ullAvailPhys", ctypes.c_ulonglong),
+                        ("ullTotalPageFile", ctypes.c_ulonglong),
+                        ("ullAvailPageFile", ctypes.c_ulonglong),
+                        ("ullTotalVirtual", ctypes.c_ulonglong),
+                        ("ullAvailVirtual", ctypes.c_ulonglong),
+                        ("ullAvailExtendedVirtual", ctypes.c_ulonglong)]
+        st = _MemStatus()
+        st.dwLength = ctypes.sizeof(_MemStatus)
+        if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(st)):
+            return st.ullAvailPhys / (1024 ** 3)
+    except Exception:
+        pass
+    try:
+        with open("/proc/meminfo") as f:
+            for line in f:
+                if line.startswith("MemAvailable:"):
+                    return int(line.split()[1]) / (1024 ** 2)
+    except Exception:
+        pass
+    return None
+
+
+def load_ram_requirement_gb(model_id: str) -> float | None:
+    """RAM needed to load a checkpoint: weights x2 (buffer + tensors) + runtime."""
+    size = (OCR_SPECS.get(model_id) or {}).get("size_gb")
+    if not size:
+        return None
+    return round(float(size) * 2.2 + 1.0, 1)

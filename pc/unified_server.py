@@ -17,6 +17,7 @@ import base64
 import io
 import logging
 import os
+import threading
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -129,13 +130,38 @@ async def _idle_unloader():
         except Exception as e:
             logger.warning("idle sweep: %s", e)
         try:
-            if not should_idle_unload(_manager, IDLE_UNLOAD_SECONDS):
-                continue
-            logger.info("idle unload after %.0fs (limit %ss)",
-                        _manager.idle_seconds(), IDLE_UNLOAD_SECONDS)
-            _manager.unload("idle")
+            if should_idle_unload(_manager, IDLE_UNLOAD_SECONDS):
+                logger.info("idle unload after %.0fs (limit %ss)",
+                            _manager.idle_seconds(), IDLE_UNLOAD_SECONDS)
+                _manager.unload("idle")
+            # OCR/VLM weights live outside _manager, so they need their own check.
+            _release_idle_ocr(IDLE_UNLOAD_SECONDS)
         except Exception as e:
             logger.warning("idle unloader: %s", e)
+
+
+def _release_idle_ocr(limit: int) -> None:
+    """Drop OCR/VLM weights that sat unused past the limit.
+
+    A resident GLM-OCR/Qwen3-VL costs several GB of RAM; leaving it there
+    forever is what pushed the box into swap (and a hard crash mid-load) when
+    an image model was requested afterwards.
+    """
+    try:
+        from unified import ocr_engine as _ocr
+        idle = _ocr.ocr_idle_seconds()
+        if idle is None or idle < limit:
+            return
+        if _ocr.ocr_in_flight() > 0:
+            return
+        residents = _ocr.ocr_resident()
+        if not residents:
+            return
+        logger.info("OCR idle unload after %.0fs (limit %ss): %s",
+                    idle, limit, ", ".join(residents))
+        _ocr.reset_ocr_engine()
+    except Exception as e:
+        logger.warning("OCR idle unload failed: %s", e)
 
 
 @asynccontextmanager
@@ -413,6 +439,17 @@ class InstallRequest(BaseModel):
     id: str = ""
 
 
+class WarmRequest(BaseModel):
+    model: str = "auto"
+
+
+# Warm-up bookkeeping: model -> {state, error, started}. A cold OCR load takes
+# minutes, so clients should ask for it and poll instead of blocking on the
+# first /v1/images/ocr call.
+_warm_state: dict[str, dict] = {}
+_warm_lock = threading.Lock()
+
+
 def _release_vlm_best_effort():
     try:
         release_vlm()
@@ -531,8 +568,23 @@ def health():
         "audio_model": whisper_name or reg.get("default_audio_model", "turbo"),
         "audio_loaded": bool(whisper_name) or st["loaded_kind"] == "audio",
         "audio_whisper_models_resident": len(_WHISPER_CACHE),
+        # OCR/VLM residency: these models are loaded outside _manager and are
+        # dropped by the idle unloader, not by /v1/cleanup only.
+        **_ocr_health(),
         "version": "unified-0.1.0",
     }
+
+
+def _ocr_health() -> dict:
+    try:
+        from unified import ocr_engine as _ocr
+        return {
+            "ocr_loaded": _ocr.ocr_resident(),
+            "ocr_in_flight": _ocr.ocr_in_flight(),
+            "ocr_idle_seconds": _ocr.ocr_idle_seconds(),
+        }
+    except Exception:
+        return {"ocr_loaded": [], "ocr_in_flight": 0, "ocr_idle_seconds": None}
 
 
 @app.get("/v1/models")
@@ -1132,6 +1184,100 @@ def models_progress(model_id: str):
         return _mm.progress(model_id)
     except KeyError as e:
         return JSONResponse(status_code=404, content={"error": str(e).strip("'")})
+
+
+@app.post("/v1/models/warm")
+async def models_warm(req: WarmRequest):
+    """Load a heavy model ahead of the first request (currently OCR/VLM).
+
+    Returns 200 when the weights are already resident, 202 when a load was
+    started. Poll `GET /v1/models/warm/{model}` for the outcome instead of
+    waiting several minutes on a cold `/v1/images/ocr` call.
+    """
+    from unified import ocr_engine as _ocr
+
+    try:
+        model_id = _ocr.resolve_ocr_model(req.model)
+    except Exception as e:
+        return JSONResponse(status_code=400, content={
+            "error": "unknown model", "detail": str(e)[:200],
+            "supported": sorted(_ocr.OCR_SPECS)})
+
+    if _ocr.ocr_ready(model_id):
+        return {"model": model_id, "kind": "ocr", "state": "ready"}
+
+    with _warm_lock:
+        entry = _warm_state.get(model_id) or {}
+        if entry.get("state") == "loading":
+            return JSONResponse(status_code=202, content={
+                "model": model_id, "kind": "ocr", "state": "loading"})
+        _warm_state[model_id] = {"model": model_id, "kind": "ocr",
+                                 "state": "loading", "error": "",
+                                 "started": time.time()}
+
+    async def _load():
+        ok, err = await asyncio.to_thread(_warm_ocr_model, model_id)
+        with _warm_lock:
+            _warm_state[model_id] = {
+                "model": model_id, "kind": "ocr",
+                "state": "ready" if ok else "error",
+                "error": "" if ok else err,
+                "started": _warm_state.get(model_id, {}).get("started", time.time()),
+            }
+
+    asyncio.create_task(_load())
+    return JSONResponse(status_code=202, content={
+        "model": model_id, "kind": "ocr", "state": "loading",
+        "poll": f"/v1/models/warm/{model_id}"})
+
+
+def _warm_ocr_model(model_id: str) -> tuple[bool, str]:
+    from unified.ocr_engine import get_ocr_engine
+
+    try:
+        eng = get_ocr_engine(model_id)
+        ok = bool(eng.init())
+        return ok, "" if ok else (getattr(eng, "last_error", "") or "model failed to load")
+    except Exception as e:
+        logger.warning("warm-up failed for %s: %s", model_id, e)
+        return False, str(e)[:300]
+
+
+@app.get("/v1/models/warm")
+def models_warm_list():
+    with _warm_lock:
+        return {"models": [_warm_payload(m) for m in _warm_state]}
+
+
+@app.get("/v1/models/warm/{model_id}")
+def models_warm_status(model_id: str):
+    # Warm-up stores state under the resolved id, so poll with "auto" (or any
+    # alias) must resolve the same way before looking it up.
+    try:
+        from unified import ocr_engine as _ocr
+        resolved = _ocr.resolve_ocr_model(model_id)
+    except Exception:
+        resolved = model_id
+    key = model_id if model_id in _warm_state else resolved
+    with _warm_lock:
+        if key not in _warm_state:
+            return JSONResponse(status_code=404, content={
+                "error": "model was never warmed", "model": model_id,
+                "resolved": resolved})
+        return _warm_payload(key)
+
+
+def _warm_payload(model_id: str) -> dict:
+    """Live warm state: 'ready' that the idle unloader dropped reads 'unloaded'."""
+    entry = dict(_warm_state.get(model_id) or {"model": model_id, "state": "unknown"})
+    if entry.get("state") == "ready":
+        try:
+            from unified.ocr_engine import ocr_ready
+            if not ocr_ready(model_id):
+                entry["state"] = "unloaded"
+        except Exception:
+            pass
+    return entry
 
 
 @app.get("/v1/models/status/{model_id}")

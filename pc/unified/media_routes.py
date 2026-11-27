@@ -1822,7 +1822,9 @@ async def ocr_endpoint(
     loaded = await asyncio.to_thread(engine.init)
     if not loaded:
         return JSONResponse(status_code=503, content={
-            "error": "OCR model failed to load"})
+            "error": "OCR model failed to load",
+            "model": engine.model_id,
+            "detail": getattr(engine, "last_error", "") or "see server log"})
 
     try:
         import os
@@ -1838,7 +1840,12 @@ async def ocr_endpoint(
         finally:
             Path(tmp.name).unlink(missing_ok=True)
 
-        return {"text": text, "model": engine.model_id,
+        # An empty transcription used to look like a success, which hid a real
+        # engine bug behind HTTP 200s. Report it honestly instead.
+        clean = (text or "").strip()
+        if not clean:
+            logger.warning("OCR returned no text (model=%s, task=%s)", engine.model_id, task)
+        return {"text": text, "ok": bool(clean), "model": engine.model_id,
                 "language": language, "task": task}
     except Exception as e:
         logger.error(f"OCR endpoint failed: {e}")

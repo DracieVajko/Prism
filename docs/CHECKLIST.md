@@ -1221,3 +1221,27 @@ Verification (2026-11-27): `cd pc && python -m pytest tests/test_webui_live.py
 tests/test_live_session_api.py -q` → **5 passed, 3 warnings in 0.91s** (warnings
 are pre-existing Starlette/FastAPI deprecations). No device was attached, so the
 manual Android checklist above remains open.
+
+## OCR resilience and warm-up (2026-11-27)
+
+- [x] OCREngine.init() is serialised with a lock so a warm-up call and a
+      request cannot load the same multi-GB checkpoint twice.
+- [x] Loading refuses with an actionable 503 (last_error) when free RAM is
+      below the estimated need (~2.2x weights + 1 GB) instead of crashing the
+      process inside 	orch_cpu.dll.
+- [x] In-flight OCR generations are counted; the idle unloader in
+      unified_server._release_idle_ocr cannot drop weights during a call.
+- [x] A transient generation error is retried in place; a full reload only
+      happens with LENSWRIGHT_OCR_RELOAD_ON_ERROR=1.
+- [x] GET /health reports ocr_loaded, ocr_in_flight and
+      ocr_idle_seconds. /v1/images/ocr adds ok: false with a warning when
+      the transcript is empty (HTTP 200 is kept for client compatibility).
+- [x] POST /v1/models/warm + GET /v1/models/warm/{model} allow starting a
+      cold OCR load and polling it; poll accepts aliases such as `auto`.
+- [x] pc/tests/test_ocr_engine.py pins the retry policy, in-flight counters,
+      idle helpers, readiness and RAM estimate with a fake model (no weights).
+
+Review note (2026-11-27): the idle unload path checks in-flight count before
+unloading, but other callers of `reset_ocr_engine()` (e.g. the restore route)
+do not. A later change should add a shared guard there if concurrent OCR and
+restore calls are observed.
