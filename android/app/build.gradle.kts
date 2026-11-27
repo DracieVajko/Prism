@@ -150,6 +150,7 @@ implementation("io.ktor:ktor-server-websockets:$ktor")
     implementation("io.ktor:ktor-serialization-gson:$ktor")
     implementation("io.ktor:ktor-client-core:$ktor")
     implementation("io.ktor:ktor-client-okhttp:$ktor")
+    implementation("io.ktor:ktor-client-websockets:$ktor")
     implementation("com.google.code.gson:gson:2.10.1")
     // Keep kotlinx-serialization for @Serializable annotations (needed for data classes)
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.5.1")
@@ -171,6 +172,9 @@ implementation("io.ktor:ktor-server-websockets:$ktor")
     // Optional: works on Pixel 8+, Samsung S24+, Xiaomi, Motorola with NPU support.
     // Falls back gracefully on unsupported devices (summarize returns 503).
     implementation("com.google.mlkit:genai-prompt:1.0.0-beta5")
+
+    // JVM unit tests (Task 5: LiveCapture.awaitPending drain contract).
+    testImplementation("junit:junit:4.13.2")
 
     // ONNX Runtime GenAI: NOT used. The artifact com.microsoft.onnxruntime:onnxruntime-genai:0.4.0
     // is not published on Maven Central or Google Maven. SmolVlmOnnxEngine.kt only has

@@ -18,6 +18,8 @@ class DiffusionService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        // Live capture is owned by this service so it survives backgrounding.
+        LiveCapture.attach(applicationContext)
         val ch = NotificationChannel("srv", "Diffusion server", NotificationManager.IMPORTANCE_LOW)
         (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).createNotificationChannel(ch)
         try {
@@ -50,6 +52,8 @@ class DiffusionService : Service() {
     }
 
     override fun onDestroy() {
+        // Drain any in-flight live commits before the process goes away.
+        LiveCapture.stop()
         server?.stop()
         server = null
         super.onDestroy()
