@@ -639,23 +639,26 @@ class MainActivity : AppCompatActivity() {
         }
         val gen = liveTailGeneration
         val sid = liveSessionId
-        liveTailExecutor.execute {
-            try {
-                val resp = httpGet("http://127.0.0.1:8101/v1/live/sessions/$sid")
-                if (resp == null) return@execute
-                val obj = org.json.JSONObject(resp)
-                val descs = obj.optJSONObject("descriptors")
-                val micUrl = descs?.optJSONObject("mic")?.optString("url")
-                val devUrl = descs?.optJSONObject("device")?.optString("url")
-                val micTail = fetchLastLine(micUrl)
-                val devTail = fetchLastLine(devUrl)
-                handler.post {
-                    if (liveTailGeneration != gen) return@post
-                    liveTailMic.text = micTail
-                    liveTailDevice.text = devTail
-                }
-            } catch (_: Exception) { }
-        }
+        if (liveTailExecutor.isShutdown) return
+        try {
+            liveTailExecutor.execute {
+                try {
+                    val resp = httpGet("http://127.0.0.1:8101/v1/live/sessions/$sid")
+                    if (resp == null) return@execute
+                    val obj = org.json.JSONObject(resp)
+                    val descs = obj.optJSONObject("descriptors")
+                    val micUrl = descs?.optJSONObject("mic")?.optString("url")
+                    val devUrl = descs?.optJSONObject("device")?.optString("url")
+                    val micTail = fetchLastLine(micUrl)
+                    val devTail = fetchLastLine(devUrl)
+                    handler.post {
+                        if (liveTailGeneration != gen) return@post
+                        liveTailMic.text = micTail
+                        liveTailDevice.text = devTail
+                    }
+                } catch (_: Exception) { }
+            }
+        } catch (_: java.util.concurrent.RejectedExecutionException) { }
     }
 
     private fun fetchLastLine(url: String?): String {
