@@ -175,8 +175,9 @@ class MainActivity : AppCompatActivity() {
     private val expandedKinds = mutableSetOf<String>()
 
     private val livePoller = android.os.Handler(android.os.Looper.getMainLooper())
-    private val livePollRunnable = object : Runnable {
-        override fun run() {
+    private val liveTailExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
+    @Volatile private var liveTailGeneration: Int = 0
+    private val livePollRunnable = object : Runnable {        override fun run() {
             updateLiveUi()
             if (LiveCapture.status()["running"] == true) {
                 livePoller.postDelayed(this, 500)
@@ -529,8 +530,10 @@ class MainActivity : AppCompatActivity() {
         mediaRecorder?.release()
         mediaRecorder = null
         handler.removeCallbacks(ticker)
-        super.onDestroy()
-    }
+        livePoller.removeCallbacks(livePollRunnable)
+        liveTailGeneration++
+        liveTailExecutor.shutdownNow()
+        super.onDestroy()    }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: android.content.Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
@@ -628,15 +631,18 @@ class MainActivity : AppCompatActivity() {
         btnLiveStop.isEnabled = running
         if (!running || liveSessionId.isBlank()) {
             if (!running) {
+                liveTailGeneration++
                 liveTailMic.text = ""
                 liveTailDevice.text = ""
             }
             return
         }
-        Thread {
+        val gen = liveTailGeneration
+        val sid = liveSessionId
+        liveTailExecutor.execute {
             try {
-                val resp = httpGet("http://127.0.0.1:8101/v1/live/sessions/$liveSessionId")
-                if (resp == null) return@Thread
+                val resp = httpGet("http://127.0.0.1:8101/v1/live/sessions/$sid")
+                if (resp == null) return@execute
                 val obj = org.json.JSONObject(resp)
                 val descs = obj.optJSONObject("descriptors")
                 val micUrl = descs?.optJSONObject("mic")?.optString("url")
@@ -644,11 +650,12 @@ class MainActivity : AppCompatActivity() {
                 val micTail = fetchLastLine(micUrl)
                 val devTail = fetchLastLine(devUrl)
                 handler.post {
+                    if (liveTailGeneration != gen) return@post
                     liveTailMic.text = micTail
                     liveTailDevice.text = devTail
                 }
             } catch (_: Exception) { }
-        }.start()
+        }
     }
 
     private fun fetchLastLine(url: String?): String {
@@ -1375,7 +1382,7 @@ class MainActivity : AppCompatActivity() {
         btnLiveStop.setOnClickListener {
             Thread {
                 LiveCapture.stop()
-                handler.post { liveSessionId = ""; updateLiveUi(); livePoller.removeCallbacks(livePollRunnable) }
+                handler.post { liveTailGeneration++; liveSessionId = ""; updateLiveUi(); livePoller.removeCallbacks(livePollRunnable) }
             }.start()
         }
         btnLiveOutputs.setOnClickListener { showOutputsDialog() }
