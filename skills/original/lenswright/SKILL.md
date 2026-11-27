@@ -1,6 +1,6 @@
 ---
 name: lenswright
-description: "Operate Lenswright, a local offline OpenAI-compatible AI server on PC (pc/) and Android (android/). Use for starting/stopping/verifying the server, image generation, edits, inpaint, outpaint, colorize, restore, upscale, OCR, caption, VLM chat, transcription, TTS, realtime ASR, FFmpeg, batch jobs, model downloads, secrets and client setup. Covers endpoints, model IDs, env vars, honest-503 fallbacks and ADB testing. Trigger on Lenswright, port 8101 or 'is the server running'."
+description: "Operate Lenswright, a local offline OpenAI-compatible AI server on PC (pc/) and Android (android/). Use for starting/stopping/verifying the server, image generation, edits, inpaint, outpaint, colorize, restore, upscale, OCR, caption, VLM chat, transcription, TTS, realtime ASR, live transcription sessions, FFmpeg, batch jobs, model downloads, secrets and client setup. Covers endpoints, model IDs, env vars, honest-503 fallbacks and ADB testing. Trigger on Lenswright, port 8101 or 'is the server running'."
 version: 1.0.0
 author: DracieVajko
 tags: [lenswright, local-ai, server, android, image-generation, ocr, asr, adb]
@@ -61,6 +61,7 @@ the code disagree, trust the code and the live `/health`, `/v1/settings`,
 | Vision Q&A | PC / Android with VLM | `POST /v1/chat/completions` with `image_url` data-URI |
 | Speech → text / English | Both | `POST /v1/audio/transcriptions`, `/translations` |
 | Realtime microphone ASR | Both | WebSocket `/v1/realtime` (OpenAI transcription session; Cindy client) |
+| Live session → two `.txt` files | Both | `POST /v1/live/sessions` (+ `/append`, `/close`, `GET`); separate `mic`/`device` files, **no audio saved** |
 | Text → speech | Both | `POST /v1/audio/speech`, `GET /v1/audio/voices` |
 | Convert/trim/compress media | PC full, Android partial | PC: eight explicit `POST /v1/ffmpeg/convert-video\|convert-audio\|convert-image\|extract-audio\|trim\|compress\|info\|run` routes; Android: generic `POST /v1/ffmpeg/{op}` (503 stub) |
 | Inspect / download artifacts | Both | `GET /v1/outputs`, `GET /v1/outputs/{rel}`, `DELETE ...` |
@@ -219,6 +220,27 @@ message content (transformers 5.x).
 curl -s -F "file=@jfk.wav" -F "language=en" http://127.0.0.1:8101/v1/audio/transcriptions
 ```
 
+**Live sessions (file-only).** `POST /v1/live/sessions` accepts optional
+`language`, `model`, `label` and returns `id`, `sources:["mic","device"]` plus
+per-source `descriptors` of shape
+`{name, kind:"text", size, path:"text/<name>", url:"/v1/outputs/text/<name>"}`.
+While capturing, send each final transcript to
+`POST /v1/live/sessions/{id}/append` with `{source, text, item_id?, elapsed_ms?}`;
+`POST /v1/live/sessions/{id}/close` flushes both files, and
+`GET /v1/live/sessions/{id}` reports state and line counts. Two **separate** files
+are written under `pc/output/text/` (PC) or `files/output/text/` (Android) and
+appear in `GET /v1/outputs`. **No audio is recorded or saved** — PCM stays in
+client memory, only text crosses the unchanged `/v1/realtime` socket (Cindy needs
+no change), and neither client nor server creates a `MediaRecorder` or audio file.
+Appends are flushed immediately and deduplicated on `item_id`.
+
+Limits: PC Live capture is **localhost-only** (`localhost`/`127.0.0.1`; secure
+context, no TLS) and captures one shared **browser tab**, not system audio — on
+LAN/Tailscale the controls are disabled. Android device audio uses
+`MediaProjection` (apps that disallow playback capture produce silence); all
+`/v1/live/*` calls and live sockets bypass Local/Remote/Auto forwarding and run
+on the phone.
+
 ### 3.4 Media (FFmpeg)
 
 `GET /v1/ffmpeg/presets` → groups: video (H.264/H.265 HQ/fast, mp4-small,
@@ -365,7 +387,7 @@ client = OpenAI(base_url="http://<host>:8101/v1", api_key="not-needed")
 client.images.generate(model="lcm-dreamshaper-int8-onnx", prompt="a red cube", size="512x512")
 ```
 
-- **Cindy** → realtime WebSocket `/v1/realtime` ("Custom realtime ASR → OpenAI transcription").
+- **Cindy** → realtime WebSocket `/v1/realtime` ("Custom realtime ASR → OpenAI transcription"). Live sessions are a separate HTTP layer beside it; the socket protocol is unchanged.
 - **Odysseus** → `endpoint:<id>` HTTP STT against `/v1/audio/transcriptions`.
 - **OpenAI SDK / any compatible client** → `/v1/*`.
 - Claude Code / Codex CLI built-in voice cannot use a custom ASR endpoint.

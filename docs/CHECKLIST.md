@@ -1173,3 +1173,51 @@ Android (`Android/data/<pkg>/files/output/<kind>/`):
       server and at `/v1/images/colorize` instead of falling through to 404.
 - [x] `assembleDebug` BUILD SUCCESSFUL (104.4 MB APK). No device was attached,
       so the on-device colorize run is still pending.
+
+## Live transcription sessions (2026-11-26)
+
+Two append-only `.txt` files per session — one for `mic`, one for `device` —
+written while capturing. Audio is never saved: PCM stays in the client's memory
+and crosses the unchanged `/v1/realtime` socket.
+
+- [x] Endpoints on **both** platforms: `POST /v1/live/sessions`,
+      `POST /v1/live/sessions/{sid}/append`, `POST /v1/live/sessions/{sid}/close`,
+      `GET /v1/live/sessions/{sid}`. Create takes optional `language`, `model`,
+      `label`; append takes `{source, text, item_id?, elapsed_ms?}` and is
+      idempotent on `item_id`. Descriptors match the other outputs:
+      `{name, kind:"text", size, path:"text/<name>", url:"/v1/outputs/text/<name>"}`.
+- [x] Files: `pc/output/text/` (PC) and app `files/output/text/` (Android), named
+      `YYYYmmdd-HHMMSS-<sid>-<source>.txt`, present from create (header line),
+      flushed on every append and listed by `GET /v1/outputs`. Sessions idle for
+      30 minutes with no open socket are closed automatically.
+- [x] Capture: PC WebUI `getUserMedia` (mic) + `getDisplayMedia` (shared tab) →
+      `AudioWorklet` → 16 kHz PCM16; Android `AudioRecord` (mic) +
+      `MediaProjection`/`AudioPlaybackCaptureConfiguration` (device audio).
+      No `MediaRecorder` and no `.wav`/`.m4a` artifact on either platform.
+- [x] Android permissions: runtime `RECORD_AUDIO`, manifest
+      `FOREGROUND_SERVICE_MICROPHONE` and `FOREGROUND_SERVICE_MEDIA_PROJECTION`,
+      and `foregroundServiceType="dataSync|microphone|mediaProjection"` while a
+      session runs. MediaProjection consent is requested through the UI.
+- [x] Android live API and live sockets bypass Local/Remote/Auto forwarding;
+      every `/v1/live/*` call runs against the local server on the phone.
+- [x] PC live capture is localhost-only — `getUserMedia`/`getDisplayMedia`/
+      `AudioWorklet` need a secure context and the WebUI has no TLS, so over
+      LAN/Tailscale both source controls are disabled. Shared-tab audio is the
+      selected browser tab, not whole-system loopback. Cindy's `/v1/realtime`
+      protocol is unchanged.
+- [x] Tests: `pc/tests/test_live_session.py` (store, separate files, empty text,
+      dedupe, idle sweep), `pc/tests/test_live_session_api.py` (HTTP + outputs),
+      `pc/tests/test_webui_live.py` (controls, secure-context guard, no
+      `MediaRecorder`); Android HTTP test `android/tests/test_android_live_sessions.py`.
+      `:app:assembleDebug` and `:app:testDebugUnitTest` both succeeded.
+- [ ] Manual device checklist (needs a phone with USB/ADB):
+      `android/tests/test_android_live_sessions.py::test_pending_commit_drained_before_close`
+      is skipped. Verify on device: mic-only, device-only (apps that disallow
+      playback capture yield silence), both sources into separate files,
+      background/screen-off survival, Stop with a commit in flight, and no audio
+      files under `output/`.
+
+Verification (2026-11-27): `cd pc && python -m pytest tests/test_webui_live.py
+tests/test_live_session_api.py -q` → **5 passed, 3 warnings in 0.91s** (warnings
+are pre-existing Starlette/FastAPI deprecations). No device was attached, so the
+manual Android checklist above remains open.
