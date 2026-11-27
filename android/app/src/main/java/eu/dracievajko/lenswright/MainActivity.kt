@@ -594,12 +594,12 @@ class MainActivity : AppCompatActivity() {
         Thread {
             try {
                 LiveCapture.attach(this@MainActivity)
-                val model = spinnerLiveModel.selectedItem?.toString() ?: "whisper-tiny"
-                val lang = spinnerLiveLang.selectedItem?.toString() ?: ""
+                val model = spinnerLiveModel.selectedItem?.toString()?.takeIf { it.isNotBlank() }
+                    ?: (downloader.allAssets().filter { it.kind == "audio" }.firstOrNull()?.id ?: "whisper-tiny")
+                val lang = spinnerLiveLang.selectedItem?.toString()?.takeIf { it.isNotBlank() } ?: "auto"
                 val sources = mutableListOf<String>()
                 if (switchLiveMic.isChecked) sources.add("mic")
-                if (switchLiveDevice.isChecked) sources.add("device")
-                // create session
+                if (switchLiveDevice.isChecked) sources.add("device")                // create session
                 val body = org.json.JSONObject().put("language", lang).toString()
                 val resp = httpPostJson("http://127.0.0.1:8101/v1/live/sessions", body)
                 val sid = if (resp != null) org.json.JSONObject(resp).optString("id") else ""
@@ -626,9 +626,37 @@ class MainActivity : AppCompatActivity() {
         liveStatus.text = if (running) "running: ${st["session_id"]}" else "idle"
         btnLiveStart.isEnabled = !running
         btnLiveStop.isEnabled = running
-        // tails: fetch session lines? Keep simple: show pending count
-        liveTailMic.text = "mic pending: ${st["pending"]}"
-        liveTailDevice.text = "device pending: ${st["pending"]}"
+        if (!running || liveSessionId.isBlank()) {
+            if (!running) {
+                liveTailMic.text = ""
+                liveTailDevice.text = ""
+            }
+            return
+        }
+        Thread {
+            try {
+                val resp = httpGet("http://127.0.0.1:8101/v1/live/sessions/$liveSessionId")
+                if (resp == null) return@Thread
+                val obj = org.json.JSONObject(resp)
+                val descs = obj.optJSONObject("descriptors")
+                val micUrl = descs?.optJSONObject("mic")?.optString("url")
+                val devUrl = descs?.optJSONObject("device")?.optString("url")
+                val micTail = fetchLastLine(micUrl)
+                val devTail = fetchLastLine(devUrl)
+                handler.post {
+                    liveTailMic.text = micTail
+                    liveTailDevice.text = devTail
+                }
+            } catch (_: Exception) { }
+        }.start()
+    }
+
+    private fun fetchLastLine(url: String?): String {
+        if (url.isNullOrBlank()) return ""
+        return try {
+            val text = httpGet("http://127.0.0.1:8101" + url) ?: ""
+            text.lines().lastOrNull { it.trim().isNotEmpty() } ?: ""
+        } catch (_: Exception) { "" }
     }
 
     // ---------- server ----------
@@ -1120,8 +1148,12 @@ class MainActivity : AppCompatActivity() {
         spinnerLang.adapter = android.widget.ArrayAdapter(
             this, android.R.layout.simple_spinner_dropdown_item,
             listOf("sk", "cs", "en", "de", "fr", "es", "it", "pl", "ru", "uk", "hu", "auto"))
-        spinnerGemmaMode.adapter = android.widget.ArrayAdapter(
+        spinnerLiveModel.adapter = android.widget.ArrayAdapter(
+            this, android.R.layout.simple_spinner_dropdown_item, audio.map { it.id })
+        spinnerLiveLang.adapter = android.widget.ArrayAdapter(
             this, android.R.layout.simple_spinner_dropdown_item,
+            listOf("sk", "cs", "en", "de", "fr", "es", "it", "pl", "ru", "uk", "hu", "auto"))
+        spinnerGemmaMode.adapter = android.widget.ArrayAdapter(            this, android.R.layout.simple_spinner_dropdown_item,
             listOf("cleanup", "translate", "summarize", "rewrite"))
 
         refreshGenerateModels()
