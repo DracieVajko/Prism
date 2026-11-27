@@ -21,8 +21,17 @@ def test_live_session_api_and_separate_files():
     assert not any(n.endswith(".m4a") or n.endswith(".wav")
                    for n in names if "-mic" in n or "-device" in n)
 
-@pytest.mark.skip(reason="implemented with the controller in Task 5")
+@pytest.mark.skip(reason="requires a device; controller implemented in Task 5")
 def test_pending_commit_drained_before_close():
+    """Manual device verification checklist (Task 6):
+
+    - mic-only session produces a *-mic.txt output and no audio files.
+    - device-only session (apps that disallow playback capture produce silence).
+    - both sources produce separate mic/device files.
+    - background/screen-off survival while running.
+    - Stop with a commit in flight drains before close.
+    - no audio files under output/.
+    """
     # Controller-level: with a fake socket holding one in-flight commit,
     # stop() must wait for its completed event before close() is called.
     # Implement against LiveCapture.awaitPending(timeoutMs) in Task 5.

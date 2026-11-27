@@ -95,14 +95,25 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnSaveImage: MaterialButton
     private lateinit var btnSaveTranscript: MaterialButton
     private lateinit var btnCopyTranscript: MaterialButton
-
+    private lateinit var btnLiveStart: MaterialButton
+    private lateinit var btnLiveStop: MaterialButton
+    private lateinit var switchLiveMic: androidx.appcompat.widget.SwitchCompat
+    private lateinit var switchLiveDevice: androidx.appcompat.widget.SwitchCompat
+    private lateinit var spinnerLiveModel: android.widget.Spinner
+    private lateinit var spinnerLiveLang: android.widget.Spinner
+    private lateinit var liveStatus: TextView
+    private lateinit var liveTailMic: TextView
+    private lateinit var liveTailDevice: TextView
+    private lateinit var btnLiveOutputs: MaterialButton
     private var inpaintUri: android.net.Uri? = null
     private var maskUri: android.net.Uri? = null
     private var lastInpaintBitmap: android.graphics.Bitmap? = null
     private var lastBitmap: android.graphics.Bitmap? = null
     private var lastTranscript: String = ""
     private var lastTranscriptTitle: String = ""
-
+    private var liveSessionId: String = ""
+    private var liveProjectionIntent: android.content.Intent? = null
+    private var pendingLiveStart: Boolean = false
     // navigation + screen refs
     private lateinit var tabBar: android.widget.LinearLayout
     // tabs
@@ -163,6 +174,15 @@ class MainActivity : AppCompatActivity() {
 // UI state of sections: closed by default, open state survives re-render
     private val expandedKinds = mutableSetOf<String>()
 
+    private val livePoller = android.os.Handler(android.os.Looper.getMainLooper())
+    private val livePollRunnable = object : Runnable {
+        override fun run() {
+            updateLiveUi()
+            if (LiveCapture.status()["running"] == true) {
+                livePoller.postDelayed(this, 500)
+            }
+        }
+    }
     private val ticker = object : Runnable {
         override fun run() {
             refreshServerState()
@@ -229,7 +249,16 @@ class MainActivity : AppCompatActivity() {
         btnSaveImage = findViewById(R.id.btnSaveImage)
         btnSaveTranscript = findViewById(R.id.btnSaveTranscript)
         btnCopyTranscript = findViewById(R.id.btnCopyTranscript)
-
+        btnLiveStart = findViewById(R.id.btnLiveStart)
+        btnLiveStop = findViewById(R.id.btnLiveStop)
+        switchLiveMic = findViewById(R.id.switchLiveMic)
+        switchLiveDevice = findViewById(R.id.switchLiveDevice)
+        spinnerLiveModel = findViewById(R.id.spinnerLiveModel)
+        spinnerLiveLang = findViewById(R.id.spinnerLiveLang)
+        liveStatus = findViewById(R.id.liveStatus)
+        liveTailMic = findViewById(R.id.liveTailMic)
+        liveTailDevice = findViewById(R.id.liveTailDevice)
+        btnLiveOutputs = findViewById(R.id.btnLiveOutputs)
         tabBar = findViewById(R.id.tabBar)
         screenHost = findViewById(R.id.screenHost)
         screenServer = findViewById(R.id.screenServer)
@@ -503,13 +532,103 @@ class MainActivity : AppCompatActivity() {
         super.onDestroy()
     }
 
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: android.content.Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == 2003) {
+            if (resultCode == android.app.Activity.RESULT_OK && data != null) {
+                liveProjectionIntent = data
+                startLiveCapture()
+            } else {
+                toast("Screen capture permission denied")
+                pendingLiveStart = false
+            }
+        }
+    }
+
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == 2001 && grantResults.isNotEmpty() && grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED) {
-            startRecording()
+            if (pendingLiveStart) {
+                if (switchLiveDevice.isChecked) {
+                    launchLiveProjectionConsent()
+                } else {
+                    startLiveCapture()
+                }
+            } else {
+                startRecording()
+            }
         } else if (requestCode == 2001) {
             toast("Microphone permission denied")
+            pendingLiveStart = false
         }
+    }
+
+    // ---------- live transcription ----------
+    private fun beginLiveStart() {
+        pendingLiveStart = true
+        val mic = switchLiveMic.isChecked
+        val device = switchLiveDevice.isChecked
+        if (!mic && !device) { toast("Select at least one source"); pendingLiveStart = false; return }
+        if (!serverRunning) toggleServer()
+        if (mic) {
+            val granted = checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED
+            if (!granted) {
+                requestPermissions(arrayOf(android.Manifest.permission.RECORD_AUDIO), 2001)
+                return
+            }
+        }
+        if (device) {
+            launchLiveProjectionConsent()
+        } else {
+            startLiveCapture()
+        }
+    }
+
+    private fun launchLiveProjectionConsent() {
+        val mpm = getSystemService(android.content.Context.MEDIA_PROJECTION_SERVICE) as android.media.projection.MediaProjectionManager
+        startActivityForResult(mpm.createScreenCaptureIntent(), 2003)
+    }
+
+    private fun startLiveCapture() {
+        pendingLiveStart = false
+        Thread {
+            try {
+                LiveCapture.attach(this@MainActivity)
+                val model = spinnerLiveModel.selectedItem?.toString() ?: "whisper-tiny"
+                val lang = spinnerLiveLang.selectedItem?.toString() ?: ""
+                val sources = mutableListOf<String>()
+                if (switchLiveMic.isChecked) sources.add("mic")
+                if (switchLiveDevice.isChecked) sources.add("device")
+                // create session
+                val body = org.json.JSONObject().put("language", lang).toString()
+                val resp = httpPostJson("http://127.0.0.1:8101/v1/live/sessions", body)
+                val sid = if (resp != null) org.json.JSONObject(resp).optString("id") else ""
+                if (sid.isBlank()) {
+                    handler.post { toast("Failed to create live session"); updateLiveUi() }
+                    return@Thread
+                }
+                liveSessionId = sid
+                LiveCapture.start(this@MainActivity, sid, sources, model, lang, liveProjectionIntent)
+                handler.post {
+                    updateLiveUi()
+                    livePoller.removeCallbacks(livePollRunnable)
+                    livePoller.post(livePollRunnable)
+                }
+            } catch (e: Exception) {
+                handler.post { toast("Live start failed: ${e.message}") }
+            }
+        }.start()
+    }
+
+    private fun updateLiveUi() {
+        val st = LiveCapture.status()
+        val running = st["running"] == true
+        liveStatus.text = if (running) "running: ${st["session_id"]}" else "idle"
+        btnLiveStart.isEnabled = !running
+        btnLiveStop.isEnabled = running
+        // tails: fetch session lines? Keep simple: show pending count
+        liveTailMic.text = "mic pending: ${st["pending"]}"
+        liveTailDevice.text = "device pending: ${st["pending"]}"
     }
 
     // ---------- server ----------
@@ -1220,8 +1339,15 @@ class MainActivity : AppCompatActivity() {
 
         btnGenerate.setOnClickListener { runGenerate() }
         btnTranscribe.setOnClickListener { runTranscribe() }
-        btnClearTranscript.setOnClickListener {
-            transcribeOut.setText("")
+        btnLiveStart.setOnClickListener { beginLiveStart() }
+        btnLiveStop.setOnClickListener {
+            Thread {
+                LiveCapture.stop()
+                handler.post { liveSessionId = ""; updateLiveUi(); livePoller.removeCallbacks(livePollRunnable) }
+            }.start()
+        }
+        btnLiveOutputs.setOnClickListener { showOutputsDialog() }
+        btnClearTranscript.setOnClickListener {            transcribeOut.setText("")
             transcribeStatus.text = ""
             btnSaveTranscript.visibility = android.view.View.GONE
         }
