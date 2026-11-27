@@ -78,6 +78,58 @@ object OutputStore {
     }
 
     /**
+     * Reserve a live-transcript file path under `output/text/`.
+     *
+     * The name is `YYYYmmdd-HHmmss-<safe session id>-<source>.txt`. The session
+     * id is sanitised with the same rule as [store] and the existing `-n`
+     * collision suffix is reused so two sessions never share one file. The
+     * parent `text/` directory is created but the file itself is not opened;
+     * the caller appends the header and transcript lines. Only text is written.
+     */
+    fun liveFile(ctx: Context, sessionId: String, source: String): File {
+        val stamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date())
+        val safeSid = sessionId
+            .filter { it.isLetterOrDigit() || it == '-' || it == '_' }
+            .take(24).trim('-', '_')
+            .ifEmpty { System.currentTimeMillis().toString(36) }
+        val base = "$stamp-$safeSid-$source"
+        val dir = kindDir(ctx, "text")
+        var target = File(dir, "$base.txt")
+        var n = 1
+        while (target.exists()) {
+            target = File(dir, "$base-$n.txt")
+            n++
+        }
+        return target
+    }
+
+    /**
+     * Mirror one already-written output file into the public
+     * `Download/Lenswright` folder via MediaStore. Reuses the same publish
+     * block as [store]; failures are logged, never fatal. Called once when a
+     * live session closes, so the final transcript is available to file
+     * managers without rewriting on every append.
+     */
+    fun publish(ctx: Context, file: File) {
+        try {
+            val values = ContentValues().apply {
+                put(MediaStore.MediaColumns.DISPLAY_NAME, file.name)
+                put(MediaStore.MediaColumns.MIME_TYPE, mimeOf(file))
+                put(MediaStore.MediaColumns.RELATIVE_PATH,
+                    "${android.os.Environment.DIRECTORY_DOWNLOADS}/Lenswright")
+            }
+            val uri: Uri? = ctx.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+            if (uri != null) {
+                ctx.contentResolver.openOutputStream(uri)?.use { out ->
+                    file.inputStream().use { it.copyTo(out) }
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "auto-save to Downloads failed for ${file.name}: ${e.message}")
+        }
+    }
+
+    /**
      * List output files, optionally filtered by kind and sorted by the given criterion.
      *
      * @param ctx Context

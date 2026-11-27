@@ -57,6 +57,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import java.io.File
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import org.json.JSONObject
 
 // Gemini Nano via ML Kit GenAI (on-device summarization / cleanup).
 // genai-prompt:1.0.0-beta5 exposes com.google.mlkit.genai.prompt.Generation,
@@ -279,6 +280,17 @@ fun jsonOf(vararg pairs: Pair<String, Any?>): JsonObject =
         pairs.forEach { (k, v) -> add(k, anyToJson(v)) }
     }
 
+/** Map LiveSessionStore exceptions to the shared {error, detail} HTTP shape. */
+private fun liveHttpError(e: Exception): Pair<HttpStatusCode, JsonObject> = when (e) {
+    is NoSuchElementException -> HttpStatusCode.NotFound to
+        jsonOf("error" to "unknown session", "detail" to (e.message ?: "unknown session"))
+    is IllegalArgumentException -> HttpStatusCode.BadRequest to
+        jsonOf("error" to "bad source", "detail" to (e.message ?: "bad source"))
+    is IllegalStateException -> HttpStatusCode.Conflict to
+        jsonOf("error" to "session closed", "detail" to (e.message ?: "session closed"))
+    else -> throw e
+}
+
 /** Request body: kotlinx-serialization (defaults + ignoreUnknownKeys), not Gson.
 *  Gson ignores Kotlin defaults via reflection and leaves missing String fields null. */
 private val wireJson = Json {
@@ -450,6 +462,14 @@ private val batchState = ConcurrentHashMap<String, BatchState>()
                 } catch (e: Exception) {
                     android.util.Log.w("ApiServer", "memory watchdog failed: ${e.message}")
                 }
+                // Close abandoned live sessions after 30 minutes of idle with
+                // no open sockets. Mirrors the PC idle sweep; guarded so a
+                // failure cannot stop the unloader loop.
+                try {
+                    appContext?.let { LiveSessionStore.sweepIdle(it) }
+                } catch (e: Exception) {
+                    android.util.Log.w("ApiServer", "live idle sweep failed: ${e.message}")
+                }
             }
         }
         // Remote fallback: endpoint handlers handle auto-forward via try-catch on ModelWillNotLoadError
@@ -523,9 +543,12 @@ private val batchState = ConcurrentHashMap<String, BatchState>()
             }
         }
         // Remote mode: forward all requests to the configured PC server.
+        // Live sessions are always local: never forward /v1/live/* to the PC,
+        // otherwise a session opened on the phone would receive appends on a
+        // PC that has no such session.
         if (RemoteProxy.isRemoteMode() || RemoteProxy.isAutoMode()) {
             intercept(io.ktor.server.application.ApplicationCallPipeline.Call) {
-                if (RemoteProxy.forward(call)) {
+                if (!call.request.path().startsWith("/v1/live/") && RemoteProxy.forward(call)) {
                     finish()
                 }
             }
@@ -989,6 +1012,78 @@ private val batchState = ConcurrentHashMap<String, BatchState>()
                         ),
                     ),
                 )
+            }
+            // --------------------------------------------------------------- live sessions
+            // Live transcripts are always local: the forwarding interceptor above
+            // bypasses /v1/live/* so these handlers run on the phone, never on a
+            // remote PC that would have no matching session.
+            post("/v1/live/sessions") {
+                val ctx = appContext ?: run {
+                    call.respond(HttpStatusCode.InternalServerError,
+                        jsonOf("error" to "no app context"))
+                    return@post
+                }
+                val body = try {
+                    JSONObject(call.receiveText().ifBlank { "{}" })
+                } catch (_: Exception) {
+                    JSONObject()
+                }
+                try {
+                    val result = LiveSessionStore.create(
+                        ctx,
+                        language = body.optString("language", ""),
+                        model = body.optString("model", "turbo"),
+                        label = body.optString("label", ""),
+                    )
+                    call.respond(anyToJson(result))
+                } catch (e: Exception) {
+                    val (code, err) = liveHttpError(e)
+                    call.respond(code, err)
+                }
+            }
+            post("/v1/live/sessions/{sid}/append") {
+                val sid = call.parameters["sid"] ?: ""
+                val body = try {
+                    JSONObject(call.receiveText().ifBlank { "{}" })
+                } catch (_: Exception) {
+                    JSONObject()
+                }
+                try {
+                    val result = LiveSessionStore.append(
+                        sid,
+                        source = body.optString("source", ""),
+                        text = body.optString("text", ""),
+                        itemId = body.optString("item_id", ""),
+                        elapsedMs = body.optLong("elapsed_ms", 0L),
+                    )
+                    call.respond(anyToJson(result))
+                } catch (e: Exception) {
+                    val (code, err) = liveHttpError(e)
+                    call.respond(code, err)
+                }
+            }
+            post("/v1/live/sessions/{sid}/close") {
+                val ctx = appContext ?: run {
+                    call.respond(HttpStatusCode.InternalServerError,
+                        jsonOf("error" to "no app context"))
+                    return@post
+                }
+                val sid = call.parameters["sid"] ?: ""
+                try {
+                    call.respond(anyToJson(LiveSessionStore.close(ctx, sid)))
+                } catch (e: Exception) {
+                    val (code, err) = liveHttpError(e)
+                    call.respond(code, err)
+                }
+            }
+            get("/v1/live/sessions/{sid}") {
+                val sid = call.parameters["sid"] ?: ""
+                try {
+                    call.respond(anyToJson(LiveSessionStore.status(sid)))
+                } catch (e: Exception) {
+                    val (code, err) = liveHttpError(e)
+                    call.respond(code, err)
+                }
             }
 // Media Tools: implemented on-device via MediaCodec / MediaMuxer / LAME
 // (see MediaTools.kt). No external ffmpeg binary is shipped; the
